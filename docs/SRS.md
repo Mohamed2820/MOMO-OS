@@ -577,3 +577,8 @@ The unprivileged IPC daemon now applies bounded core/file/descriptor/CPU/address
 ## IPC Syscall Filter Increment — 2026-11-13 (PR #41 candidate)
 
 The unprivileged daemon now requires libseccomp and installs a default-allow syscall denylist that blocks process creation/exec, ptrace, mount and namespace changes, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory access. Failure to load or install the filter prevents service startup. This is not a strict allowlist or complete sandbox; filesystem syscalls remain available, and namespaces/cgroups/LSM enforcement remain open requirements.
+
+
+## AArch64 Platform Target — 2026-11-13 (PR #42 candidate)
+
+A dedicated Buildroot/QEMU AArch64 virtual-target workflow is added using `qemu_aarch64_virt_defconfig`, the MOMO rootfs overlay, libseccomp and the unprivileged IPC status service. Acceptance requires a non-empty ARM64 kernel/rootfs, QEMU boot to `MOMO OS READY`, and the authenticated status response. Until that workflow passes, AArch64 remains a planned/under-validation target, not a verified supported architecture. No physical Android device support is implied.
