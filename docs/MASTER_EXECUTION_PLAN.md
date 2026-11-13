@@ -248,6 +248,6 @@ This closes the persisted dependency-readiness foundation only. It does not deli
 - Block ordinary event updates and deletions through SQLite triggers.
 - Backfill older pre-hash event rows during schema migration.
 - Test normal verification, mutation rejection, trigger-bypass tampering and legacy migration.
-- Repository validation passed with 108 unit tests.
+- Repository validation passed with 109 unit tests.
 
 This is not a signed audit log and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring and protected storage remain open.
