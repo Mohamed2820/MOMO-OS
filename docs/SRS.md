@@ -17,9 +17,9 @@ This snapshot distinguishes source implementation, target-image integration, aut
 |---|---|---|
 | x86_64 Linux image | Buildroot 2026.08.1 image built, output files verified, QEMU serial boot reached readiness, artifact downloaded and inspected | QEMU-validated on x86_64 for commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`, run [#43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431); artifact contains `bzImage`, `rootfs.ext2`, `qemu-boot.log` and build metadata. Log confirms permission broker health, task runtime self-test and `MOMO OS READY`. Not physical hardware validation. |
 | Task state machine | Risk-aware lifecycle and transition validation | Repository unit tests pass |
-| Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; QEMU boot passed on the image revision. Newer execution-journal integration is tracked separately and is not included in that image evidence. |
-| Task Coordinator | Plan validation, immutable SHA-256 binding, atomic task/plan/event persistence and permission checks | PR #23 merged; repository tests pass; no tool execution or crash-recovery scheduler yet |
-| Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; boot-time task runtime self-test passed in QEMU. Interactive `momoctl doctor` and full CLI acceptance matrix remain pending. |
+| Persistent task journal and step journal | SQLite TaskStore plus plan-bound step execution records, retry limits, cancellation requests, restart quarantine and hash-chained step events | TaskCoordinator integration and Buildroot overlay are merged in PR #26; 111 repository tests reported passing. Fresh QEMU run #43446234529 for the integrated revision remains in progress with no artifact yet. |
+| Task Coordinator | Plan validation, immutable SHA-256 binding, atomic task/plan/step persistence, durable dependency readiness and permission checks | PR #26 merged; 111 tests reported passing. No tool execution adapter, authenticated executor or native OS sandbox. |
+| Task CLI | create/list/show/transition/doctor/self-test/recover | Recovery command is wired into the boot readiness path in the integrated overlay. Its integrated image-level behavior awaits QEMU run #43446234529; full target CLI matrix remains pending. |
 | Device inventory | Runtime OS/kernel/architecture/device identity collection | Source and rootfs overlay included; exact hardware capabilities remain unknown absent verified profile |
 | Persistent permission broker | SQLite grants, expiry, revocation, bounded use, exact R3/R4 approval matching and audit journal | QEMU boot log confirms broker initialization and health; policy layer does not enforce native OS permissions or execute tools. |
 | Device profiles | JSON schema and CI validation | Schema validation does not prove a device port boots |
@@ -547,3 +547,12 @@ The first x86_64 Buildroot target passed its automated QEMU acceptance workflow.
 - The serial log records persistent permission broker health, task runtime self-test success and `MOMO OS READY`.
 
 **Evidence boundary:** this proves the specific x86_64 QEMU image revision boots and reaches its readiness check. It does not prove physical hardware compatibility, interactive validation of every CLI command, Android/AOSP support, a phone port, native OS sandboxing or production readiness. The artifact is a development image, not an installable phone release.
+
+
+## Implementation Snapshot Correction — Task/Step Journal Integration (2026-11-13)
+
+PR #26 merged the Step Execution Journal into TaskCoordinator and the Buildroot rootfs overlay. The accepted plan and initial step records are persisted atomically; dependency readiness derives from durable step state; hash-chain verification fails closed; and boot readiness invokes interrupted-step recovery. Repository validation for the integrated PR reported 111 passing unit tests.
+
+**Image evidence is pending:** workflow [#43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) targets commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25`. The last observed state was kernel/rootfs build in progress, with no artifact. Do not mark this integrated revision QEMU-validated until image outputs and the serial boot log prove it.
+
+The journal remains a persistence/recovery component, not a tool executor. Authenticated IPC, executor identity, native Linux isolation and platform permission enforcement remain open.
