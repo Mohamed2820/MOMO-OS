@@ -123,3 +123,7 @@ This does **not** complete Stage 2 or Stage 3. The journal is integrated with Ta
 A tested dependency-readiness foundation is now integrated: TaskCoordinator trusts only persisted `succeeded` step records, returns only journal entries in `ready` state, and blocks descendants of failed or ambiguous steps. Callers cannot forge completion by supplying an in-memory set. The change is mirrored into the Buildroot overlay and covered by the repository validation suite (105 tests).
 
 The Runtime and Service Contracts stage remains open: there is no worker scheduler, actual executor, deadline/backoff service, concurrency/fairness/resource quotas, independent outcome verifier or OS-enforced sandbox.
+
+### Audit integrity progress — 2026-11-13
+
+The per-step event ledger now has a verified SHA-256 hash chain, update/delete protection through SQLite triggers and a migration path for legacy event rows. The repository suite covers mutation attempts and tamper detection. This is an integrity foundation only; it is not a signed or externally anchored audit log and does not replace native storage protection.

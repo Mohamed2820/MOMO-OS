@@ -6,6 +6,8 @@ found running after a restart is moved to NEEDS_REVIEW, never replayed.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -96,6 +98,8 @@ class StepExecutionJournal:
                     previous TEXT,
                     current TEXT NOT NULL,
                     reason TEXT NOT NULL CHECK(length(trim(reason)) > 0),
+                    previous_hash TEXT NOT NULL,
+                    event_hash TEXT NOT NULL,
                     FOREIGN KEY(task_id, step_id)
                         REFERENCES task_step_executions(task_id, step_id)
                         ON DELETE CASCADE
@@ -105,6 +109,69 @@ class StepExecutionJournal:
                     ON task_step_events(task_id, step_id, event_id);
                 CREATE INDEX IF NOT EXISTS idx_step_execution_status
                     ON task_step_executions(status, updated_at);
+                """
+            )
+
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(task_step_events)")
+            }
+            if "previous_hash" not in columns:
+                connection.execute(
+                    "ALTER TABLE task_step_events ADD COLUMN previous_hash TEXT NOT NULL DEFAULT ''"
+                )
+            if "event_hash" not in columns:
+                connection.execute(
+                    "ALTER TABLE task_step_events ADD COLUMN event_hash TEXT NOT NULL DEFAULT ''"
+                )
+
+            previous_by_step: dict[tuple[str, str], str] = {}
+            rows = connection.execute(
+                """
+                SELECT event_id, task_id, step_id, at, previous, current, reason,
+                       previous_hash, event_hash
+                FROM task_step_events
+                ORDER BY task_id, step_id, event_id
+                """
+            ).fetchall()
+            for row in rows:
+                key = (row["task_id"], row["step_id"])
+                expected_previous = previous_by_step.get(key, "0" * 64)
+                expected_hash = self._calculate_event_hash(
+                    row["task_id"], row["step_id"], row["at"], row["previous"],
+                    row["current"], row["reason"], expected_previous,
+                )
+                if not row["event_hash"] or not row["previous_hash"]:
+                    connection.execute(
+                        """
+                        UPDATE task_step_events
+                        SET previous_hash = ?, event_hash = ? WHERE event_id = ?
+                        """,
+                        (expected_previous, expected_hash, row["event_id"]),
+                    )
+                elif (
+                    not hmac.compare_digest(row["previous_hash"], expected_previous)
+                    or not hmac.compare_digest(row["event_hash"], expected_hash)
+                ):
+                    raise RuntimeError("Existing step event journal failed hash-chain verification")
+                previous_by_step[key] = expected_hash
+
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS task_step_events_no_update
+                BEFORE UPDATE ON task_step_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'step event journal is append-only');
+                END
+                """
+            )
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS task_step_events_no_delete
+                BEFORE DELETE ON task_step_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'step event journal is append-only');
+                END
                 """
             )
 
@@ -137,6 +204,32 @@ class StepExecutionJournal:
         )
 
     @staticmethod
+    def _calculate_event_hash(
+        task_id: str,
+        step_id: str,
+        at: str,
+        previous: str | None,
+        current: str,
+        reason: str,
+        previous_hash: str,
+    ) -> str:
+        payload = json.dumps(
+            {
+                "task_id": task_id,
+                "step_id": step_id,
+                "at": at,
+                "previous": previous,
+                "current": current,
+                "reason": reason,
+                "previous_hash": previous_hash,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
     def _event(
         connection: sqlite3.Connection,
         task_id: str,
@@ -146,13 +239,58 @@ class StepExecutionJournal:
         reason: str,
         at: str,
     ) -> None:
+        normalized_reason = reason.strip()
+        row = connection.execute(
+            """
+            SELECT event_hash FROM task_step_events
+            WHERE task_id = ? AND step_id = ?
+            ORDER BY event_id DESC LIMIT 1
+            """,
+            (task_id, step_id),
+        ).fetchone()
+        previous_hash = row[0] if row else "0" * 64
+        event_hash = StepExecutionJournal._calculate_event_hash(
+            task_id, step_id, at, previous, current, normalized_reason, previous_hash
+        )
         connection.execute(
             """
-            INSERT INTO task_step_events(task_id, step_id, at, previous, current, reason)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO task_step_events(
+                task_id, step_id, at, previous, current, reason,
+                previous_hash, event_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (task_id, step_id, at, previous, current, reason.strip()),
+            (
+                task_id, step_id, at, previous, current, normalized_reason,
+                previous_hash, event_hash,
+            ),
         )
+
+    def verify_event_chain(self, task_id: str, step_id: str) -> bool:
+        """Verify the append-only event hash chain for one task step."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT task_id, step_id, at, previous, current, reason,
+                       previous_hash, event_hash
+                FROM task_step_events
+                WHERE task_id = ? AND step_id = ?
+                ORDER BY event_id
+                """,
+                (task_id, step_id),
+            ).fetchall()
+        expected_previous = "0" * 64
+        for row in rows:
+            expected_hash = self._calculate_event_hash(
+                row["task_id"], row["step_id"], row["at"], row["previous"],
+                row["current"], row["reason"], expected_previous,
+            )
+            if (
+                not hmac.compare_digest(row["previous_hash"], expected_previous)
+                or not hmac.compare_digest(row["event_hash"], expected_hash)
+            ):
+                raise ValueError("Step execution event hash-chain verification failed")
+            expected_previous = expected_hash
+        return True
 
     def register_plan_steps(
         self,
@@ -263,6 +401,7 @@ class StepExecutionJournal:
         return tuple(self._record(row) for row in rows)
 
     def list_events(self, task_id: str, step_id: str) -> tuple[StepExecutionEvent, ...]:
+        self.verify_event_chain(task_id, step_id)
         with self._connect() as connection:
             rows = connection.execute(
                 """

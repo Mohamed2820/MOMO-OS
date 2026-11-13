@@ -240,3 +240,14 @@ The journal is integrated into TaskCoordinator: accepted plan steps are register
 - Repository validation passed with 105 unit tests.
 
 This closes the persisted dependency-readiness foundation only. It does not deliver worker scheduling, concurrency control, deadlines, backoff, fairness, quotas, executor dispatch or result verification.
+
+### Completed sub-milestone: tamper-evident step event history
+
+- Added a per-task-step SHA-256 event hash chain.
+- Verify event integrity before returning event history.
+- Block ordinary event updates and deletions through SQLite triggers.
+- Backfill older pre-hash event rows during schema migration.
+- Test normal verification, mutation rejection, trigger-bypass tampering and legacy migration.
+- Repository validation passed with 108 unit tests.
+
+This is not a signed audit log and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring and protected storage remain open.
