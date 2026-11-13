@@ -176,3 +176,8 @@ PR #38 adds a first unprivileged AF_UNIX status daemon with a dedicated Buildroo
 ## IPC Hardening — Replay Detection (2026-11-13)
 
 The local status service now rejects duplicate request IDs using a bounded 1,024-entry process-lifetime cache, and the CLI uses unique IDs and validates server responses strictly. Durable anti-replay for side effects, capability authorization and native sandboxing remain open.
+
+
+## IPC Process Hardening — Initial Restrictions (2026-11-13)
+
+The IPC daemon now runs unprivileged with explicit resource limits and `PR_SET_NO_NEW_PRIVS`. This is defense in depth, not a complete sandbox. Seccomp, namespaces, cgroups and LSM enforcement remain future gates before any executor can be enabled.
