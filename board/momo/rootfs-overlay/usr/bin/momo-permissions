@@ -10,6 +10,8 @@ sys.path.insert(0, "/usr/lib/momo")
 
 from intelligence.runtime.persistent_permission_broker import PersistentPermissionBroker
 
+DATABASE = __import__("os").environ.get("MOMO_PERMISSION_DB", "/var/lib/momo/permissions.sqlite3")
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
@@ -24,7 +26,7 @@ def main(argv=None):
     revoke.add_argument("grant_id")
     args = parser.parse_args(argv)
 
-    broker = PersistentPermissionBroker()
+    broker = PersistentPermissionBroker(DATABASE)
     if args.command == "doctor":
         print(f"[MOMO] Permission database: {broker.database}")
         print("[MOMO] Persistent permission broker healthy")
