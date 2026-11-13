@@ -84,3 +84,9 @@ The next integration milestone is to bind each accepted plan step to this journa
 TaskCoordinator obtains step states from `StepExecutionJournal.list_steps(task_id)`. It validates that the journal contains exactly the step IDs and risk levels from the immutable accepted plan. A dependency counts as complete only when its journal state is `succeeded`; caller-supplied completion sets are no longer accepted. The coordinator returns a step only if all dependencies succeeded and that step's own durable state is `ready`.
 
 A `failed`, `running`, `cancelled` or `needs_review` step cannot unblock dependent work. This avoids treating an in-memory assertion or an ambiguous external outcome as proof of completion. Retry and reconciliation remain explicit separate operations.
+
+## Event integrity
+
+Each step's event stream is linked with a SHA-256 hash chain. New events include the previous event hash, and `verify_event_chain` checks the entire sequence. `list_events` verifies integrity before returning history. SQLite triggers reject ordinary UPDATE and DELETE statements. On initialization, legacy event tables are migrated by backfilling hashes before the append-only triggers are installed.
+
+This is tamper-evident, not a signed audit log. A privileged attacker able to rewrite the database and recompute hashes can forge a new chain. Stronger assurance requires protected storage permissions, a signing key held outside the database, and/or an external append-only audit anchor.
