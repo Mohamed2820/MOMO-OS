@@ -256,3 +256,22 @@ The journal is not yet integrated into TaskCoordinator, the Buildroot overlay or
 3. Add authenticated executor identity, native Linux service isolation, narrow IPC and a tool executor only after permission and plan checks.
 4. Complete service contracts, migration/recovery tests and OS-enforced sandboxing before enabling side effects.
 5. Continue Android/Linux platform selection and exact-device feasibility only with source, bootloader and recovery evidence.
+
+
+## Execution Progress Record — Task/Step Journal Integration (2026-11-13)
+
+### Completed in source and rootfs overlay
+- TaskCoordinator now registers every accepted plan step atomically with the task and immutable plan.
+- Step state, attempts, retry budgets, idempotency keys, cancellation requests and result digests persist in the shared SQLite database.
+- Dependency readiness is derived from verified durable succeeded records.
+- Event history uses a SHA-256 chain and SQLite mutation guards; integrity failures fail closed.
+- Boot readiness invokes interrupted-step recovery, which quarantines in-flight work without replay.
+- Repository validation for PR #26 reported 111 passing unit tests.
+
+### Pending evidence and implementation
+- Fresh QEMU image build/boot for integrated commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25`: workflow [#43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) was last observed in progress at kernel/rootfs build; no artifact was available.
+- Target-side CLI acceptance matrix and direct verification of recovery behavior inside the new image.
+- Authenticated executor identity, narrow IPC and Linux-native service isolation.
+- Tool adapter only after OS-enforced sandbox and fresh permission checks.
+
+The execution journal integration does not close the runtime or OS-security stages. No external tool execution or native sandbox is claimed.
