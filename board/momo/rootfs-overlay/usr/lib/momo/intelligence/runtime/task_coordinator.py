@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .momo_runtime import (
@@ -40,15 +41,44 @@ def _plan_document(plan: Plan) -> dict:
     }
 
 
-def _plan_digest(plan: Plan) -> tuple[str, str]:
-    encoded = json.dumps(
+def _canonical_plan_json(plan: Plan) -> str:
+    return json.dumps(
         _plan_document(plan), sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
+
+
+def _plan_digest(plan: Plan) -> tuple[str, str]:
+    encoded = _canonical_plan_json(plan)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest(), encoded
 
 
+def _plan_from_document(document: dict) -> Plan:
+    try:
+        steps = tuple(
+            PlanStep(
+                step_id=item["step_id"],
+                description=item["description"],
+                agent_role=item["agent_role"],
+                domain=item["domain"],
+                required_capabilities=frozenset(item["required_capabilities"]),
+                risk=Risk(item["risk"]),
+                depends_on=tuple(item["depends_on"]),
+                delegation_depth=int(item["delegation_depth"]),
+            )
+            for item in document["steps"]
+        )
+        return Plan(
+            goal=document["goal"],
+            steps=steps,
+            max_steps=int(document["max_steps"]),
+            max_delegation_depth=int(document["max_delegation_depth"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Persisted task plan has an invalid structure") from exc
+
+
 class TaskCoordinator:
-    """Validate, persist, schedule and authorize plans; never dispatch tools."""
+    """Validate, atomically persist, schedule and authorize plans; never dispatch tools."""
 
     def __init__(
         self,
@@ -59,8 +89,9 @@ class TaskCoordinator:
         self.validator = PlanValidator(registry)
         self.tasks = TaskStore(task_database)
         self.permissions = PersistentPermissionBroker(permission_database)
-        with sqlite3.connect(str(self.tasks.database)) as connection:
+        with sqlite3.connect(str(self.tasks.database), timeout=10) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA busy_timeout = 10000")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS task_plans (
@@ -72,33 +103,96 @@ class TaskCoordinator:
             )
 
     def create_task(self, goal: str, risk: Risk, plan: Plan) -> Task:
+        """Persist task, accepted plan and initial lifecycle events atomically."""
         self.validator.validate(plan)
+        if not isinstance(goal, str) or not goal.strip():
+            raise ValueError("Task goal must not be empty")
+        if not isinstance(risk, Risk):
+            raise ValueError("Task risk must be a Risk value")
         if plan.goal.strip() != goal.strip():
             raise ValueError("Task goal must match the validated plan goal")
         if any(_RISK_LEVEL[step.risk] > _RISK_LEVEL[risk] for step in plan.steps):
             raise ValueError("A plan step exceeds the task risk ceiling")
 
         digest, encoded = _plan_digest(plan)
-        task = self.tasks.create_task(goal, risk)
-        with sqlite3.connect(str(self.tasks.database)) as connection:
+        task = Task(goal=goal.strip(), risk=risk)
+        created_at = datetime.now(timezone.utc).isoformat()
+
+        with sqlite3.connect(str(self.tasks.database), timeout=10) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA busy_timeout = 10000")
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                INSERT INTO tasks(task_id, goal, risk, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (task.task_id, task.goal, task.risk.value, task.status.value,
+                 created_at, created_at),
+            )
             connection.execute(
                 "INSERT INTO task_plans(task_id, plan_sha256, plan_json) VALUES (?, ?, ?)",
                 (task.task_id, digest, encoded),
             )
-        task = self.tasks.transition(
-            task.task_id, TaskStatus.CLASSIFIED,
-            "Plan passed structural and agent-policy validation",
-        )
-        task = self.tasks.transition(
-            task.task_id, TaskStatus.PLANNED,
-            "Validated plan accepted by task coordinator",
-        )
-        if risk in {Risk.R3, Risk.R4}:
-            task = self.tasks.transition(
-                task.task_id, TaskStatus.AWAITING_APPROVAL,
-                "High-risk task requires explicit approval before execution",
+
+            task.transition(
+                TaskStatus.CLASSIFIED,
+                "Plan passed structural and agent-policy validation",
             )
-        return task
+            task.transition(
+                TaskStatus.PLANNED,
+                "Validated plan accepted by task coordinator",
+            )
+            if risk in {Risk.R3, Risk.R4}:
+                task.transition(
+                    TaskStatus.AWAITING_APPROVAL,
+                    "High-risk task requires explicit approval before execution",
+                )
+
+            updated_at = task.events[-1].at.isoformat()
+            connection.execute(
+                "UPDATE tasks SET status = ?, updated_at = ? WHERE task_id = ?",
+                (task.status.value, updated_at, task.task_id),
+            )
+            connection.executemany(
+                """
+                INSERT INTO task_events(task_id, at, previous, current, reason)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (task.task_id, event.at.isoformat(), event.previous.value,
+                     event.current.value, event.reason)
+                    for event in task.events
+                ],
+            )
+            connection.commit()
+        return self.tasks.get_task(task.task_id)
+
+    def get_persisted_plan(self, task_id: str) -> Plan:
+        """Load the exact accepted plan after restart and verify its stored digest."""
+        with sqlite3.connect(str(self.tasks.database), timeout=10) as connection:
+            connection.row_factory = sqlite3.Row
+            row = connection.execute(
+                "SELECT plan_sha256, plan_json FROM task_plans WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+        if row is None:
+            raise ValueError("No persisted plan exists for this task")
+
+        encoded = row["plan_json"]
+        actual_digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        if not hmac.compare_digest(actual_digest, row["plan_sha256"]):
+            raise ValueError("Persisted task plan digest verification failed")
+
+        try:
+            document = json.loads(encoded)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Persisted task plan is not valid JSON") from exc
+        plan = _plan_from_document(document)
+        if _canonical_plan_json(plan) != encoded:
+            raise ValueError("Persisted task plan is not in canonical form")
+        self.validator.validate(plan)
+        return plan
 
     def get_ready_steps(
         self, task_id: str, plan: Plan, completed_step_ids: set[str] | None = None
@@ -144,10 +238,8 @@ class TaskCoordinator:
             raise ValueError("Supplied plan does not belong to this task")
         if any(_RISK_LEVEL[step.risk] > _RISK_LEVEL[task.risk] for step in plan.steps):
             raise ValueError("A plan step exceeds the persisted task risk ceiling")
-        digest, _ = _plan_digest(plan)
-        with sqlite3.connect(str(self.tasks.database)) as connection:
-            row = connection.execute(
-                "SELECT plan_sha256 FROM task_plans WHERE task_id = ?", (task.task_id,)
-            ).fetchone()
-        if row is None or row[0] != digest:
+        stored = self.get_persisted_plan(task.task_id)
+        supplied_digest, _ = _plan_digest(plan)
+        stored_digest, _ = _plan_digest(stored)
+        if not hmac.compare_digest(supplied_digest, stored_digest):
             raise ValueError("Supplied plan does not match the immutable task plan")
