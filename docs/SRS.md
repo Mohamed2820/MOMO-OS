@@ -549,3 +549,10 @@ This is tamper-evident against accidental or partial record modification, not a 
 The journal also verifies the existing event chain before appending. A corrupted history blocks the new transition and the transaction rolls back; new events cannot silently extend a compromised chain.
 
 The integrity check also gates state reads and dependency scheduling: TaskCoordinator verifies all relevant step event chains before returning readiness. Corrupt history blocks the read/scheduling path instead of allowing untrusted state to authorize progress.
+
+
+## Linux IPC Protocol Foundation — Implementation Note (2026-11-13)
+
+A versioned, bounded local IPC framing layer has been added alongside the Linux peer-credential helper. Version 1 uses a four-byte network-order length prefix and a 64 KiB payload ceiling. The parser rejects duplicate JSON keys, non-finite values, invalid UTF-8, malformed/truncated/trailing frames, unsupported versions and invalid request fields. Source and Buildroot overlay parity is tested.
+
+This is partial evidence toward the local service protocol requirements. The parser does not authenticate peers, authorize operations, prevent replay, impose deadlines or dispatch tools. It is not wired into a daemon. No tool execution is enabled.
