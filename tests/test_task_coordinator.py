@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -21,9 +22,10 @@ class TaskCoordinatorTests(unittest.TestCase):
             role="operator", domains=frozenset({"device"}),
             capabilities=frozenset({"device.inspect"}), max_risk=Risk.R4,
         ))
-        self.coordinator = TaskCoordinator(
-            registry, root / "tasks.sqlite3", root / "permissions.sqlite3"
-        )
+        self.task_db = root / "tasks.sqlite3"
+        self.permission_db = root / "permissions.sqlite3"
+        self.registry = registry
+        self.coordinator = TaskCoordinator(registry, self.task_db, self.permission_db)
         self.plan = Plan("Inspect public system status", (
             PlanStep("inspect", "Inspect system status", "researcher", "research",
                      frozenset({"web.read"}), Risk.R1),
@@ -37,6 +39,31 @@ class TaskCoordinatorTests(unittest.TestCase):
         self.assertEqual(task.status, TaskStatus.PLANNED)
         self.assertEqual(self.coordinator.tasks.get_task(task.task_id).status,
                          TaskStatus.PLANNED)
+
+    def test_task_and_plan_are_committed_atomically(self):
+        with sqlite3.connect(self.task_db) as connection:
+            connection.execute("""
+                CREATE TRIGGER reject_plan BEFORE INSERT ON task_plans
+                BEGIN SELECT RAISE(ABORT, 'injected plan insert failure'); END
+            """)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        self.assertEqual(self.coordinator.tasks.list_tasks(), [])
+
+    def test_persisted_plan_round_trips_after_coordinator_restart(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        restarted = TaskCoordinator(self.registry, self.task_db, self.permission_db)
+        self.assertEqual(restarted.get_persisted_plan(task.task_id), self.plan)
+
+    def test_persisted_plan_digest_detects_database_tampering(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        with sqlite3.connect(self.task_db) as connection:
+            connection.execute(
+                "UPDATE task_plans SET plan_json = ? WHERE task_id = ?",
+                ('{"goal":"tampered"}', task.task_id),
+            )
+        with self.assertRaisesRegex(ValueError, "digest verification"):
+            self.coordinator.get_persisted_plan(task.task_id)
 
     def test_high_risk_task_waits_for_approval(self):
         plan = Plan("Inspect device", (
