@@ -88,4 +88,4 @@ Step-state reads and task step listings verify the corresponding event chains. T
 
 ## Next milestone
 
-Once the latest QEMU image passes, add a non-executing executor protocol and test its authorization, identity, idempotency, deadline and cancellation contracts. Keep actual privileged dispatch disabled until native OS sandboxing and authenticated IPC are implemented.
+A narrow authenticated AF_UNIX status-only service now exists in the IPC workstream: it checks SO_PEERCRED before parsing, accepts only the configured root UID, and exposes no executor. Once the latest QEMU image passes, add a non-executing executor protocol and test its authorization, identity, idempotency, deadline and cancellation contracts. Keep privileged dispatch disabled until operation-specific authorization and native OS sandboxing are implemented.
