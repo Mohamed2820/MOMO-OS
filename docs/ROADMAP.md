@@ -186,3 +186,8 @@ The IPC daemon now runs unprivileged with explicit resource limits and `PR_SET_N
 ## IPC Syscall Filtering — 2026-11-13
 
 A libseccomp denylist now blocks selected execution, process creation, namespace, kernel-control and cross-process-memory syscalls in the daemon. It is fail-closed and tested in a subprocess. The policy defaults to allow and is not a complete sandbox; strict syscall allowlisting, namespaces, cgroups and LSM enforcement remain future gates.
+
+
+## Platform Roadmap — AArch64 virtual bring-up (2026-11-13)
+
+A separate AArch64 QEMU build-and-boot workflow is now under review. It shares the portable runtime and security overlay with x86_64. AArch64 support will not be claimed until the ARM64 workflow passes. Physical device enablement remains per-device engineering, not automatic universal compatibility.
