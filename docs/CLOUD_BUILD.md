@@ -27,3 +27,9 @@ Set maximum worker size, wall-clock timeout, cache quota, artifact retention, an
 
 ## Release evidence
 Every artifact must link to commit SHA, manifest SHA, toolchain, build environment, build logs, SBOM, checksum, signing identity, and device compatibility status.
+
+## Reference links
+- [AOSP build environment requirements](https://source.android.com/docs/setup/start/requirements)
+- [AOSP build and source workflow](https://source.android.com/docs/setup/start)
+
+These requirements are periodically updated; re-check them before provisioning a build worker.
