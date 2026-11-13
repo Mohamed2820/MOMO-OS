@@ -7,6 +7,7 @@ from pathlib import Path
 from intelligence.runtime.momo_runtime import Approval, CapabilityGrant, Risk, TaskStatus
 from intelligence.runtime.orchestrator import AgentRegistry, AgentSpec, Plan, PlanStep
 from intelligence.runtime.task_coordinator import TaskCoordinator
+from intelligence.execution.step_journal import StepExecutionStatus
 
 
 class TaskCoordinatorTests(unittest.TestCase):
@@ -39,6 +40,38 @@ class TaskCoordinatorTests(unittest.TestCase):
         self.assertEqual(task.status, TaskStatus.PLANNED)
         self.assertEqual(self.coordinator.tasks.get_task(task.task_id).status,
                          TaskStatus.PLANNED)
+
+    def test_create_task_registers_all_plan_steps(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        execution = self.coordinator.get_step_execution(task.task_id, "inspect")
+        self.assertEqual(execution.status, StepExecutionStatus.READY)
+        self.assertEqual(execution.attempt, 0)
+        self.assertEqual(execution.risk, Risk.R1)
+        self.assertEqual(
+            len(self.coordinator.get_step_execution_events(task.task_id, "inspect")), 1
+        )
+
+    def test_task_plan_and_step_records_are_atomic(self):
+        with sqlite3.connect(self.task_db) as connection:
+            connection.execute("""
+                CREATE TRIGGER reject_step BEFORE INSERT ON task_step_executions
+                BEGIN SELECT RAISE(ABORT, 'injected step insert failure'); END
+            """)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        self.assertEqual(self.coordinator.tasks.list_tasks(), [])
+        with sqlite3.connect(self.task_db) as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM task_plans").fetchone()[0], 0)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM task_step_executions").fetchone()[0], 0)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM task_step_events").fetchone()[0], 0)
+
+    def test_restart_recovery_quarantines_coordinator_step(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        self.coordinator.execution.start_step(task.task_id, "inspect")
+        restarted = TaskCoordinator(self.registry, self.task_db, self.permission_db)
+        recovered = restarted.recover_interrupted_steps()
+        self.assertEqual(len(recovered), 1)
+        self.assertEqual(recovered[0].status, StepExecutionStatus.NEEDS_REVIEW)
 
     def test_task_and_plan_are_committed_atomically(self):
         with sqlite3.connect(self.task_db) as connection:
