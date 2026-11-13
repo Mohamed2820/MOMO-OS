@@ -1,6 +1,8 @@
 import json
 import os
 import socket
+import subprocess
+import sys
 import struct
 import tempfile
 import threading
@@ -94,6 +96,25 @@ class IPCServiceTests(unittest.TestCase):
         guard = RequestReplayGuard()
         self.assertFalse(guard.claim(""))
         self.assertFalse(guard.claim(None))
+
+    def test_process_restrictions_apply_limits_and_no_new_privs(self):
+        service_path = ROOT / "board/momo/rootfs-overlay/usr/lib/momo"
+        code = (
+            "import ctypes, resource; "
+            "from momo_ipcd import apply_process_restrictions; "
+            "apply_process_restrictions(); "
+            "assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0); "
+            "assert resource.getrlimit(resource.RLIMIT_NOFILE) == (32, 32); "
+            "assert resource.getrlimit(resource.RLIMIT_FSIZE) == (0, 0); "
+            "assert ctypes.CDLL(None).prctl(39, 0, 0, 0, 0) == 1"
+        )
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(service_path)
+        result = subprocess.run(
+            [sys.executable, "-c", code], env=env,
+            capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_refuses_to_replace_regular_file_or_foreign_path(self):
         with tempfile.TemporaryDirectory() as directory:
