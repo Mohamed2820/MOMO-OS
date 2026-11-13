@@ -111,3 +111,9 @@ Build the x86_64 Buildroot image and prove it boots under QEMU. This is a develo
 - No physical device is certified.
 - No OS-enforced MOMO tool sandbox or full tool execution adapter exists yet.
 - No final Android base, first phone SKU, cloud build host or release signing infrastructure is selected.
+
+## Progress Evidence Update — 2026-11-13
+
+The Runtime and Service Contracts stage has a new tested sub-milestone: a durable per-step execution journal. It records step attempts and events, bounds retries to R0/R1 read-only work, and quarantines side-effecting failures and restart-interrupted work as `needs_review`. Cooperative cancellation requires executor confirmation that no side effect occurred. The repository validation workflow passed with 96 unit tests.
+
+This does **not** complete Stage 2 or Stage 3. The journal is not yet integrated with TaskCoordinator, Buildroot or QEMU; there is no actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff scheduler, concurrency manager or outcome reconciler. The Stage 2/3 exit criteria remain open.
