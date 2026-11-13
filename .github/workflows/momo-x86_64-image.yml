@@ -12,6 +12,7 @@ on:
       - "tests/test_device_inventory.py"
       - "tests/test_persistent_permission_broker.py"
       - "tests/test_runtime_overlay.py"
+      - "tests/test_task_coordinator.py"
       - "docs/BOOTABLE_IMAGE.md"
       - ".github/workflows/momo-x86_64-image.yml"
 
