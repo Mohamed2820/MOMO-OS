@@ -54,13 +54,10 @@ class IPCServiceTests(unittest.TestCase):
                 server.close()
         worker = threading.Thread(target=run)
         worker.start()
-        client.sendall(encode_request({
-            "version": 1, "request_id": "deny-1",
-            "operation": "status.read", "args": {},
-        }))
         client.settimeout(1)
-        self.assertEqual(client.recv(1), b"")
         worker.join(timeout=2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(client.recv(1), b"")
         self.assertFalse(errors)
         client.close()
         server.close()
