@@ -1,0 +1,52 @@
+#!/usr/bin/python3
+"""MOMO local IPC status client; read-only and non-executing."""
+import json
+import socket
+import struct
+import sys
+
+from intelligence.security.ipc_protocol import MAX_FRAME_BYTES, encode_request
+
+SOCKET_PATH = "/run/momo/ipc.sock"
+
+
+def receive_exact(connection, count):
+    data = bytearray()
+    while len(data) < count:
+        chunk = connection.recv(count - len(data))
+        if not chunk:
+            raise RuntimeError("IPC peer closed before response completed")
+        data.extend(chunk)
+    return bytes(data)
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] != "status":
+        print("Usage: momo-ipcctl status", file=sys.stderr)
+        return 2
+    request = {
+        "version": 1,
+        "request_id": "momoctl-status",
+        "operation": "status.read",
+        "args": {},
+    }
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            connection.settimeout(3.0)
+            connection.connect(SOCKET_PATH)
+            connection.sendall(encode_request(request))
+            length = struct.unpack("!I", receive_exact(connection, 4))[0]
+            if length <= 0 or length > MAX_FRAME_BYTES:
+                raise RuntimeError("Invalid IPC response frame length")
+            payload = json.loads(receive_exact(connection, length).decode("utf-8"))
+        if payload.get("version") != 1 or payload.get("request_id") != request["request_id"] or payload.get("ok") is not True:
+            raise RuntimeError("IPC response failed protocol validation")
+        print(json.dumps(payload["result"], indent=2, sort_keys=True))
+        return 0
+    except (OSError, ValueError, RuntimeError, KeyError, json.JSONDecodeError) as exc:
+        print(f"MOMO IPC unavailable: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
