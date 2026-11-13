@@ -220,12 +220,12 @@ No fixed delivery date is promised until build capacity, device access, maintain
 
 ### Explicitly not complete
 
-The journal is not yet integrated into TaskCoordinator, the Buildroot overlay or the target image. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered. The current work is a tested persistence foundation only.
+The journal is integrated into TaskCoordinator: accepted plan steps are registered in the same SQLite transaction as the parent task, immutable plan and task events. The journal and coordinator are mirrored into the Buildroot rootfs overlay, with source/overlay parity tests. The target image has not yet been rebuilt with this integration or validated in QEMU. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered.
 
 ### Next execution sequence
 
 1. Keep the x86_64 Buildroot/QEMU acceptance gate independent and do not merge its image PR until the image, boot log and runtime evidence are verified.
-2. Integrate step registration and lifecycle transitions with immutable persisted plans and the parent task journal.
-3. Add an executor interface with idempotency propagation, bounded deadlines and cooperative cancellation; do not execute before fresh permission authorization.
-4. Add restart reconciliation and negative tests for duplicate dispatch, ambiguous external outcomes and cancellation races.
-5. Implement native OS isolation and IPC identity before enabling any privileged tool.
+2. Add a boot/service-supervisor hook that invokes interrupted-step recovery exactly once per confirmed service restart; do not invoke it on every coordinator construction.
+3. Add dependency-completion persistence and scheduler deadlines, backoff, concurrency limits and resource budgets.
+4. Design the executor boundary with fresh permission authorization, OS identity, idempotency propagation, cancellation and independent result verification; do not dispatch tools yet.
+5. Implement native OS isolation and IPC identity, then add adversarial tests before enabling any privileged tool.
