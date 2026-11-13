@@ -1,0 +1,4 @@
+NAME=MOMO OS
+VERSION=0.1.0-alpha
+TRACK=linux-x86_64
+STATUS=experimental
