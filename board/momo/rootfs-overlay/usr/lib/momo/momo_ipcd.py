@@ -6,7 +6,6 @@ It intentionally has no shell, process, filesystem-write, or tool dispatcher.
 from __future__ import annotations
 
 import ctypes
-import ctypes.util
 import errno
 import json
 import os
@@ -147,14 +146,15 @@ def apply_seccomp_filter() -> None:
     The default action is ALLOW; dangerous process/namespace and execution
     syscalls are denied. This is defense in depth, not a complete allowlist.
     """
-    library = ctypes.util.find_library("seccomp")
-    if not library:
-        raise RuntimeError("libseccomp is required; refusing to run without syscall filter")
-    seccomp = ctypes.CDLL(library, use_errno=True)
+    try:
+        seccomp = ctypes.CDLL("libseccomp.so.2", use_errno=True)
+    except OSError as exc:
+        raise RuntimeError("libseccomp is required; refusing to run without syscall filter") from exc
     seccomp.seccomp_init.argtypes = [ctypes.c_uint32]
     seccomp.seccomp_init.restype = ctypes.c_void_p
     seccomp.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
     seccomp.seccomp_syscall_resolve_name.restype = ctypes.c_int
+    seccomp.seccomp_rule_add.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_int, ctypes.c_uint]
     seccomp.seccomp_rule_add.restype = ctypes.c_int
     seccomp.seccomp_load.argtypes = [ctypes.c_void_p]
     seccomp.seccomp_load.restype = ctypes.c_int
