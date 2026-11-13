@@ -1,0 +1,123 @@
+#!/usr/bin/python3
+"""Command-line interface for MOMO's durable task coordinator."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/momo")
+
+from intelligence.runtime.momo_runtime import Risk, TaskStatus
+from intelligence.runtime.task_store import TaskNotFoundError, TaskStore
+
+DATABASE = os.environ.get("MOMO_TASK_DB", "/var/lib/momo/tasks.sqlite3")
+
+
+def serialize(task):
+    return {
+        "task_id": task.task_id,
+        "goal": task.goal,
+        "risk": task.risk.value,
+        "status": task.status.value,
+        "events": [
+            {
+                "at": event.at.isoformat(),
+                "from": event.previous.value,
+                "to": event.current.value,
+                "reason": event.reason,
+            }
+            for event in task.events
+        ],
+    }
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog="momo-task",
+        description="Manage persistent MOMO tasks; this tool does not execute external actions.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("doctor", help="Check Python SQLite support and task database")
+    sub.add_parser("self-test", help="Run a disposable persistence and transition test")
+
+    create = sub.add_parser("create", help="Create a task")
+    create.add_argument("--goal", required=True)
+    create.add_argument("--risk", choices=[risk.value for risk in Risk], default="R0")
+
+    sub.add_parser("list", help="List recent tasks")
+
+    show = sub.add_parser("show", help="Show a task and its event history")
+    show.add_argument("task_id")
+
+    transition = sub.add_parser("transition", help="Change a task state")
+    transition.add_argument("task_id")
+    transition.add_argument("status", choices=[status.value for status in TaskStatus])
+    transition.add_argument("--reason", required=True)
+
+    return parser
+
+
+def self_test():
+    with tempfile.TemporaryDirectory(prefix="momo-task-test-") as directory:
+        database = Path(directory) / "tasks.sqlite3"
+        store = TaskStore(database)
+        task = store.create_task("MOMO runtime persistence self-test", Risk.R0)
+        for status, reason in (
+            (TaskStatus.CLASSIFIED, "Self-test classification"),
+            (TaskStatus.PLANNED, "Self-test plan"),
+            (TaskStatus.EXECUTING, "Self-test execution"),
+            (TaskStatus.VERIFYING, "Self-test verification"),
+            (TaskStatus.COMPLETED, "Self-test passed"),
+        ):
+            store.transition(task.task_id, status, reason)
+        restored = TaskStore(database).get_task(task.task_id)
+        if restored.status is not TaskStatus.COMPLETED or len(restored.events) != 5:
+            raise RuntimeError("Persistent task self-test did not restore expected state")
+    print("[MOMO] Persistent task runtime self-test passed")
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    try:
+        if args.command == "self-test":
+            self_test()
+            return 0
+
+        if args.command == "doctor":
+            with sqlite3.connect(":memory:") as connection:
+                connection.execute("SELECT sqlite_version()").fetchone()
+            store = TaskStore(DATABASE)
+            print(f"[MOMO] Python: {sys.version.split()[0]}")
+            print(f"[MOMO] SQLite: {sqlite3.sqlite_version}")
+            print(f"[MOMO] Task database: {store.database}")
+            print("[MOMO] Task runtime healthy")
+            return 0
+
+        store = TaskStore(DATABASE)
+        if args.command == "create":
+            task = store.create_task(args.goal, Risk(args.risk))
+            print(json.dumps(serialize(task), ensure_ascii=False, indent=2))
+        elif args.command == "list":
+            tasks = [serialize(task) for task in store.list_tasks()]
+            print(json.dumps(tasks, ensure_ascii=False, indent=2))
+        elif args.command == "show":
+            print(json.dumps(serialize(store.get_task(args.task_id)), ensure_ascii=False, indent=2))
+        elif args.command == "transition":
+            task = store.transition(
+                args.task_id, TaskStatus(args.status), args.reason
+            )
+            print(json.dumps(serialize(task), ensure_ascii=False, indent=2))
+        return 0
+    except (ValueError, TaskNotFoundError, sqlite3.Error, OSError, RuntimeError) as error:
+        print(f"[MOMO] ERROR: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
