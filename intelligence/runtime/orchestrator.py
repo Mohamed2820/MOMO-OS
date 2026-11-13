@@ -32,6 +32,7 @@ class PlanStep:
     required_capabilities: frozenset[str] = frozenset()
     risk: Risk = Risk.R0
     depends_on: tuple[str, ...] = ()
+    delegation_depth: int = 0
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,10 @@ class PlanValidator:
                 raise PlanValidationError(f"Duplicate step ID: {step.step_id}")
             if not step.description.strip():
                 raise PlanValidationError(f"Step {step.step_id} has no description")
+            if step.delegation_depth < 0 or step.delegation_depth > plan.max_delegation_depth:
+                raise PlanValidationError(
+                    f"Step {step.step_id} exceeds the delegation-depth budget"
+                )
             if step.step_id in step.depends_on:
                 raise PlanValidationError(f"Step {step.step_id} depends on itself")
             by_id[step.step_id] = step
