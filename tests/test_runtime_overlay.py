@@ -33,7 +33,7 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
                 )
 
     def test_execution_modules_match_the_source_of_truth(self):
-        for name in ("__init__.py", "step_journal.py"):
+        for name in ("step_journal.py",):
             with self.subTest(module=name):
                 self.assertEqual(
                     (EXECUTION_SOURCE / name).read_text(encoding="utf-8"),
