@@ -103,6 +103,15 @@ class TaskCoordinatorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.coordinator.get_ready_steps(task.task_id, other)
 
+    def test_same_goal_but_modified_plan_is_rejected(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        altered = Plan(self.plan.goal, (
+            PlanStep("inspect", "Different operation", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1),
+        ))
+        with self.assertRaises(ValueError):
+            self.coordinator.authorize_step(task.task_id, altered, "inspect")
+
 
 if __name__ == "__main__":
     unittest.main()
