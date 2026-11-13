@@ -28,7 +28,7 @@ The event hash chain is tamper-evident against accidental or partial record modi
 ## Not yet implemented
 
 - A worker scheduler and actual execution adapter; no process or tool is dispatched.
-- Fresh authorization bound atomically to dispatch, plus authenticated executor identity and replay-resistant IPC.
+- Fresh authorization bound atomically to dispatch and authenticated executor identity. A status-only authenticated IPC service now exists, with bounded process-lifetime replay detection, but it is not connected to task dispatch and does not authorize execution.
 - Linux namespaces, seccomp/LSM policy and sandbox profiles; Android SELinux/AppOps/Binder enforcement.
 - Downstream propagation and enforcement of idempotency keys by external services.
 - Deadline enforcement, backoff scheduling, concurrency/fairness limits and resource budgets.
