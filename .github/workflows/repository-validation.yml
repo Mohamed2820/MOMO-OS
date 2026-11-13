@@ -37,5 +37,11 @@ jobs:
         run: python3 -m pip install -r requirements-dev.txt
       - name: Validate device profiles against JSON Schema
         run: python3 tools/validate_device_profiles.py
+      - name: Check MOMO shell utilities
+        run: |
+          sh -n board/momo/rootfs-overlay/etc/init.d/S99momo
+          sh -n board/momo/rootfs-overlay/usr/bin/momoctl
+          sh board/momo/rootfs-overlay/usr/bin/momoctl version
+          sh board/momo/rootfs-overlay/usr/bin/momoctl help
       - name: Run MOMO runtime unit tests
         run: python3 -m unittest discover -s tests -v
