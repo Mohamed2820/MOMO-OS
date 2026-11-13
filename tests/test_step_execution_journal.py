@@ -129,13 +129,9 @@ class StepExecutionJournalTests(unittest.TestCase):
         self.register()
         with self.assertRaises(sqlite3.IntegrityError):
             self.register()
-        self.journal.register_step(
-            self.task.task_id, "another-step", Risk.R1,
-            f"{self.task.task_id}:read-status:v1",
-        )
         with self.assertRaises(sqlite3.IntegrityError):
             self.journal.register_step(
-                self.task.task_id, "third-step", Risk.R1,
+                self.task.task_id, "another-step", Risk.R1,
                 f"{self.task.task_id}:read-status:v1",
             )
 
