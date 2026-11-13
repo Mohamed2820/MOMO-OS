@@ -90,3 +90,5 @@ A `failed`, `running`, `cancelled` or `needs_review` step cannot unblock depende
 Each step's event stream is linked with a SHA-256 hash chain. New events include the previous event hash, and `verify_event_chain` checks the entire sequence. `list_events` verifies integrity before returning history. SQLite triggers reject ordinary UPDATE and DELETE statements. On initialization, legacy event tables are migrated by backfilling hashes before the append-only triggers are installed.
 
 This is tamper-evident, not a signed audit log. A privileged attacker able to rewrite the database and recompute hashes can forge a new chain. Stronger assurance requires protected storage permissions, a signing key held outside the database, and/or an external append-only audit anchor.
+
+Before any new lifecycle event is appended, the existing chain is verified using the same SQLite transaction connection. If prior history is corrupt, the state transition fails and rolls back; the journal will not extend or normalize a corrupted event stream.
