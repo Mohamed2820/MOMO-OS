@@ -46,6 +46,7 @@ MOMO OS aims to create a capable mobile computing environment by reusing mature 
 - [Vision](docs/VISION.md)
 - [Technical architecture](docs/ARCHITECTURE.md)
 - [AI runtime](docs/AI_RUNTIME.md)
+- [Provider routing](intelligence/providers/README.md)
 - [Agent methodology](docs/AGENT_METHODOLOGY.md)
 - [Tool and permission model](docs/TOOL_AND_PERMISSION_MODEL.md)
 - [Desktop experience](docs/DESKTOP_EXPERIENCE.md)
