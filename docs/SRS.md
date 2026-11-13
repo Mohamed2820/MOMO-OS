@@ -549,3 +549,10 @@ This is tamper-evident against accidental or partial record modification, not a 
 The journal also verifies the existing event chain before appending. A corrupted history blocks the new transition and the transaction rolls back; new events cannot silently extend a compromised chain.
 
 The integrity check also gates state reads and dependency scheduling: TaskCoordinator verifies all relevant step event chains before returning readiness. Corrupt history blocks the read/scheduling path instead of allowing untrusted state to authorize progress.
+
+
+## Linux IPC Identity Primitive — Implementation Note (2026-11-13)
+
+A first Linux-specific IPC identity primitive has been added on the x86_64 development track: `SO_PEERCRED` extraction for connected AF_UNIX sockets with explicit UID and optional primary-GID allowlists. The helper is mirrored into the Buildroot overlay and has unit tests plus source/overlay parity coverage.
+
+**Traceability:** partial implementation evidence for FR-SVC-004 (least-privilege services) and the IPC identity requirements. It is not yet integrated into a service, does not authenticate an operation's authority, and does not provide namespaces, seccomp, LSM policy or process isolation. No tool execution is enabled. Android IPC remains a separate Binder/AIDL and SELinux design.
