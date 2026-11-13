@@ -190,10 +190,13 @@ class StepExecutionJournalTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "hash-chain verification"):
             self.journal.start_step(self.task.task_id, "read-status")
-        self.assertEqual(
-            self.journal.get_step(self.task.task_id, "read-status").status,
-            StepExecutionStatus.READY,
-        )
+        with sqlite3.connect(self.database) as connection:
+            persisted_status = connection.execute(
+                "SELECT status FROM task_step_executions "
+                "WHERE task_id = ? AND step_id = ?",
+                (self.task.task_id, "read-status"),
+            ).fetchone()[0]
+        self.assertEqual(persisted_status, StepExecutionStatus.READY.value)
 
     def test_legacy_event_table_is_migrated_and_backfilled(self):
         legacy_database = Path(self.temp.name) / "legacy.sqlite3"
