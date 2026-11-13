@@ -167,3 +167,7 @@ Stage 2 and Stage 3 remain open. There is no worker scheduler, actual tool execu
 ## Stage 3 Progress — IPC protocol framing (2026-11-13)
 
 A bounded version-1 Linux local IPC framing codec is under review: strict length-prefixed frames, maximum payload, strict JSON validation and socket stream helpers, with unit and overlay parity tests. This does not complete service IPC or Stage 3. The codec is not wired to a daemon; peer identity must be checked before request processing, and operation authorization, service-role mapping, deadlines, replay defense, quotas and OS-native isolation remain mandatory.
+
+## IPC Service Progress — 2026-11-13
+
+PR #38 adds a first unprivileged AF_UNIX status daemon with a dedicated Buildroot account, kernel peer authentication, one read-only status operation and a CLI client. It is not a tool executor and is not production-security complete. CI and QEMU acceptance are required before merging into the boot branch. Next: replay protection, explicit role/capability authorization, Linux-native sandboxing and adversarial isolation tests. Android remains a separate Binder/AIDL + SELinux/AppOps track.
