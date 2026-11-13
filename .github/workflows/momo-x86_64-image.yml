@@ -9,6 +9,8 @@ on:
       - "board/momo/**"
       - "intelligence/runtime/**"
       - "tests/test_task_store.py"
+      - "tests/test_device_inventory.py"
+      - "tests/test_persistent_permission_broker.py"
       - "docs/BOOTABLE_IMAGE.md"
       - ".github/workflows/momo-x86_64-image.yml"
 
@@ -51,6 +53,8 @@ jobs:
           chmod +x board/momo/rootfs-overlay/etc/init.d/S99momo
           chmod +x board/momo/rootfs-overlay/usr/bin/momoctl
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-task
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-device
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-permissions
           make -C "$BUILDROOT_DIR" qemu_x86_64_defconfig
           # QEMU is already installed on the GitHub runner; do not build a second host QEMU from source.
           sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
