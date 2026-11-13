@@ -1,6 +1,6 @@
 # MOMO AI Runtime Specification
 
-Status: architecture specification; implementation not yet production-ready.
+Status: architecture specification plus early deterministic runtime components; not production-ready.
 
 ## Product contract
 MOMO is a personal assistant runtime that coordinates specialized agents. It is not described as AGI and must never claim certainty or task completion without evidence.
@@ -11,7 +11,7 @@ MOMO is a personal assistant runtime that coordinates specialized agents. It is 
 - **Planner:** produces a structured plan with dependencies, expected outputs, and stop conditions.
 - **Orchestrator:** owns task state, budgets, delegation, cancellation, and retries.
 - **Agent registry:** maps bounded specialist roles to model profiles and tool scopes.
-- **Model router:** chooses local or remote provider based on policy, capability, latency, availability, and cost.
+- **Model router:** chooses local or remote provider based on policy, capability, latency, availability, and cost. An initial provider-profile selector now enforces capability, data-classification, local-only, and cost constraints; it does not yet call model APIs.
 - **Tool broker:** validates schema, checks capability grants, requests approval, executes, and records evidence.
 - **Memory service:** stores only authorized user/project memory with provenance and retention rules.
 - **Verifier:** checks external state, test results, and artifact integrity independently.
