@@ -39,6 +39,8 @@ class PersistentPermissionBrokerTests(unittest.TestCase):
         self.assertTrue(self.broker.revoke(self.grant.grant_id))
         restarted = PersistentPermissionBroker(self.database)
         self.assertFalse(restarted.authorize(self.request, now=self.now).allowed)
+        reasons = {event["reason"] for event in restarted.list_events()}
+        self.assertIn("Capability grant revoked", reasons)
 
     def test_expired_grant_is_denied_and_audited(self):
         expired = CapabilityGrant(
