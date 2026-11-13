@@ -9,7 +9,12 @@ case "$1" in
     echo "              MOMO OS 0.1.0-alpha"
     echo "       Adaptive computing platform"
     echo "=============================================="
-    /usr/bin/momoctl boot-check
+    mkdir -p /var/lib/momo
+    chmod 700 /var/lib/momo
+    if ! /usr/bin/momoctl boot-check; then
+      echo "[MOMO] Boot checks failed; entering degraded state."
+      exit 1
+    fi
     echo "[MOMO] Boot initialization complete."
     ;;
   stop)
