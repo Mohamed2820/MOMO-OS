@@ -38,8 +38,7 @@ jobs:
           archive="buildroot-${version}.tar.xz"
           base="https://buildroot.org/downloads"
           wget --https-only "${base}/${archive}"
-          wget --https-only "${base}/${archive}.sha256"
-          sha256sum -c "${archive}.sha256"
+          echo "34fb7bea8a213ffde39cc02e61703391560f26e0850f03138c722d0b09880f2b  ${archive}" | sha256sum -c -
           tar -xf "${archive}"
           echo "BUILDROOT_DIR=${GITHUB_WORKSPACE}/buildroot-${version}" >> "$GITHUB_ENV"
 
