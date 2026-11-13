@@ -5,6 +5,7 @@ replace native operating-system permission enforcement.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,11 @@ class PersistentPermissionBroker:
         self.database = Path(database)
         self.database.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._initialize()
+        try:
+            os.chmod(self.database, 0o600)
+        except OSError:
+            # Some managed/read-only filesystems do not permit chmod.
+            pass
 
     def _connect(self):
         connection = sqlite3.connect(str(self.database), timeout=10)
