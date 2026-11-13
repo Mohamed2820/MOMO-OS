@@ -32,4 +32,4 @@ This is process-lifetime replay detection, not durable anti-replay across daemon
 
 ## Daemon process hardening increment (PR #40 candidate)
 
-Before binding its socket, the IPC daemon applies hard process limits: zero core dumps, 32 open file descriptors, zero file-size growth, 120 seconds CPU time and 256 MiB address space. It also sets Linux `PR_SET_NO_NEW_PRIVS`. These controls reduce impact but are not a syscall allowlist: no seccomp filter, mount/user/network namespace, cgroup policy or LSM profile is installed. Do not describe this as a complete sandbox.
+Before binding its socket, the IPC daemon applies hard process limits: zero core dumps, 32 open file descriptors, zero file-size growth and 256 MiB address space. A hard cumulative CPU-time limit was deliberately omitted because it would eventually terminate a healthy long-lived daemon. It also sets Linux `PR_SET_NO_NEW_PRIVS`. These controls reduce impact but are not a syscall allowlist: no seccomp filter, mount/user/network namespace, cgroup policy or LSM profile is installed. Do not describe this as a complete sandbox.
