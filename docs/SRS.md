@@ -15,9 +15,10 @@ This snapshot distinguishes source implementation, target-image integration, aut
 
 | Area | Current implementation | Evidence / limitation |
 |---|---|---|
-| x86_64 Linux image | Buildroot configuration, kernel/rootfs pipeline and QEMU serial-boot acceptance check | Latest image run #43436209791 is in progress; no successful QEMU boot or artifact claim yet |
+| x86_64 Linux image | Buildroot configuration, kernel/rootfs pipeline and QEMU serial-boot acceptance check | Latest image run #43437714431 is in progress at kernel/rootfs build; no image artifact or successful QEMU boot yet. Earlier run #43436209791 was cancelled during build and produced metadata only. |
 | Task state machine | Risk-aware lifecycle and transition validation | Repository unit tests pass |
 | Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; image-level execution awaits QEMU boot |
+| Task Coordinator | Plan validation, immutable SHA-256 binding, atomic task/plan/event persistence and permission checks | PR #23 merged; repository tests pass; no tool execution or crash-recovery scheduler yet |
 | Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; target CLI has not yet been exercised in QEMU |
 | Device inventory | Runtime OS/kernel/architecture/device identity collection | Source and rootfs overlay included; exact hardware capabilities remain unknown absent verified profile |
 | Persistent permission broker | SQLite grants, expiry, revocation, bounded use, exact R3/R4 approval matching and audit journal | Source and rootfs overlay included; policy layer does not enforce native OS permissions or execute tools |
