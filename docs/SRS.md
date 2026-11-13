@@ -567,3 +567,8 @@ Acceptance remains conditional on CI and a fresh QEMU image run. This does not s
 ## IPC Replay Protection Increment — 2026-11-13 (PR #39 candidate)
 
 The read-only IPC service adds a bounded process-lifetime replay cache (1,024 request IDs), rejects duplicate IDs before dispatch, and uses unique CLI request IDs. Client response validation rejects duplicate JSON keys, unexpected fields and mismatched request IDs. This is not durable replay protection across daemon restart and is not sufficient for side-effecting operations.
+
+
+## IPC Process Restriction Increment — 2026-11-13 (PR #40 candidate)
+
+The unprivileged IPC daemon now applies bounded core/file/descriptor/CPU/address-space limits and Linux `PR_SET_NO_NEW_PRIVS` before opening its listening socket. These are defense-in-depth process restrictions only; syscall filtering, namespaces, cgroups and LSM policy remain required for a real sandbox.
