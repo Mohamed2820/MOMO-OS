@@ -1,0 +1,45 @@
+{
+  "profile_version": 1,
+  "identity": {
+    "manufacturer": "REPLACE_WITH_MANUFACTURER",
+    "model": "REPLACE_WITH_EXACT_MODEL",
+    "codename": "REPLACE_WITH_DEVICE_CODENAME",
+    "region": null,
+    "soc": "REPLACE_WITH_SOC",
+    "firmware_build": null
+  },
+  "platform_track": "android",
+  "architecture": "arm64",
+  "boot": {
+    "bootloader_unlock": "unknown",
+    "verified_boot": "unknown",
+    "recovery_path": "unknown",
+    "partition_map_verified": false
+  },
+  "kernel": {
+    "family": null,
+    "version": null,
+    "source_url": null,
+    "config_revision": null
+  },
+  "support_tier": 0,
+  "maintainer": null,
+  "last_validated": null,
+  "features": {
+    "display": "unknown",
+    "touch": "unknown",
+    "storage": "unknown",
+    "charging": "unknown",
+    "wifi": "unknown",
+    "bluetooth": "unknown",
+    "telephony": "unknown",
+    "audio": "unknown",
+    "camera": "unknown",
+    "sensors": "unknown",
+    "biometrics": "unknown",
+    "encryption": "unknown",
+    "suspend_resume": "unknown",
+    "ota": "unknown"
+  },
+  "evidence": []
+}

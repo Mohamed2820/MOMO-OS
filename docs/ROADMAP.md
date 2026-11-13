@@ -13,7 +13,7 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 
 **Exit:** repository policy and initial runtime contracts are in place; no unverified device or build claims. Remaining: dependency/license inventory and maintainer governance.
 
-## M1 — Device feasibility and base selection
+## M1 — Universal platform and device compatibility
 - [ ] Confirm exact Galaxy A17 product variant/codename and regional SKU.
 - [ ] Verify bootloader unlock availability for the exact variant and region.
 - [ ] Locate official kernel sources and matching kernel configuration.
@@ -22,7 +22,7 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 - [ ] Compare AOSP and LineageOS integration cost and maintenance health.
 - [ ] Select a pinned platform baseline only after the above evidence.
 
-**Exit:** reproducible build plan and credible recovery path. No flashing before this gate.
+**Exit:** common platform architecture is independent of devices, and each selected device has a verified build and recovery plan. No flashing before this gate.
 
 ## M2 — Cloud source and build pipeline
 - [ ] Define pinned Repo manifest.
@@ -34,7 +34,7 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 **Exit:** repeatable baseline build with documented limitations.
 
 ## M3 — MOMO platform shell and services
-- [ ] Prototype launcher and mobile shell.
+- [ ] Prototype launcher and mobile shell once, with platform-specific adapters beneath it.
 - [ ] Define permission broker and narrow system APIs.
 - [ ] Build task/activity history and user-visible automation controls.
 - [ ] Prototype desktop/workstation mode where hardware supports it.
@@ -53,9 +53,9 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 **Exit:** measured task performance with safe, auditable execution.
 
 ## M5 — Integration, hardening, and device validation
-- [ ] Integrate services with Android permission and SELinux policy.
+- [ ] Integrate services with Android permission/SELinux policy and Linux service/portal policy on their respective tracks.
 - [ ] Run functional, regression, privacy, and security tests.
-- [ ] Validate battery, thermal, radio, camera, audio, sensors, biometrics, and OTA.
+- [ ] Validate battery, thermal, radio, camera, audio, sensors, biometrics, and OTA on each claimed device profile and platform track.
 - [ ] Test restore and rollback paths.
 - [ ] Conduct independent review before any public release.
 
@@ -69,9 +69,9 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 
 ## Current engineering blockers
 
-- **Device:** exact firmware/CSC, bootloader unlock status, matching Samsung kernel source, device tree, vendor files, partition/AVB layout, and restore route are not yet verified.
+- **Device matrix:** no device family has yet passed a complete porting and recovery gate. SM-A175F remains only one candidate, not the product's target boundary.
 - **Cloud:** no build worker or cloud budget has been provisioned. Standard GitHub-hosted runners are not assumed sufficient for full AOSP.
 - **AI providers:** no provider credentials or local inference runtime has been configured. The core currently contains policy/state logic only, not an LLM integration.
-- **Android integration:** no privileged system service, launcher, desktop shell, or device image has been built.
+- **Platform integration:** no Android/Linux hardware adapter, privileged system service, launcher, desktop shell, or device image has been built.
 
 These are explicit blockers, not completed tasks.
