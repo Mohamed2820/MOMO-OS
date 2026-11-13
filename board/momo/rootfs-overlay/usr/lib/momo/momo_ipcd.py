@@ -10,6 +10,8 @@ import os
 import socket
 import stat
 import struct
+import threading
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,32 @@ from intelligence.security.linux_peercred import (
 SOCKET_PATH = Path("/run/momo/ipc.sock")
 ALLOWED_CLIENT_UIDS = frozenset({0})
 MAX_CLIENTS_PER_LOOP = 8
+REPLAY_CACHE_CAPACITY = 1024
+
+
+class RequestReplayGuard:
+    """Bounded in-memory replay detector for request IDs within one daemon run."""
+
+    def __init__(self, capacity: int = REPLAY_CACHE_CAPACITY) -> None:
+        if type(capacity) is not int or capacity < 1:
+            raise ValueError("Replay cache capacity must be a positive integer")
+        self._capacity = capacity
+        self._order: deque[str] = deque()
+        self._seen: set[str] = set()
+        self._lock = threading.Lock()
+
+    def claim(self, request_id: str) -> bool:
+        if not isinstance(request_id, str) or not request_id:
+            return False
+        with self._lock:
+            if request_id in self._seen:
+                return False
+            if len(self._order) >= self._capacity:
+                expired = self._order.popleft()
+                self._seen.remove(expired)
+            self._order.append(request_id)
+            self._seen.add(request_id)
+            return True
 
 
 def _response_frame(payload: dict[str, Any]) -> bytes:
@@ -51,11 +79,13 @@ def _status_payload() -> dict[str, Any]:
     }
 
 
-def handle_connection(connection: socket.socket, allowed_uids: frozenset[int]) -> None:
+def handle_connection(\n    connection: socket.socket, allowed_uids: frozenset[int],\n    replay_guard: RequestReplayGuard | None = None,\n) -> None:
     """Authenticate, validate and answer one read-only request."""
     try:
         peer = require_peer_identity(connection, allowed_uids)
         request = recv_request(connection)
+        if replay_guard is not None and not replay_guard.claim(request["request_id"]):
+            raise IPCProtocolError("Duplicate request identifier")
         if request["operation"] != "status.read" or request["args"] != {}:
             raise IPCProtocolError("Operation is not available")
         response = {
@@ -85,6 +115,7 @@ def prepare_socket_path(path: Path) -> None:
 def serve(path: Path = SOCKET_PATH) -> None:
     prepare_socket_path(path)
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    replay_guard = RequestReplayGuard()
     try:
         server.bind(str(path))
         os.chmod(path, 0o660)
@@ -97,7 +128,7 @@ def serve(path: Path = SOCKET_PATH) -> None:
                 continue
             with connection:
                 connection.settimeout(2.0)
-                handle_connection(connection, ALLOWED_CLIENT_UIDS)
+                handle_connection(connection, ALLOWED_CLIENT_UIDS, replay_guard)
     finally:
         server.close()
         try:
