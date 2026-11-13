@@ -162,3 +162,10 @@ The integrated revision is undergoing a fresh Buildroot/QEMU run. Until that run
 ### Explicitly incomplete
 
 Stage 2 and Stage 3 remain open. There is no worker scheduler, actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff service, concurrency/resource manager, independent outcome verifier or needs_review reconciler. The 111-test repository result is not a substitute for image or hardware validation.
+
+
+## Stage 3 — Security implementation progress (2026-11-13)
+
+A Linux-only peer identity primitive now exists in PR #36: kernel-provided AF_UNIX `SO_PEERCRED` extraction and UID/primary-GID allowlist checks, mirrored into the Buildroot overlay and covered by tests. This is only a foundation. It is not wired to a daemon and does not satisfy the Stage 3 exit criteria.
+
+Still required: authenticated service-role mapping, versioned IPC protocol, dedicated service identities, namespaces/seccomp/LSM enforcement, Android Binder/AIDL + SELinux/AppOps design, adversarial tests and independent security review. No tool executor is enabled.
