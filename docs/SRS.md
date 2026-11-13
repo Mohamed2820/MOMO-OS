@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS)
 ## MOMO OS — Device-Adaptive Mobile Computing Platform
 
-**Document status:** Active SRS, version 0.3  
+**Document status:** Active SRS, version 1.0  
 **Date:** 2026-11-13  
 **Repository:** Mohamed2820/MOMO-OS  
 **Normative language:** "shall" indicates a requirement; "should" indicates a recommended requirement.  
@@ -15,7 +15,7 @@ This snapshot distinguishes source implementation, target-image integration, aut
 
 | Area | Current implementation | Evidence / limitation |
 |---|---|---|
-| x86_64 Linux image | Buildroot configuration, kernel/rootfs pipeline and QEMU serial-boot acceptance check | Latest image run is queued/building; no successful QEMU boot or artifact claim yet |
+| x86_64 Linux image | Buildroot configuration, kernel/rootfs pipeline and QEMU serial-boot acceptance check | Latest image run #43436209791 is in progress; no successful QEMU boot or artifact claim yet |
 | Task state machine | Risk-aware lifecycle and transition validation | Repository unit tests pass |
 | Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; image-level execution awaits QEMU boot |
 | Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; target CLI has not yet been exercised in QEMU |
@@ -299,3 +299,221 @@ A requirement is accepted only when a test or documented review provides evidenc
 
 ## 12. Definition of Done
 MOMO OS is production-ready only when a reproducible, signed release boots on its declared devices; the support matrix reflects hardware test evidence; core services and security boundaries pass acceptance tests; AI tools operate through explicit permissions and verified outcomes; updates and recovery are tested; and source, licenses, SBOM and release provenance are published.
+
+
+---
+
+# SRS Extension — Complete System Requirements Baseline
+
+**Baseline version:** 1.0  
+**Status:** Requirements baseline; implementation remains incremental.  
+**Normative rule:** each requirement must be linked to implementation and verification evidence before being marked complete.
+
+## 13. System context and architectural constraints
+
+### 13.1 Product boundaries
+MOMO OS is a product family consisting of shared MOMO contracts and independently implemented platform tracks. Android-compatible and mainline-Linux tracks are not interchangeable operating systems. Kernel, boot chain, drivers, HALs, application model, security enforcement and update mechanism remain platform-specific.
+
+### 13.2 Architectural requirements
+- **ARC-001:** Shared MOMO contracts shall not expose platform-private structures as public APIs.
+- **ARC-002:** Each adapter shall declare platform, version range, capabilities, privilege requirements and conformance tests.
+- **ARC-003:** Boot, emergency, recovery and basic device functions shall not depend on models, network access or AI.
+- **ARC-004:** Optional subsystems shall fail independently and expose health state.
+- **ARC-005:** Device-specific code shall be isolated from shared service logic.
+- **ARC-006:** Hardware capability shall not be reported supported without successful probe or suitable profile evidence.
+- **ARC-007:** Public service contracts shall be versioned and have compatibility tests.
+
+## 14. Detailed functional requirements
+
+### 14.1 Boot and lifecycle
+- **FR-BOOT-001:** Boot shall identify platform and target profile before optional MOMO services start.
+- **FR-BOOT-002:** Failure of an optional service shall not cause an unrecoverable boot loop.
+- **FR-BOOT-003:** The system shall expose boot stage, service health and diagnostic logs.
+- **FR-BOOT-004:** Safe/recovery mode shall disable nonessential services and AI automation.
+- **FR-BOOT-005:** Every bootable release shall have a documented recovery and restore path for its exact device.
+
+### 14.2 Device profile and hardware abstraction
+- **FR-DEV-001:** Each profile shall bind to exact manufacturer, model, board/codename, SKU/region and relevant firmware.
+- **FR-DEV-002:** Each capability shall include status, evidence source, last-tested timestamp and adapter version.
+- **FR-DEV-003:** Profiles shall distinguish unsupported, unknown, unavailable, permission-denied and supported.
+- **FR-DEV-004:** Runtime discovery shall not silently override reviewed profile data with weaker inferred data.
+- **FR-DEV-005:** Capability changes shall be observable and auditable.
+- **FR-DEV-006:** Device adapters shall gracefully degrade when optional hardware is absent.
+- **FR-DEV-007:** Device-specific boot and recovery metadata shall be validated before a release is installable.
+
+### 14.3 Service framework and IPC
+- **FR-IPC-001:** Local endpoints shall authenticate callers using native OS identity.
+- **FR-IPC-002:** Requests shall carry schema version, request ID, deadline and caller identity.
+- **FR-IPC-003:** Responses shall contain structured status, error code, correlation ID and bounded diagnostic detail.
+- **FR-IPC-004:** Service APIs shall support cancellation where safe.
+- **FR-IPC-005:** Privileged services shall reject unknown fields and invalid enum values in security-sensitive requests.
+- **FR-IPC-006:** IPC endpoints shall not be exposed to unauthenticated network clients by default.
+- **FR-IPC-007:** Adapters shall pass shared contract and platform security tests.
+
+### 14.4 Task and automation execution
+- **FR-TASK-001:** Every task shall have stable ID, owner, goal, risk ceiling, state, creation time and event history.
+- **FR-TASK-002:** Plans shall declare steps, dependencies, required capabilities, agent roles, risk, deadlines and acceptance criteria.
+- **FR-TASK-003:** Plans shall be validated against registered agent/tool capabilities before scheduling.
+- **FR-TASK-004:** Persisted tasks shall be cryptographically bound to their accepted plan version.
+- **FR-TASK-005:** The scheduler shall run only steps whose dependencies are complete and preconditions remain true.
+- **FR-TASK-006:** Every side-effecting step shall be authorized against exact subject, action, resource and risk.
+- **FR-TASK-007:** R3/R4 steps shall require operation-specific approval bound to exact target and arguments.
+- **FR-TASK-008:** Cancellation shall prevent new steps and propagate to running adapters where safe.
+- **FR-TASK-009:** Retries shall be bounded and use backoff; side effects shall use idempotency or reconciliation.
+- **FR-TASK-010:** After restart, interrupted steps shall be reconciled without blindly repeating side effects.
+- **FR-TASK-011:** State transitions shall be atomic and validated against an explicit state machine.
+- **FR-TASK-012:** A task shall not be marked successful without independent verification of acceptance criteria.
+- **FR-TASK-013:** Users shall inspect, pause, cancel and review task history.
+- **FR-TASK-014:** Budgets shall limit concurrency, CPU, memory, network and model/tool spend where measurable.
+
+### 14.5 Permission and security enforcement
+- **FR-PERM-001:** Permissions shall represent principal, capability, resource scope, risk, expiry, use limit and approval binding.
+- **FR-PERM-002:** Grants shall be revocable before the next operation.
+- **FR-PERM-003:** Single-use grants shall be consumed atomically to prevent replay and races.
+- **FR-PERM-004:** High-risk approval shall not be satisfied by model-generated text or agent identity.
+- **FR-PERM-005:** Native OS permissions, SELinux/LSM, sandbox and secure boot remain authoritative.
+- **FR-PERM-006:** Privileged operations shall fail closed if policy state is unavailable.
+- **FR-PERM-007:** Security decisions shall emit append-only audit events with secret redaction.
+- **FR-PERM-008:** Users shall inspect active grants, scope, expiry and revocation state.
+- **FR-PERM-009:** Permission prompts shall explain action, target, data scope and consequences.
+- **FR-PERM-010:** Read, write, execute, network and device-control capabilities shall be distinct.
+
+### 14.6 Storage and personal data
+- **FR-STOR-001:** File APIs shall use scoped handles or equivalent capability access, not unrestricted paths.
+- **FR-STOR-002:** File operations shall validate traversal, symlinks, mount boundaries and ownership.
+- **FR-STOR-003:** Bulk/destructive operations shall provide preview, confirmation and recovery where possible.
+- **FR-STOR-004:** Storage service shall report quotas, free space and progress.
+- **FR-STOR-005:** Sensitive data shall use platform encryption facilities where available.
+- **FR-STOR-006:** Backup/restore shall preserve integrity and disclose exclusions.
+- **FR-STOR-007:** Temporary data shall have retention and cleanup policies.
+- **FR-STOR-008:** Agent access shall be limited to exact files and operations authorized by the user.
+
+### 14.7 Application lifecycle and compatibility
+- **FR-APP-004:** App Broker shall delegate install/update/uninstall to native package manager or documented Linux runtime.
+- **FR-APP-005:** Application identity and signing state shall be checked before privileged lifecycle operations.
+- **FR-APP-006:** Application permissions shall remain controlled by the platform.
+- **FR-APP-007:** Compatibility claims shall identify platform, OS release, app version and test status.
+- **FR-APP-008:** Incompatible packages shall not be silently converted or installed.
+
+### 14.8 Notifications and user interaction
+- **FR-NOTIF-001:** Notifications shall support channels, priority, grouping and user-controlled interruption.
+- **FR-NOTIF-002:** Lock-screen visibility shall respect private-content settings.
+- **FR-NOTIF-003:** Notification actions that create side effects shall use the same permission policy as other tools.
+- **FR-NOTIF-004:** Users shall configure, disable or snooze notification categories.
+- **FR-NOTIF-005:** Critical system notifications shall be distinguishable from agent-generated notifications.
+
+### 14.9 Network and connectivity
+- **FR-NET-001:** Network access shall be mediated by native platform permissions and per-service policy.
+- **FR-NET-002:** AI providers shall be selected by user policy, privacy class, availability, cost and capability.
+- **FR-NET-003:** Cloud-bound payloads shall be minimized and private-context transfer disclosed.
+- **FR-NET-004:** Offline degradation shall be supported; only safe operations may be queued.
+- **FR-NET-005:** Credentials shall be scoped, revocable and excluded from logs.
+- **FR-NET-006:** Privileged local services shall not bind to all network interfaces without security review.
+
+### 14.10 Power, thermal and hardware safety
+- **FR-PWR-001:** The system shall observe platform thermal and battery signals where available.
+- **FR-PWR-002:** MOMO shall never override kernel, firmware or hardware thermal protections.
+- **FR-PWR-003:** Background AI work shall be deferrable, cancellable and subject to power/thermal budgets.
+- **FR-PWR-004:** Telemetry shall report unknown when the platform exposes no reliable data.
+- **FR-PWR-005:** Performance modes shall be exposed only through verified adapters.
+
+### 14.11 AI model, agent and memory behavior
+- **FR-AI-015:** Provider adapters shall declare data handling, context limits, tool support, availability and credential source.
+- **FR-AI-016:** Provider secrets shall be user-supplied or managed by an approved secret manager; never hardcoded.
+- **FR-AI-017:** Model routing shall support local-only, cloud-allowed and offline policies.
+- **FR-AI-018:** Agent delegation shall preserve initiating-user policy and cannot expand authority.
+- **FR-AI-019:** Memory writes shall record provenance, scope, retention and consent state.
+- **FR-AI-020:** Users shall inspect, correct and delete assistant memory through defined controls.
+- **FR-AI-021:** Model planning output shall be separate from verified execution results.
+- **FR-AI-022:** The assistant shall disclose uncertainty and clarify assumptions when errors could cause harm.
+- **FR-AI-023:** Provider failure shall not corrupt task state or bypass approval.
+- **FR-AI-024:** Evaluations shall report dataset, hardware, provider/model version, success criteria, cost and latency.
+
+### 14.12 Updates, recovery and lifecycle
+- **FR-UPD-007:** Update metadata shall bind target device, platform version, source revision and artifact hashes.
+- **FR-UPD-008:** Update installation shall verify signatures and rollback constraints before writing.
+- **FR-UPD-009:** Updates shall preserve user data according to the device's supported update model.
+- **FR-UPD-010:** Interrupted updates shall recover to a bootable state where transactional updates are supported.
+- **FR-UPD-011:** Channels shall distinguish development, beta, candidate and stable.
+- **FR-UPD-012:** End-of-life devices shall be clearly identified without false security-update promises.
+
+## 15. Data model and retention
+
+Core logical entities:
+- DeviceProfile: exact identity, platform, firmware, components, capability evidence, adapter versions and support tier.
+- Capability: identifier, status, evidence, permission requirements and last verification.
+- Principal: service, agent, application or user identity.
+- Grant: principal, capability, resource scope, risk ceiling, expiry, use limit, approval binding and revocation state.
+- Task: goal, owner, risk, state, accepted plan digest, deadline, budget and timestamps.
+- TaskStep: agent/tool, input schema, dependencies, risk, preconditions and acceptance criteria.
+- TaskEvent: append-only transition, authorization, execution and verification record.
+- MemoryRecord: content reference, provenance, scope, retention and consent.
+- AuditEvent: actor, action, target, outcome, correlation ID, timestamp and redacted metadata.
+- BuildArtifact: source revision, toolchain, target profile, hash, signature and provenance.
+
+Retention periods and deletion guarantees must be finalized before stable release. Audit retention must not become a backdoor for retaining raw private content.
+
+## 16. Quality attributes and measurable targets
+
+These are objectives, not current performance claims, and must be measured on declared hardware:
+- **NFR-PERF-006:** Core shell input feedback target p95 ≤100 ms on qualified reference hardware.
+- **NFR-PERF-007:** Local warm core-service health query target p95 ≤250 ms.
+- **NFR-REL-005:** Task journal shall survive process restart and power-loss simulation without invalid transitions.
+- **NFR-REL-006:** Optional AI/provider failure shall not prevent core boot or non-AI use.
+- **NFR-SEC-005:** No unresolved critical/high privilege-bypass finding at stable release.
+- **NFR-PORT-005:** Shared contract tests shall run against every maintained adapter.
+- **NFR-OBS-001:** Every side effect shall be traceable from task ID through authorization, adapter and verification.
+- **NFR-ACCESS-001:** First-party UI shall pass keyboard, screen-reader, scaling and RTL checks.
+- **NFR-ENERGY-001:** Background AI shall obey per-device battery and thermal policy; numeric budgets follow baseline measurement.
+
+## 17. External interface contracts
+
+Every service API shall define version, compatibility policy, authenticated caller identity, typed request/response, maximum payload, timeout/cancellation, error taxonomy, capability requirements, audit/correlation, idempotency and negative security tests.
+
+Android may use Binder/AIDL and native services. Linux may use D-Bus, authenticated Unix sockets, portals and isolated daemons. These are implementation choices; MOMO contracts remain platform-neutral.
+
+## 18. Verification matrix
+
+| Layer | Required evidence | Release relevance |
+|---|---|---|
+| Static/repository | Schemas, manifests, docs, secrets, license and source checks | Every PR |
+| Unit | Deterministic policy, state, routing and data logic | Every PR |
+| Integration | IPC, service, database, provider and adapter behavior | Each subsystem |
+| Emulator | Image boot, health, UI and failure injection | Each platform build |
+| Hardware | Exact SKU boot, radios, display, input, camera, audio, power and security | Each device claim |
+| Security | Threat model, adversarial tests and independent review | Before candidate/stable |
+| Release | Signatures, SBOM, provenance, update, rollback and restore | Every release |
+
+A pass at one layer does not imply a higher layer passed.
+
+## 19. Requirement traceability and change control
+
+Each requirement shall have unique ID, priority, owner/workstream, implementation path, positive/negative tests, evidence link, tested revision and status (specified, implemented, CI-tested, image-integrated, emulator-tested, hardware-tested, release-qualified). Changes require rationale, impact analysis, tests and revision history.
+
+## 20. Product acceptance gates
+
+- **AC-001:** SRS, architecture, threat model, platform strategy and support tiers approved.
+- **AC-002:** Pinned Buildroot build, non-empty artifacts, QEMU serial boot, readiness marker and target smoke tests pass.
+- **AC-003:** Tasks, plans, grants and audit events persist/recover after restart and fault injection.
+- **AC-004:** Unauthorized calls fail at OS sandbox/permission boundary; high-risk approval is exact and replay-resistant.
+- **AC-005:** Selected Android and Linux baselines build from pinned manifests with license/provenance.
+- **AC-006:** Exact SKU boots repeatedly with logs and verified restore procedure.
+- **AC-007:** Essential hardware, encryption, thermal/power, update and recovery pass device tests.
+- **AC-008:** Assistant uses bounded tools, approvals and independent verification and passes adversarial evaluation.
+- **AC-009:** Signed artifacts, SBOM, provenance, security review, release notes and rollback evidence exist.
+- **AC-010:** At least two distinct device families pass their declared support tier before broad multi-device maturity is claimed.
+
+## 21. Open decisions requiring ADRs
+
+- Android base, API baseline and kernel maintenance strategy.
+- Mainline Linux mobile target, compositor/shell, init and package/runtime.
+- First exact Android SKU and first Linux mobile device.
+- Secure IPC and capability token format.
+- Tool sandbox technology per platform.
+- Local model runtimes and minimum hardware classes.
+- Memory retention/deletion and cloud data policy.
+- Signing infrastructure, key custody and OTA design.
+- Supported languages and formal accessibility target.
+- MOMO-owned code license and contribution governance.
+
+No unresolved decision may be silently treated as selected. Each ADR records alternatives, evidence, decision, consequences and review date.

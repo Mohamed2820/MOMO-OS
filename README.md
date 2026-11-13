@@ -58,6 +58,8 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 - [Cloud build pipeline](docs/CLOUD_BUILD.md)
 - [Test strategy](docs/TEST_STRATEGY.md)
 - [Device research: SM-A175F](docs/DEVICE_RESEARCH.md) (one candidate, not the product target)\n- [Device profile schema](manifests/device-profile.schema.json)\n- [Device profile template](manifests/device-profiles/template.json)
+- [Complete product description](docs/PROJECT_OVERVIEW.md)
+- [Master execution plan](docs/MASTER_EXECUTION_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
 
 ## Device feasibility gate

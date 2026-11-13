@@ -1,77 +1,113 @@
-# Roadmap
+# MOMO OS — End-to-End Roadmap
 
-Milestones are gated by evidence and acceptance criteria, not calendar promises.
+Roadmap stages are evidence-gated. Dates are not promised until build capacity, device access, platform baselines and maintainers are confirmed.
 
-## M0 — Repository and governance foundation
-- [x] Establish cloud-first, upstream-aware repository strategy.
-- [x] Document architecture, security, licensing, and device feasibility gates.
-- [x] Specify AI runtime, capability broker, desktop experience, cloud pipeline, and test strategy.
-- [x] Add provider-neutral task state machine and permission-policy core with unit tests.
-- [x] Add JSON contracts for tasks and capability grants.
-- [ ] Add maintainers, issue templates, and contribution guidance.
-- [ ] Inventory upstream candidates and exact licenses.
+## Current stage — Experimental Linux bring-up
+Build the x86_64 Buildroot image and prove it boots under QEMU. This is a development target, not a mobile ROM.
 
-**Exit:** repository policy and initial runtime contracts are in place; no unverified device or build claims. Remaining: dependency/license inventory and maintainer governance.
+## Stage 0 — Governance and product baseline
+- [x] Repository and cloud-first development strategy.
+- [x] Initial architecture, security, device compatibility, AI runtime and licensing documents.
+- [x] Initial task state machine, task journal, device inventory and persistent permission broker.
+- [x] Initial Task Coordinator with immutable plan binding and scoped permission checks.
+- [ ] Complete SRS, product overview, master plan and evidence-based roadmap.
+- [ ] Dependency/license inventory, contribution governance and security reporting process.
+**Exit:** product scope and governance approved; claims mapped to evidence.
 
-## M1 — Universal platform and device compatibility
-- [ ] Confirm exact Galaxy A17 product variant/codename and regional SKU.
-- [ ] Verify bootloader unlock availability for the exact variant and region.
-- [ ] Locate official kernel sources and matching kernel configuration.
-- [ ] Identify device tree, vendor blobs, HAL and firmware dependencies.
-- [ ] Confirm partition layout, AVB/vbmeta, recovery and restore procedure.
-- [ ] Compare AOSP and LineageOS integration cost and maintenance health.
-- [ ] Select a pinned platform baseline only after the above evidence.
+## Stage 1 — First bootable target (critical path)
+- [x] Buildroot x86_64 configuration and MOMO rootfs overlay.
+- [x] CI workflow for kernel/rootfs build, QEMU serial boot, readiness check and artifact upload.
+- [ ] Successful kernel/rootfs build on latest commit.
+- [ ] Verify image output and artifact integrity.
+- [ ] QEMU boot reaches MOMO OS READY.
+- [ ] Run momoctl doctor, task self-test, device inventory and permission checks in target.
+- [ ] Inspect boot log, checksums and provenance.
+- [ ] Merge bootable image PR into main only after all gates pass.
+**Exit:** reproducible QEMU-validated image with retained evidence.
 
-**Exit:** common platform architecture is independent of devices, and each selected device has a verified build and recovery plan. No flashing before this gate.
+## Stage 2 — Runtime and service contracts
+- [x] Task state machine and durable event journal.
+- [x] Plan validation, agent registry and dependency-aware scheduling.
+- [x] Initial Task Coordinator, persistent permission integration and immutable plan digest.
+- [ ] Complete cancellation, deadline, idempotency, retries and crash recovery.
+- [ ] Define versioned contracts for device, permissions, tasks, storage, apps, notifications, power, update and audit.
+- [ ] Add IPC identity, structured errors, health checks and migration tests.
+**Exit:** durable service layer with negative authorization and restart tests.
 
-## M2 — Cloud source and build pipeline
-- [ ] Define pinned Repo manifest.
-- [ ] Provision a suitable cloud build host with adequate RAM, storage, and build time.
-- [ ] Implement source sync, cache strategy, build logs, artifact retention, and provenance.
-- [ ] Build an unmodified baseline before applying MOMO patches.
-- [ ] Preserve checksums and source revisions.
+## Stage 3 — OS-enforced security
+- [ ] Linux service identities, namespaces, seccomp/LSM policy and sandbox profiles.
+- [ ] Android Binder/AIDL, SELinux, AppOps and signature-level enforcement.
+- [ ] Secure secret storage, audit redaction and retention/deletion policy.
+- [ ] Adversarial tests: prompt injection, confused deputy, replay, path traversal and privilege escalation.
+- [ ] Independent security review.
+**Exit:** unauthorized actions rejected by native OS boundaries, not only app-level policy.
 
-**Exit:** repeatable baseline build with documented limitations.
+## Stage 4 — Platform selection and reproducible upstream builds
+- [ ] Evaluate and pin Android-compatible base and API baseline.
+- [ ] Evaluate mainline-Linux userspace, shell/compositor, package and update strategy.
+- [ ] Build unmodified platform baselines before MOMO patches.
+- [ ] Record source manifests, licenses, firmware provenance, toolchain and SBOM.
+**Exit:** two documented, reproducible platform tracks with selected baselines.
 
-## M3 — MOMO platform shell and services
-- [ ] Prototype launcher and mobile shell once, with platform-specific adapters beneath it.
-- [ ] Define permission broker and narrow system APIs.
-- [ ] Build task/activity history and user-visible automation controls.
-- [ ] Prototype desktop/workstation mode where hardware supports it.
+## Stage 5 — First exact-device port
+- [ ] Select first device by source availability, unlock/recovery and test access.
+- [ ] Confirm exact SKU, codename, region, boot chain, partitions, AVB, kernel and vendor dependencies.
+- [ ] Build and boot without risking the only device.
+- [ ] Validate display, touch, storage, charging, thermal, radios, audio, camera, sensors, biometrics and encryption.
+- [ ] Test OTA, rollback, restore and data preservation.
+**Exit:** at least Tier 2 boot-tested; Tier 3 required for daily-use candidate.
 
-**Exit:** usable shell prototype and reviewed privilege model.
+## Stage 6 — MOMO mobile and desktop experience
+- [ ] Launcher/shell, navigation, quick settings, notifications and settings.
+- [ ] Permissions dashboard, task/activity history and approval UX.
+- [ ] Arabic RTL and English LTR localization.
+- [ ] Screen reader, scalable UI, contrast and alternative input.
+- [ ] Desktop/convergence mode on qualified hardware.
+**Exit:** coherent shell usable without AI and with understandable automation controls.
 
-## M4 — MOMO Multi-Agent Intelligence
-- [x] Specify initial typed task and capability schemas.
-- [x] Implement deterministic plan validation, agent capability registry, and dependency-aware scheduling.
-- [x] Implement initial privacy-aware provider profile selection with local-only handling for sensitive/restricted data.
-- [ ] Implement model-backed planning, real agent execution, specialist delegation, and provider SDK adapters.
-- [ ] Add memory controls, provenance, retention, and deletion behavior.
-- [ ] Add evaluator, sandboxed tool execution, budget and cancellation.
-- [ ] Build benchmark tasks and adversarial tests.
+## Stage 7 — Core services
+- [ ] Storage Broker and scoped file access.
+- [ ] App Broker and lifecycle integration.
+- [ ] Notification Broker.
+- [ ] Network/connectivity abstraction.
+- [ ] Power and Thermal service.
+- [ ] Audit/diagnostics service.
+- [ ] Update and Recovery Manager.
+**Exit:** P0/P1 services pass contract, integration, restart and permission tests on target platform.
 
-**Exit:** measured task performance with safe, auditable execution.
+## Stage 8 — AI assistant and multi-agent execution
+- [ ] Model provider adapters and user-configured credentials.
+- [ ] Local model runtime discovery and cloud routing policy.
+- [ ] Planner, agent execution, tool gateway and sandbox adapters.
+- [ ] User-controlled memory, provenance, retention and deletion.
+- [ ] Approval UX, cancellation, budgets, rate limits and outcome verification.
+- [ ] Benchmark and adversarial safety suite.
+**Exit:** measured task completion with no critical safety bypass.
 
-## M5 — Integration, hardening, and device validation
-- [ ] Integrate services with Android permission/SELinux policy and Linux service/portal policy on their respective tracks.
-- [ ] Run functional, regression, privacy, and security tests.
-- [ ] Validate battery, thermal, radio, camera, audio, sensors, biometrics, and OTA on each claimed device profile and platform track.
-- [ ] Test restore and rollback paths.
-- [ ] Conduct independent review before any public release.
+## Stage 9 — Applications and ecosystem
+- [ ] Essential first-party apps and settings.
+- [ ] Android compatibility validation on Android track.
+- [ ] Native Linux app/package strategy on Linux track.
+- [ ] Stable service SDK/contracts and sample integrations.
+**Exit:** minimum app set works on qualified targets with permission conformance.
 
-**Exit:** release candidate with explicit device and feature support matrix.
+## Stage 10 — Release engineering
+- [ ] Protected artifact signing and key custody.
+- [ ] SBOM, checksums, source provenance and license notices.
+- [ ] Staged updates, health checks, rollback and recovery.
+- [ ] Release channels, support lifecycle, security response and installation guides.
+**Exit:** signed reproducible release candidate passes full qualification.
 
-## M6 — Release
-- [ ] Publish reproducible build instructions and source manifests.
-- [ ] Publish checksums, SBOM, licenses, notices, and security contact.
-- [ ] Sign artifacts with protected keys.
-- [ ] Provide installation and recovery instructions only for verified devices.
+## Stage 11 — Multi-device expansion and maintenance
+- [ ] Port a second distinct device family.
+- [ ] Cross-device conformance and regression automation.
+- [ ] Kernel/security update process and upstream synchronization.
+- [ ] Public support matrix and end-of-life policy.
+**Exit:** at least two device families have evidence-backed support tiers and active maintenance.
 
-## Current engineering blockers
-
-- **Device matrix:** no device family has yet passed a complete porting and recovery gate. SM-A175F remains only one candidate, not the product's target boundary.
-- **Cloud:** no build worker or cloud budget has been provisioned. Standard GitHub-hosted runners are not assumed sufficient for full AOSP.
-- **AI providers:** no provider credentials or local inference runtime has been configured. The core currently contains policy/state logic only, not an LLM integration.
-- **Platform integration:** no Android/Linux hardware adapter, privileged system service, launcher, desktop shell, or device image has been built.
-
-These are explicit blockers, not completed tasks.
+## Current blockers
+- Latest QEMU image build is pending; no successful image boot is claimed.
+- No Android/AOSP build or Android phone image is validated.
+- No physical device is certified.
+- No OS-enforced MOMO tool sandbox or full tool execution adapter exists yet.
+- No final Android base, first phone SKU, cloud build host or release signing infrastructure is selected.
