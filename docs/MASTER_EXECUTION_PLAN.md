@@ -273,7 +273,7 @@ Added a lock-protected bounded 1,024-entry request-ID cache, duplicate rejection
 
 ## IPC Process Hardening — Resource Limits and No-New-Privileges (PR #40 candidate)
 
-Added startup restrictions for core dumps, file size, open descriptors, CPU time and address space, plus Linux `PR_SET_NO_NEW_PRIVS`. A subprocess test verifies limits and kernel state. This is not a complete sandbox: syscall allowlisting via seccomp, namespace isolation, cgroup limits and LSM policy remain outstanding.
+Added startup restrictions for core dumps, file size, open descriptors and address space, plus Linux `PR_SET_NO_NEW_PRIVS`. A subprocess test verifies limits and kernel state. A cumulative CPU-time hard limit is intentionally omitted to avoid killing a healthy long-lived service. This is not a complete sandbox: syscall allowlisting via seccomp, namespace isolation, cgroup limits and LSM policy remain outstanding.
 
 
 ## IPC Syscall Restriction — libseccomp denylist (PR #41 candidate)
