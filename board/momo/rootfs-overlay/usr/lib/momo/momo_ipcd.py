@@ -79,7 +79,10 @@ def _status_payload() -> dict[str, Any]:
     }
 
 
-def handle_connection(\n    connection: socket.socket, allowed_uids: frozenset[int],\n    replay_guard: RequestReplayGuard | None = None,\n) -> None:
+def handle_connection(
+    connection: socket.socket, allowed_uids: frozenset[int],
+    replay_guard: RequestReplayGuard | None = None,
+) -> None:
     """Authenticate, validate and answer one read-only request."""
     try:
         peer = require_peer_identity(connection, allowed_uids)
