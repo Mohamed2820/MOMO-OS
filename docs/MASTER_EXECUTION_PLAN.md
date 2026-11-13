@@ -251,3 +251,22 @@ This closes the persisted dependency-readiness foundation only. It does not deli
 - Repository validation passed with 111 unit tests, including fail-closed state-read and scheduler tests.
 
 This is not a signed audit log and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring and protected storage remain open.
+
+
+## Execution Progress Record — Linux IPC Peer Identity Primitive (2026-11-13)
+
+### Implemented foundation
+- Added Linux AF_UNIX `SO_PEERCRED` parsing for kernel-provided PID, UID and primary GID.
+- Added deny-by-default UID allowlists and optional primary-GID allowlists.
+- Mirrored the module into the Buildroot rootfs overlay.
+- Added unit tests for current peer identity, UID/GID denial, empty/invalid allowlists and non-Unix socket rejection.
+- Added source/overlay parity coverage and CI compilation.
+- Documented the exact security boundary and Android separation.
+
+### Not yet delivered
+- No MOMO privileged daemon consumes this helper yet.
+- No versioned IPC protocol, message framing, schema validation, replay/rate controls or service-role mapping.
+- No dedicated service UID, namespaces, seccomp, LSM enforcement or executor.
+- This primitive does not authorize requested operations and does not enable tools.
+
+PR #36 is the implementation review gate. The current QEMU build for the prior integrated runtime revision remains a separate acceptance gate.
