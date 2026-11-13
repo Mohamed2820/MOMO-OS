@@ -19,7 +19,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/DEVICE_RESEARCH.md docs/UNIVERSAL_PLATFORM_STRATEGY.md docs/DEVICE_COMPATIBILITY.md docs/PLATFORM_ADAPTERS.md docs/AGENT_METHODOLOGY.md docs/AI_RUNTIME.md docs/TOOL_AND_PERMISSION_MODEL.md docs/CLOUD_BUILD.md docs/DESKTOP_EXPERIENCE.md docs/TEST_STRATEGY.md docs/LICENSING.md intelligence/README.md platform_adapters/README.md; do
+          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/DEVICE_RESEARCH.md docs/UNIVERSAL_PLATFORM_STRATEGY.md docs/DEVICE_COMPATIBILITY.md docs/PLATFORM_ADAPTERS.md docs/AGENT_METHODOLOGY.md docs/AI_RUNTIME.md docs/TOOL_AND_PERMISSION_MODEL.md docs/CLOUD_BUILD.md docs/DESKTOP_EXPERIENCE.md docs/TEST_STRATEGY.md docs/LICENSING.md docs/BOOTABLE_IMAGE.md intelligence/README.md platform_adapters/README.md; do
             test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
           done
           python3 - <<'PY'
@@ -33,5 +33,11 @@ jobs:
           grep -q "Reuse" README.md
           grep -q "Do not" docs/SECURITY.md
           echo "Repository validation passed."
+      - name: Check MOMO shell utilities
+        run: |
+          sh -n board/momo/rootfs-overlay/etc/init.d/S99momo
+          sh -n board/momo/rootfs-overlay/usr/bin/momoctl
+          sh board/momo/rootfs-overlay/usr/bin/momoctl version
+          sh board/momo/rootfs-overlay/usr/bin/momoctl help
       - name: Run MOMO runtime unit tests
         run: python3 -m unittest discover -s tests -v
