@@ -545,3 +545,5 @@ This is CI-tested and included in the Buildroot overlay source. It is not a conc
 The per-step event history now includes a SHA-256 hash chain, verifies the chain before returning event history, and uses SQLite triggers to reject ordinary event updates and deletions. A migration backfills deterministic hashes for databases created by the earlier event-table schema. CI covers normal verification, blocked mutation, tampering after trigger removal and legacy migration.
 
 This is tamper-evident against accidental or partial record modification, not a cryptographic signature or protection against a privileged attacker who can rewrite the database and recompute the chain. Protected key custody, external audit anchoring, native file permissions and OS isolation remain required for stronger assurance.
+
+The journal also verifies the existing event chain before appending. A corrupted history blocks the new transition and the transaction rolls back; new events cannot silently extend a compromised chain.
