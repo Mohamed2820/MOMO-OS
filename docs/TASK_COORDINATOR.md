@@ -1,30 +1,34 @@
 # Task Coordinator
 
-**Status:** Initial policy/scheduling layer; not a tool executor or complete runtime scheduler.
+**Status:** Implemented policy, immutable-plan persistence, step-journal integration and dependency scheduling. Not a tool executor or complete runtime scheduler.
 
 ## Implemented
+
 - Validates plans against registered agent roles, domains, capabilities, risk ceilings, dependency graph and delegation budget.
-- Atomically persists task creation, the accepted canonical plan and initial lifecycle events in one SQLite transaction.
+- Atomically persists task creation, accepted canonical plan and initial lifecycle events.
 - Reloads the accepted plan after restart and verifies its SHA-256 digest before use.
-- Persists task lifecycle events through the SQLite task journal.
-- Stores canonical plan JSON and SHA-256 digest, binding the plan to its task and rejecting later plan substitution.
-- Returns deterministic dependency-ready steps.
+- Atomically registers accepted plan steps in the durable Step Execution Journal.
+- Binds step records and idempotency keys to task/step identity and the accepted plan.
+- Persists step state, attempt count, retry budget, cancellation request, result digest and transition events.
+- Protects step event history with a SHA-256 hash chain and SQLite update/delete guards; integrity failures fail closed.
+- Derives dependency readiness from durable succeeded step records rather than caller-supplied completion claims.
+- Quarantines restart-interrupted steps and ambiguous side-effecting outcomes as `needs_review`; it never automatically replays them.
 - Requests per-step authorization through the persistent permission broker using exact subject/action/task-resource/risk scope.
 - Requires matching explicit per-action approval for R3/R4 operations according to broker policy.
-- Included in the Buildroot root filesystem overlay and covered by repository tests.
+- Source runtime modules are mirrored into the Buildroot root filesystem overlay and covered by parity tests.
 
 ## Security boundary
-The coordinator never dispatches a tool, calls a model, creates a grant, approves an action, or treats a model-produced plan as authority. A successful authorization decision means only that a matching grant was consumed; the platform adapter must still enforce native OS permissions and sandboxing. Model-generated plans are untrusted input and must pass validation.
+
+The coordinator never dispatches a tool, calls a model, creates a grant, or approves an action. A successful authorization decision is not execution permission at the Linux kernel boundary; native service identity, IPC authentication, OS sandboxing and platform permissions are still mandatory.
 
 ## Not yet implemented
-- Tool execution adapters and sandboxed process/container execution.
-- Atomic task + plan persistence across database failure boundaries.
-- Complete lifecycle transitions for running, waiting, retrying, cancelling, failed and completed tasks.
-- Durable dependency completion records and crash recovery/reconciliation.
-- Idempotency keys for side-effecting tools.
-- Deadlines, bounded retries, backoff, concurrency quotas and resource budgets.
-- Cancellation propagation to running adapters.
-- Independent result verification and outcome evidence.
-- IPC authentication and platform-native permission enforcement.
 
-These are separate milestones. The coordinator must not be described as an autonomous execution engine until they are implemented and tested.
+- Tool execution adapters and sandboxed process/container execution.
+- Authenticated IPC and executor identity.
+- Linux namespaces, seccomp and LSM policy enforcement; Android Binder/AIDL, SELinux and AppOps enforcement.
+- Complete deadline scheduling, backoff, concurrency quotas and resource budgets.
+- Cancellation propagation to a real running executor.
+- Independent result verification, external outcome reconciliation and safe resolution of `needs_review`.
+- Production-grade service supervision and cross-service recovery.
+
+The coordinator must not be described as an autonomous execution engine until these separate milestones are implemented and tested. The integrated revision's fresh QEMU image acceptance is still pending.
