@@ -86,6 +86,12 @@ class Task:
             raise ValueError(
                 f"Invalid task transition: {self.status.value} -> {target.value}"
             )
+        if (
+            self.status == TaskStatus.PLANNED
+            and target == TaskStatus.EXECUTING
+            and self.risk in {Risk.R3, Risk.R4}
+        ):
+            raise ValueError("R3/R4 tasks must enter awaiting_approval before execution")
         if not reason.strip():
             raise ValueError("A transition reason is required")
         previous = self.status
