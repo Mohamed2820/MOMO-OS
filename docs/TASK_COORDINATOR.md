@@ -4,7 +4,10 @@
 
 ## Implemented
 - Validates plans against registered agent roles, domains, capabilities, risk ceilings, dependency graph and delegation budget.
-- Atomically persists task creation, the accepted canonical plan and initial lifecycle events in one SQLite transaction.
+- Atomically persists task creation, the accepted canonical plan, every plan-step execution record and initial lifecycle events in one SQLite transaction.
+- Exposes per-step execution records and append-only execution events through the coordinator.
+- Recovers in-flight step records to `needs_review` through an explicit restart-recovery method; no interrupted step is replayed automatically.
+- Persists unique plan-bound idempotency keys and bounded retry policy metadata; automatic retries remain restricted to R0/R1 read-only steps.
 - Reloads the accepted plan after restart and verifies its SHA-256 digest before use.
 - Persists task lifecycle events through the SQLite task journal.
 - Stores canonical plan JSON and SHA-256 digest, binding the plan to its task and rejecting later plan substitution.
@@ -20,7 +23,8 @@ The coordinator never dispatches a tool, calls a model, creates a grant, approve
 - Tool execution adapters and sandboxed process/container execution.
 - Atomic task + plan persistence across database failure boundaries.
 - Complete lifecycle transitions for running, waiting, retrying, cancelling, failed and completed tasks.
-- Durable dependency completion records and crash recovery/reconciliation.
+- Durable dependency completion records and outcome reconciliation for `needs_review` steps.
+- Boot/service-supervisor integration that invokes restart recovery exactly once per confirmed service restart.
 - Idempotency keys for side-effecting tools.
 - Deadlines, bounded retries, backoff, concurrency quotas and resource budgets.
 - Cancellation propagation to running adapters.
