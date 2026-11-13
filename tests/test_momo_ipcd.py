@@ -100,9 +100,11 @@ class IPCServiceTests(unittest.TestCase):
     def test_process_restrictions_apply_limits_and_no_new_privs(self):
         service_path = ROOT / "board/momo/rootfs-overlay/usr/lib/momo"
         code = (
-            "import ctypes, resource; "
-            "from momo_ipcd import apply_process_restrictions; "
-            "apply_process_restrictions(); "
+            "import ctypes, resource, os, errno; "
+            "from momo_ipcd import apply_process_restrictions, apply_seccomp_filter; "
+            "apply_process_restrictions(); apply_seccomp_filter(); "
+            "try: os.fork(); raise AssertionError('fork was not blocked') "
+            "except PermissionError as exc: assert exc.errno == errno.EPERM; "
             "assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0); "
             "assert resource.getrlimit(resource.RLIMIT_NOFILE) == (32, 32); "
             "assert resource.getrlimit(resource.RLIMIT_FSIZE) == (0, 0); "
