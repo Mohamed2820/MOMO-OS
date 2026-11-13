@@ -89,3 +89,8 @@ Step-state reads and task step listings verify the corresponding event chains. T
 ## Next milestone
 
 A narrow authenticated AF_UNIX status-only service now exists in the IPC workstream: it checks SO_PEERCRED before parsing, accepts only the configured root UID, and exposes no executor. Once the latest QEMU image passes, add a non-executing executor protocol and test its authorization, identity, idempotency, deadline and cancellation contracts. Keep privileged dispatch disabled until operation-specific authorization and native OS sandboxing are implemented.
+
+
+## Image Acceptance Evidence — 2026-11-13
+
+The earlier x86_64 baseline passed QEMU, but that image predates the integrated Step Execution Journal revision. The journal-integrated commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25` is being validated separately in [workflow #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). Do not infer target-image inclusion or boot success from the older artifact.
