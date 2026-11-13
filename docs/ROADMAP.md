@@ -5,10 +5,13 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 ## M0 — Repository and governance foundation
 - [x] Establish cloud-first, upstream-aware repository strategy.
 - [x] Document architecture, security, licensing, and device feasibility gates.
+- [x] Specify AI runtime, capability broker, desktop experience, cloud pipeline, and test strategy.
+- [x] Add provider-neutral task state machine and permission-policy core with unit tests.
+- [x] Add JSON contracts for tasks and capability grants.
 - [ ] Add maintainers, issue templates, and contribution guidance.
 - [ ] Inventory upstream candidates and exact licenses.
 
-**Exit:** repository policy is clear; no unverified device or build claims.
+**Exit:** repository policy and initial runtime contracts are in place; no unverified device or build claims. Remaining: dependency/license inventory and maintainer governance.
 
 ## M1 — Device feasibility and base selection
 - [ ] Confirm exact Galaxy A17 product variant/codename and regional SKU.
@@ -61,3 +64,12 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 - [ ] Publish checksums, SBOM, licenses, notices, and security contact.
 - [ ] Sign artifacts with protected keys.
 - [ ] Provide installation and recovery instructions only for verified devices.
+
+## Current engineering blockers
+
+- **Device:** exact firmware/CSC, bootloader unlock status, matching Samsung kernel source, device tree, vendor files, partition/AVB layout, and restore route are not yet verified.
+- **Cloud:** no build worker or cloud budget has been provisioned. Standard GitHub-hosted runners are not assumed sufficient for full AOSP.
+- **AI providers:** no provider credentials or local inference runtime has been configured. The core currently contains policy/state logic only, not an LLM integration.
+- **Android integration:** no privileged system service, launcher, desktop shell, or device image has been built.
+
+These are explicit blockers, not completed tasks.
