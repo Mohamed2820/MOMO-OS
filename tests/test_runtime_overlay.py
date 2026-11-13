@@ -30,6 +30,16 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
                     (RUNTIME_TARGET / name).read_text(encoding="utf-8"),
                 )
 
+    def test_execution_modules_match_the_source_of_truth(self):
+        source = ROOT / "intelligence/execution"
+        target = OVERLAY / "usr/lib/momo/intelligence/execution"
+        for name in ("__init__.py", "step_journal.py"):
+            with self.subTest(module=name):
+                self.assertEqual(
+                    (source / name).read_text(encoding="utf-8"),
+                    (target / name).read_text(encoding="utf-8"),
+                )
+
     def test_python_overlay_commands_compile(self):
         for name in ("momo-task", "momo-device", "momo-permissions"):
             with self.subTest(command=name):
