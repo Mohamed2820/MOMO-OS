@@ -556,3 +556,9 @@ The integrity check also gates state reads and dependency scheduling: TaskCoordi
 A versioned, bounded local IPC framing layer has been added alongside the Linux peer-credential helper. Version 1 uses a four-byte network-order length prefix and a 64 KiB payload ceiling. The parser rejects duplicate JSON keys, non-finite values, invalid UTF-8, malformed/truncated/trailing frames, unsupported versions and invalid request fields. Source and Buildroot overlay parity is tested.
 
 This is partial evidence toward the local service protocol requirements. The parser does not authenticate peers, authorize operations, prevent replay, impose deadlines or dispatch tools. It is not wired into a daemon. No tool execution is enabled.
+
+## IPC Service Increment — 2026-11-13 (PR #38 candidate)
+
+A first unprivileged local status service is implemented as a narrow integration milestone. Buildroot provisions a dedicated `momo-ipc` account; init starts the daemon under that account; AF_UNIX peers are authenticated through `SO_PEERCRED`; only the root UID is accepted by the current single-user image policy; and only the read-only `status.read` operation is dispatched. The `momoctl ipc-status` client exposes the status response. No command or tool execution exists in this service.
+
+Acceptance remains conditional on CI and a fresh QEMU image run. This does not satisfy the full security or execution requirements: replay protection, multi-user roles, per-operation capability grants, sandboxing, resource quotas, and Android Binder/SELinux/AppOps remain open.
