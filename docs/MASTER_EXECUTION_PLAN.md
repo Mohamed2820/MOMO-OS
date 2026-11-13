@@ -258,3 +258,9 @@ This is not a signed audit log and does not resist a privileged attacker who can
 Added a version-1 bounded request frame codec: 4-byte network-order length prefix, 64 KiB maximum, strict UTF-8/JSON parsing, duplicate-key rejection, finite-number enforcement, exact top-level schema, request-ID and operation-name validation, and socket stream helpers. Added unit tests and Buildroot source/overlay parity checks.
 
 The parser is transport hygiene only. Peer authentication, UID-to-role mapping, per-operation authorization, deadlines, replay controls, resource quotas, daemon integration and native process sandboxing remain outstanding. No privileged IPC service or tool executor is exposed. PR review and CI are required before this milestone is accepted.
+
+## Milestone — First Unprivileged IPC Service (PR #38 candidate, 2026-11-13)
+
+Implemented a narrow daemon/client path on top of the peer-credential primitive and bounded protocol. Buildroot provisions `momo-ipc`; init starts `momo-ipcd` under that account; the daemon checks kernel peer credentials before parsing; it dispatches only `status.read`; the socket path is protected against unsafe replacement; connection timeouts and backlog are bounded; and `momoctl ipc-status` queries the service. The service has no execution adapter.
+
+Required acceptance: green repository CI, successful Buildroot image build, QEMU boot reaching MOMO OS READY, and an in-guest authenticated status request. Next hardening gates are replay protection, strict operation-specific schemas, service role/capability policy, seccomp/namespaces/LSM/cgroups, and adversarial denial tests. Do not enable tool execution before those gates.
