@@ -77,3 +77,8 @@ Device ports are selected by evidence, maintainability and recovery safety—not
 ## Licensing
 
 MOMO-owned code will receive an explicit license before redistribution. Third-party components retain their own licenses and notices. See [Licensing Policy](docs/LICENSING.md).
+
+
+## Platform support evidence
+
+See [Platform Support Matrix](docs/PLATFORM_SUPPORT_MATRIX.md) for verified targets, pending virtual bring-up work, and unsupported device classes. MOMO OS does not claim universal hardware compatibility without per-target boot and driver evidence.
