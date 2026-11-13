@@ -180,4 +180,4 @@ The local status service now rejects duplicate request IDs using a bounded 1,024
 
 ## IPC Process Hardening — Initial Restrictions (2026-11-13)
 
-The IPC daemon now runs unprivileged with explicit resource limits and `PR_SET_NO_NEW_PRIVS`. This is defense in depth, not a complete sandbox. Seccomp, namespaces, cgroups and LSM enforcement remain future gates before any executor can be enabled.
+The IPC daemon now runs unprivileged with explicit core/file/descriptor/address-space limits and `PR_SET_NO_NEW_PRIVS`. This is defense in depth, not a complete sandbox. Seccomp, namespaces, cgroups and LSM enforcement remain future gates before any executor can be enabled.
