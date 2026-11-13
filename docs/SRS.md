@@ -562,3 +562,8 @@ This is partial evidence toward the local service protocol requirements. The par
 A first unprivileged local status service is implemented as a narrow integration milestone. Buildroot provisions a dedicated `momo-ipc` account; init starts the daemon under that account; AF_UNIX peers are authenticated through `SO_PEERCRED`; only the root UID is accepted by the current single-user image policy; and only the read-only `status.read` operation is dispatched. The `momoctl ipc-status` client exposes the status response. No command or tool execution exists in this service.
 
 Acceptance remains conditional on CI and a fresh QEMU image run. This does not satisfy the full security or execution requirements: replay protection, multi-user roles, per-operation capability grants, sandboxing, resource quotas, and Android Binder/SELinux/AppOps remain open.
+
+
+## IPC Replay Protection Increment — 2026-11-13 (PR #39 candidate)
+
+The read-only IPC service adds a bounded process-lifetime replay cache (1,024 request IDs), rejects duplicate IDs before dispatch, and uses unique CLI request IDs. Client response validation rejects duplicate JSON keys, unexpected fields and mismatched request IDs. This is not durable replay protection across daemon restart and is not sufficient for side-effecting operations.
