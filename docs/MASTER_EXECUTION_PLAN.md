@@ -229,3 +229,30 @@ The journal is not yet integrated into TaskCoordinator, the Buildroot overlay or
 3. Add an executor interface with idempotency propagation, bounded deadlines and cooperative cancellation; do not execute before fresh permission authorization.
 4. Add restart reconciliation and negative tests for duplicate dispatch, ambiguous external outcomes and cancellation races.
 5. Implement native OS isolation and IPC identity before enabling any privileged tool.
+
+
+## Execution Progress Record — QEMU Bring-up Acceptance (2026-11-13)
+
+### Completed
+- Buildroot 2026.08.1 kernel and root filesystem build succeeded.
+- Image output verification succeeded.
+- QEMU serial boot reached the required `MOMO OS READY` marker.
+- Boot log confirmed persistent permission broker health and task runtime self-test.
+- Build provenance was recorded and the image/evidence artifact was uploaded and downloaded for inspection.
+- The bootable image pull request was merged into `main` after the acceptance workflow passed.
+
+**Evidence:** [workflow run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact name `momo-os-x86_64-74398b8d8ab9e379e94a864d35bb9a6db3623d83`.
+
+### Still open
+- Interactive target-side `momoctl doctor`, task CLI, device inventory and permission CLI acceptance matrix.
+- A fresh image build from the post-merge `main` revision.
+- Runtime journal/TaskCoordinator integration and image-level tests for that newer code.
+- Physical device boot, recovery and hardware feature validation.
+- Android/AOSP platform baseline and device port.
+
+### Updated next execution sequence
+1. Build and boot the current post-merge `main` revision so the retained image evidence corresponds to the canonical branch.
+2. Finish the TaskCoordinator + step-journal integration and its security hardening in a reviewable PR; run repository validation and image tests before merging.
+3. Add authenticated executor identity, native Linux service isolation, narrow IPC and a tool executor only after permission and plan checks.
+4. Complete service contracts, migration/recovery tests and OS-enforced sandboxing before enabling side effects.
+5. Continue Android/Linux platform selection and exact-device feasibility only with source, bootloader and recovery evidence.
