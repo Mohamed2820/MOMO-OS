@@ -100,15 +100,14 @@ class IPCServiceTests(unittest.TestCase):
     def test_process_restrictions_apply_limits_and_no_new_privs(self):
         service_path = ROOT / "board/momo/rootfs-overlay/usr/lib/momo"
         code = (
-            "import ctypes, resource, os, errno; "
+            "import ctypes, resource, os; "
             "from momo_ipcd import apply_process_restrictions, apply_seccomp_filter; "
-            "apply_process_restrictions(); apply_seccomp_filter(); "
-            "try: os.fork(); raise AssertionError('fork was not blocked') "
-            "except PermissionError as exc: assert exc.errno == errno.EPERM; "
+            "apply_process_restrictions(); "
             "assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0); "
             "assert resource.getrlimit(resource.RLIMIT_NOFILE) == (32, 32); "
             "assert resource.getrlimit(resource.RLIMIT_FSIZE) == (0, 0); "
-            "assert ctypes.CDLL(None).prctl(39, 0, 0, 0, 0) == 1"
+            "assert ctypes.CDLL(None).prctl(39, 0, 0, 0, 0) == 1; "
+            "apply_seccomp_filter(); os.fork()"
         )
         env = os.environ.copy()
         env["PYTHONPATH"] = str(service_path)
@@ -116,7 +115,8 @@ class IPCServiceTests(unittest.TestCase):
             [sys.executable, "-c", code], env=env,
             capture_output=True, text=True, timeout=10,
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("PermissionError", result.stderr)
 
     def test_refuses_to_replace_regular_file_or_foreign_path(self):
         with tempfile.TemporaryDirectory() as directory:
