@@ -6,6 +6,8 @@ It intentionally has no shell, process, filesystem-write, or tool dispatcher.
 from __future__ import annotations
 
 import ctypes
+import ctypes.util
+import errno
 import json
 import os
 import resource
@@ -138,6 +140,53 @@ def prepare_socket_path(path: Path) -> None:
     path.unlink()
 
 
+
+def apply_seccomp_filter() -> None:
+    """Install a fail-closed syscall denylist after socket setup.
+
+    The default action is ALLOW; dangerous process/namespace and execution
+    syscalls are denied. This is defense in depth, not a complete allowlist.
+    """
+    library = ctypes.util.find_library("seccomp")
+    if not library:
+        raise RuntimeError("libseccomp is required; refusing to run without syscall filter")
+    seccomp = ctypes.CDLL(library, use_errno=True)
+    seccomp.seccomp_init.argtypes = [ctypes.c_uint32]
+    seccomp.seccomp_init.restype = ctypes.c_void_p
+    seccomp.seccomp_syscall_resolve_name.argtypes = [ctypes.c_char_p]
+    seccomp.seccomp_syscall_resolve_name.restype = ctypes.c_int
+    seccomp.seccomp_rule_add.restype = ctypes.c_int
+    seccomp.seccomp_load.argtypes = [ctypes.c_void_p]
+    seccomp.seccomp_load.restype = ctypes.c_int
+    seccomp.seccomp_release.argtypes = [ctypes.c_void_p]
+
+    action_allow = 0x7FFF0000
+    action_errno = 0x00050000 | errno.EPERM
+    context = seccomp.seccomp_init(action_allow)
+    if not context:
+        raise OSError(ctypes.get_errno(), "seccomp_init failed")
+    denied = (
+        "execve", "execveat", "fork", "vfork", "clone", "clone3",
+        "ptrace", "mount", "umount2", "pivot_root", "chroot",
+        "unshare", "setns", "reboot", "kexec_load", "bpf", "keyctl",
+        "perf_event_open", "open_by_handle_at", "io_uring_setup",
+        "io_uring_enter", "io_uring_register", "userfaultfd",
+        "process_vm_readv", "process_vm_writev",
+    )
+    try:
+        for name in denied:
+            number = seccomp.seccomp_syscall_resolve_name(name.encode("ascii"))
+            if number < 0:
+                continue
+            result = seccomp.seccomp_rule_add(context, action_errno, number, 0)
+            if result != 0:
+                raise OSError(-result, f"seccomp rule failed: {name}")
+        result = seccomp.seccomp_load(context)
+        if result != 0:
+            raise OSError(-result, "seccomp_load failed")
+    finally:
+        seccomp.seccomp_release(context)
+
 def serve(path: Path = SOCKET_PATH) -> None:
     apply_process_restrictions()
     prepare_socket_path(path)
@@ -148,6 +197,7 @@ def serve(path: Path = SOCKET_PATH) -> None:
         os.chmod(path, 0o660)
         server.listen(MAX_CLIENTS_PER_LOOP)
         server.settimeout(1.0)
+        apply_seccomp_filter()
         while True:
             try:
                 connection, _ = server.accept()
