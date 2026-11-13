@@ -4,7 +4,7 @@
 
 MOMO OS aims to create a capable mobile computing environment by reusing mature open-source platform components and adding a purpose-built multi-agent AI layer, system services, interface, and security architecture.
 
-> **Status:** Architecture and feasibility foundation. No ROM is currently declared buildable or installable. Samsung Galaxy A17 (SM-A175F) is an initial research target only; compatibility is not confirmed.
+> **Status:** Architecture, initial runtime core, and feasibility research. No ROM is currently declared buildable or installable. Samsung Galaxy A17 (SM-A175F) is a research target only; compatibility is not confirmed.
 
 ## Engineering strategy
 
@@ -31,19 +31,32 @@ MOMO OS aims to create a capable mobile computing environment by reusing mature 
 
 ## Repository map
 
-- `docs/` — vision, architecture, decisions, security, feasibility and roadmap.
+- `docs/` — vision, architecture, runtime, security, feasibility, UX and roadmap.
 - `manifests/` — upstream source manifests and pinned dependency records.
 - `platform/` — MOMO-owned platform overlays and device integration.
-- `intelligence/` — orchestrator, agents, memory, model router and tools.
+- `intelligence/` — runtime core, orchestrator, agents, memory, model router and tools.
 - `interfaces/` — mobile, desktop and voice experiences.
 - `infrastructure/` — cloud build and runtime configuration.
-- `security/` — threat models and permission policies.
+- `security/` — threat models, capability schemas and permission policies.
 - `tests/` — automated validation and compatibility checks.
 - `.github/workflows/` — repository-level validation workflows.
 
+## Technical specifications
+
+- [Vision](docs/VISION.md)
+- [Technical architecture](docs/ARCHITECTURE.md)
+- [AI runtime](docs/AI_RUNTIME.md)
+- [Agent methodology](docs/AGENT_METHODOLOGY.md)
+- [Tool and permission model](docs/TOOL_AND_PERMISSION_MODEL.md)
+- [Desktop experience](docs/DESKTOP_EXPERIENCE.md)
+- [Cloud build pipeline](docs/CLOUD_BUILD.md)
+- [Test strategy](docs/TEST_STRATEGY.md)
+- [Device research: SM-A175F](docs/DEVICE_RESEARCH.md)
+- [Roadmap](docs/ROADMAP.md)
+
 ## Device feasibility gate
 
-Initial target reported by the maintainer: Samsung Galaxy A17, model SM-A175F, ARM64, Android 16. Before selecting a ROM base or generating flashable images, verify exact product codename, bootloader unlockability, partition layout, kernel source/configuration, vendor components, device tree completeness, AVB/vbmeta behavior, and a tested recovery/restore path. A recovery device tree is not proof of ROM support.
+Initial target: Samsung Galaxy A17 LTE, model SM-A175F. Do not confuse it with SM-A176B (Galaxy A17 5G). Before selecting a ROM base or generating flashable images, verify exact firmware/CSC, bootloader unlockability, partition layout, kernel source/configuration, vendor components, device tree completeness, AVB/vbmeta behavior, and a tested recovery/restore path. A recovery tree or kernel repository is not proof of ROM support.
 
 ## Security principles
 
