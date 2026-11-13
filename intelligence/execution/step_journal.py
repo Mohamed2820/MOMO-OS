@@ -250,6 +250,18 @@ class StepExecutionJournal:
             raise StepExecutionNotFoundError((task_id, step_id))
         return self._record(row)
 
+    def list_steps(self, task_id: str) -> tuple[StepExecution, ...]:
+        """Return all durable step records for a task in stable step-ID order."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM task_step_executions
+                WHERE task_id = ? ORDER BY step_id
+                """,
+                (task_id,),
+            ).fetchall()
+        return tuple(self._record(row) for row in rows)
+
     def list_events(self, task_id: str, step_id: str) -> tuple[StepExecutionEvent, ...]:
         with self._connect() as connection:
             rows = connection.execute(
