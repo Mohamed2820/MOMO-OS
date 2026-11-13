@@ -56,6 +56,6 @@ A future execution adapter must verify the immutable plan, obtain fresh permissi
 - Target overlay: `board/momo/rootfs-overlay/usr/lib/momo/intelligence/execution/step_journal.py`.
 - Tests: `tests/test_step_execution_journal.py`, `tests/test_task_coordinator.py`, and overlay parity tests.
 - Integration: TaskCoordinator atomically registers accepted plan steps; `momo-task recover` is invoked by the first-boot readiness path.
-- Evidence: PR #26 repository validation reported 111 passing unit tests. A new QEMU image run for integrated revision `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25` is [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529); its latest observed state is still in progress, with no artifact yet.
+- Evidence: PR #26 is merged into `bootable/x86_64-buildroot-mvp-v2` (not yet `main`); its repository validation reported 111 passing unit tests. A new QEMU image run for integrated revision `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25` is [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529); its latest observed state is still in progress, with no artifact yet.
 
 **Evidence boundary:** repository tests and source/overlay parity do not establish that the integrated revision has booted. QEMU acceptance for this revision remains pending; physical hardware, Android/AOSP and native OS sandboxing remain unvalidated.
