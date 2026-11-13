@@ -284,3 +284,8 @@ Added a required libseccomp runtime dependency and a default-allow syscall denyl
 ## Platform Expansion — AArch64 QEMU target (PR #42 candidate)
 
 Added a separate AArch64 Buildroot/QEMU workflow with pinned Buildroot verification, overlay and user-table configuration, libseccomp, cached toolchain/package outputs, image checks, QEMU serial boot and IPC status evidence. Merge/acceptance is gated on workflow success. Physical ARM devices require their own boot chain, kernel, device tree, firmware, drivers and validation.
+
+
+## Historical Image Evidence and Current Gate (2026-11-13)
+
+The initial x86_64 Buildroot baseline passed build, output verification and QEMU boot on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`, reaching `MOMO OS READY` ([run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact `14046724553`). The later revision integrating Step Journal/TaskCoordinator is a distinct image and remains pending in [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). The earlier artifact is not acceptance evidence for the later commit.
