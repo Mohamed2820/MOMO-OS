@@ -20,7 +20,10 @@ support, firmware, device tree and hardware validation.
 
 - `/etc/momo-release`: build identity and track metadata.
 - `/etc/init.d/S99momo`: first-boot banner and readiness check.
-- `/usr/bin/momoctl`: status, doctor, version and help commands.
+- `/usr/bin/momoctl`: status, doctor, task-management, version and help commands.
+- `/usr/bin/momo-task`: persistent task CLI (create/list/show/transition/self-test).
+- `/usr/lib/momo/intelligence/runtime`: bundled provider-neutral task state machine and SQLite task journal.
+- Python 3 with the SQLite module, enabled in the Buildroot target configuration.
 - Build workflow: builds Buildroot, boots the image under QEMU, and requires
   the MOMO readiness marker before uploading artifacts.
 
@@ -56,6 +59,7 @@ qemu-system-x86_64 -M pc -m 1024 \
 3. QEMU reaches the MOMO init script.
 4. The serial log contains `MOMO OS READY`.
 5. The `momoctl` health checks pass during boot.
+6. Python 3 can import SQLite, create a temporary MOMO task, persist five valid transitions, and restore the completed task.
 
 A successful QEMU boot validates only this x86_64 virtual target. It does not
 establish support for ARM phones or the Samsung Galaxy A17.
