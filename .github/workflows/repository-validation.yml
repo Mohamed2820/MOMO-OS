@@ -19,7 +19,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/DEVICE_RESEARCH.md docs/UNIVERSAL_PLATFORM_STRATEGY.md docs/DEVICE_COMPATIBILITY.md docs/PLATFORM_ADAPTERS.md docs/AGENT_METHODOLOGY.md docs/AI_RUNTIME.md docs/TOOL_AND_PERMISSION_MODEL.md docs/CLOUD_BUILD.md docs/DESKTOP_EXPERIENCE.md docs/TEST_STRATEGY.md docs/LICENSING.md docs/CORE_SERVICES.md docs/AI_SYSTEM_DESIGN.md docs/RELEASE_AND_UPDATE.md docs/SRS.md docs/TASK_COORDINATOR.md docs/LINUX_IPC_SECURITY.md intelligence/README.md platform_adapters/README.md; do
+          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/DEVICE_RESEARCH.md docs/UNIVERSAL_PLATFORM_STRATEGY.md docs/DEVICE_COMPATIBILITY.md docs/PLATFORM_SUPPORT_MATRIX.md docs/PLATFORM_ADAPTERS.md docs/AGENT_METHODOLOGY.md docs/AI_RUNTIME.md docs/TOOL_AND_PERMISSION_MODEL.md docs/CLOUD_BUILD.md docs/DESKTOP_EXPERIENCE.md docs/TEST_STRATEGY.md docs/LICENSING.md docs/CORE_SERVICES.md docs/AI_SYSTEM_DESIGN.md docs/RELEASE_AND_UPDATE.md docs/SRS.md docs/TASK_COORDINATOR.md docs/LINUX_IPC_SECURITY.md intelligence/README.md platform_adapters/README.md; do
             test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
           done
           python3 - <<'PY'
