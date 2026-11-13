@@ -1,6 +1,6 @@
 # MOMO OS — Durable Step Execution Journal
 
-**Status:** Implemented as a tested persistence component; not yet connected to a tool executor or included in the boot image.
+**Status:** Integrated with TaskCoordinator and mirrored into the Buildroot rootfs overlay; repository CI-tested, but not yet validated in the target image and not connected to a tool executor.
 
 ## Purpose
 
@@ -70,8 +70,10 @@ The repository validation suite currently covers registration, durable state, re
 - Source module: `intelligence/execution/step_journal.py`.
 - Tests: `tests/test_step_execution_journal.py`.
 - CI: repository validation workflow, full unittest discovery.
-- Not yet mirrored into the Buildroot root filesystem overlay.
-- Not yet wired into `TaskCoordinator` or `momo-task`.
-- Not yet validated in QEMU or on physical hardware.
+- TaskCoordinator creates all plan-step records in the same SQLite transaction as the task, immutable plan digest and initial task events.
+- TaskCoordinator exposes step-record/event reads and an explicit interrupted-step recovery entry point.
+- The journal and coordinator are mirrored into the Buildroot root filesystem overlay, with CI source/overlay parity checks.
+- `momo-task` does not yet expose execution-journal commands.
+- The image has not yet been rebuilt with this integration; QEMU and physical hardware validation remain pending.
 
 The next integration milestone is to bind each accepted plan step to this journal atomically, then add an executor interface that can only start after plan-integrity and permission checks. OS-level sandboxing remains a separate mandatory gate.
