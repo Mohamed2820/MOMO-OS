@@ -1,39 +1,48 @@
 # Task Coordinator
 
-**Status:** Initial policy/scheduling layer; not a tool executor or complete runtime scheduler.
+**Status:** Integrated policy, durable-plan and dependency-readiness coordinator. It is not a tool executor or a complete runtime scheduler.
 
 ## Implemented
+
 - Validates plans against registered agent roles, domains, capabilities, risk ceilings, dependency graph and delegation budget.
 - Atomically persists task creation, the accepted canonical plan, every plan-step execution record and initial lifecycle events in one SQLite transaction.
-- Exposes per-step execution records and append-only execution events through the coordinator.
-- Recovers in-flight step records to `needs_review` through an explicit restart-recovery method; no interrupted step is replayed automatically.
-- The current init-managed Linux boot path invokes `momo-task recover` before the readiness check; recovery is idempotent.
-- Persists unique plan-bound idempotency keys and bounded retry policy metadata; automatic retries remain restricted to R0/R1 read-only steps.
 - Reloads the accepted plan after restart and verifies its SHA-256 digest before use.
-- Persists task lifecycle events through the SQLite task journal.
-- Stores canonical plan JSON and SHA-256 digest, binding the plan to its task and rejecting later plan substitution.
-- Returns deterministic dependency-ready steps using only persisted `succeeded` records; caller-supplied completion claims are rejected, and only journal entries in `ready` state are returned.
+- Persists per-step execution state, attempts, cancellation requests, result digests and unique plan-bound idempotency keys.
+- Persists append-only per-step lifecycle events with a SHA-256 hash chain, SQLite update/delete guards and legacy-row migration.
+- Verifies event-chain integrity before appending events, reading step state and deriving dependency readiness; corrupted history fails closed.
+- Derives dependency completion only from durable succeeded records. Caller-supplied completion claims are not accepted.
+- Returns a step as ready only when its dependencies are durably successful and its own journal state is ready.
+- Quarantines interrupted running steps as needs_review during recovery; no interrupted operation is automatically replayed.
+- The current init-managed Linux boot path invokes momo-task recover before the readiness check; repeated recovery is idempotent.
+- Stores bounded retry-policy metadata. Explicit retries are restricted to R0/R1 read-only steps.
 - Requests per-step authorization through the persistent permission broker using exact subject/action/task-resource/risk scope.
 - Requires matching explicit per-action approval for R3/R4 operations according to broker policy.
-- Included in the Buildroot root filesystem overlay and covered by repository tests.
+- Is mirrored into the Buildroot root filesystem overlay and covered by repository source/overlay parity tests.
 
 ## Security boundary
-The coordinator never dispatches a tool, calls a model, creates a grant, approves an action, or treats a model-produced plan as authority. A successful authorization decision means only that a matching grant was consumed; the platform adapter must still enforce native OS permissions and sandboxing. Model-generated plans are untrusted input and must pass validation.
+
+The coordinator never dispatches a tool, calls a model, creates a grant, approves an action, or treats a model-produced plan as authority. A successful authorization decision means only that a matching grant was consumed; it is not proof that a native OS boundary enforced the operation. Model-generated plans are untrusted input and must pass validation.
+
+The event hash chain is tamper-evident against accidental or partial record modification. It is not a digital signature and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring, protected key custody and OS-enforced storage permissions remain required for stronger assurance.
 
 ## Not yet implemented
-- Tool execution adapters and sandboxed process/container execution.
-- Atomic task + plan persistence across database failure boundaries.
-- Complete lifecycle transitions for running, waiting, retrying, cancelling, failed and completed tasks.
-- Durable dependency completion records and outcome reconciliation for `needs_review` steps.
-- Boot/service-supervisor integration that invokes restart recovery exactly once per confirmed service restart.
-- Idempotency keys for side-effecting tools.
-- Deadlines, bounded retries, backoff, concurrency quotas and resource budgets.
-- Cancellation propagation to running adapters.
-- Independent result verification and outcome evidence.
-- IPC authentication and platform-native permission enforcement.
+
+- A worker scheduler and actual execution adapter; no process or tool is dispatched.
+- Fresh authorization bound atomically to dispatch, plus authenticated executor identity and replay-resistant IPC.
+- Linux namespaces, seccomp/LSM policy and sandbox profiles; Android SELinux/AppOps/Binder enforcement.
+- Downstream propagation and enforcement of idempotency keys by external services.
+- Deadline enforcement, backoff scheduling, concurrency/fairness limits and resource budgets.
+- Cancellation propagation to a running process and proof that cancellation caused no side effect.
+- Independent result verification and reconciliation of needs_review outcomes.
+- Supervisor semantics that prove recovery runs exactly once after each confirmed service restart.
+- Signed or externally anchored audit evidence, protected key custody and retention/deletion controls.
 
 These are separate milestones. The coordinator must not be described as an autonomous execution engine until they are implemented and tested.
 
-The step event stream is hash-chained and verified before history is returned. SQLite triggers reject ordinary event updates and deletions, and legacy event rows are backfilled during migration. This does not provide cryptographic authenticity against a privileged database administrator; external anchoring and protected key custody remain separate requirements.
+## Validation status
 
-Before deriving readiness, the coordinator verifies every plan step's event chain. A corrupted step history blocks state reads and dependency scheduling rather than being treated as a valid state.
+The integrated coordinator, journal, Buildroot overlay and fail-closed dependency logic passed repository validation with 111 unit tests at PR #26. The merged revision is being rebuilt and must pass the latest QEMU image and readiness gate before image-level integration is claimed.
+
+## Next milestone
+
+After the current QEMU image passes, define and test a non-executing executor protocol: immutable plan binding, fresh authorization, OS principal identity, idempotency propagation, deadlines, cancellation acknowledgement and independent outcome evidence. Do not enable privileged tool dispatch until native OS isolation and authenticated IPC are in place.
