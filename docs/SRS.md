@@ -549,3 +549,41 @@ This is tamper-evident against accidental or partial record modification, not a 
 The journal also verifies the existing event chain before appending. A corrupted history blocks the new transition and the transaction rolls back; new events cannot silently extend a compromised chain.
 
 The integrity check also gates state reads and dependency scheduling: TaskCoordinator verifies all relevant step event chains before returning readiness. Corrupt history blocks the read/scheduling path instead of allowing untrusted state to authorize progress.
+
+
+## Linux IPC Protocol Foundation — Implementation Note (2026-11-13)
+
+A versioned, bounded local IPC framing layer has been added alongside the Linux peer-credential helper. Version 1 uses a four-byte network-order length prefix and a 64 KiB payload ceiling. The parser rejects duplicate JSON keys, non-finite values, invalid UTF-8, malformed/truncated/trailing frames, unsupported versions and invalid request fields. Source and Buildroot overlay parity is tested.
+
+This is partial evidence toward the local service protocol requirements. The parser does not authenticate peers, authorize operations, prevent replay, impose deadlines or dispatch tools. It is not wired into a daemon. No tool execution is enabled.
+
+## IPC Service Increment — 2026-11-13 (PR #38 candidate)
+
+A first unprivileged local status service is implemented as a narrow integration milestone. Buildroot provisions a dedicated `momo-ipc` account; init starts the daemon under that account; AF_UNIX peers are authenticated through `SO_PEERCRED`; only the root UID is accepted by the current single-user image policy; and only the read-only `status.read` operation is dispatched. The `momoctl ipc-status` client exposes the status response. No command or tool execution exists in this service.
+
+Acceptance remains conditional on CI and a fresh QEMU image run. This does not satisfy the full security or execution requirements: replay protection, multi-user roles, per-operation capability grants, sandboxing, resource quotas, and Android Binder/SELinux/AppOps remain open.
+
+
+## IPC Replay Protection Increment — 2026-11-13 (PR #39 candidate)
+
+The read-only IPC service adds a bounded process-lifetime replay cache (1,024 request IDs), rejects duplicate IDs before dispatch, and uses unique CLI request IDs. Client response validation rejects duplicate JSON keys, unexpected fields and mismatched request IDs. This is not durable replay protection across daemon restart and is not sufficient for side-effecting operations.
+
+
+## IPC Process Restriction Increment — 2026-11-13 (PR #40 candidate)
+
+The unprivileged IPC daemon now applies bounded core/file/descriptor/address-space limits and Linux `PR_SET_NO_NEW_PRIVS` before opening its listening socket. These are defense-in-depth process restrictions only; syscall filtering, namespaces, cgroups and LSM policy remain required for a real sandbox.
+
+
+## IPC Syscall Filter Increment — 2026-11-13 (PR #41 candidate)
+
+The unprivileged daemon now requires libseccomp and installs a default-allow syscall denylist that blocks process creation/exec, ptrace, mount and namespace changes, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory access. Failure to load or install the filter prevents service startup. This is not a strict allowlist or complete sandbox; filesystem syscalls remain available, and namespaces/cgroups/LSM enforcement remain open requirements.
+
+
+## AArch64 Platform Target — 2026-11-13 (PR #42 candidate)
+
+A dedicated Buildroot/QEMU AArch64 virtual-target workflow is added using `qemu_aarch64_virt_defconfig`, the MOMO rootfs overlay, libseccomp and the unprivileged IPC status service. Acceptance requires a non-empty ARM64 kernel/rootfs, QEMU boot to `MOMO OS READY`, and the authenticated status response. Until that workflow passes, AArch64 remains a planned/under-validation target, not a verified supported architecture. No physical Android device support is implied.
+
+
+## Historical x86_64 QEMU Baseline Evidence (2026-11-13)
+
+A prior x86_64 Buildroot image on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83` successfully built, passed image-output verification, booted under QEMU, and reached `MOMO OS READY`. Evidence: [workflow #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact ID `14046724553`. This validates only that earlier x86_64 baseline. The newer Step Journal integrated revision at [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) still requires its own fresh image and QEMU acceptance; it must not inherit the older success claim.

@@ -1,0 +1,141 @@
+name: MOMO OS — AArch64 QEMU image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "bootable/**"
+    paths:
+      - "board/momo/**"
+      - "intelligence/**"
+      - "tests/test_momo_ipcd.py"
+      - "tests/test_ipc_protocol.py"
+      - "tests/test_security_overlay.py"
+      - "docs/BOOTABLE_IMAGE.md"
+      - ".github/workflows/momo-aarch64-image.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: momo-aarch64-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out MOMO OS
+        uses: actions/checkout@v4
+
+      - name: Install host build and emulator dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc cpio file libncurses-dev \
+            python3 rsync unzip wget qemu-system-arm qemu-utils
+
+      - name: Download and verify pinned Buildroot release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="2026.08.1"
+          archive="buildroot-${version}.tar.xz"
+          base="https://buildroot.org/downloads"
+          wget --https-only "${base}/${archive}"
+          echo "34fb7bea8a213ffde39cc02e61703391560f26e0850f03138c722d0b09880f2b  ${archive}" | sha256sum -c -
+          tar -xf "${archive}"
+          echo "BUILDROOT_DIR=${GITHUB_WORKSPACE}/buildroot-${version}" >> "$GITHUB_ENV"
+
+      - name: Configure Buildroot for AArch64 virt with MOMO
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x board/momo/rootfs-overlay/etc/init.d/S98momo-ipc
+          chmod +x board/momo/rootfs-overlay/etc/init.d/S99momo
+          chmod +x board/momo/rootfs-overlay/usr/bin/momoctl
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-task
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-device
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-permissions
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-ipcctl
+          make -C "$BUILDROOT_DIR" qemu_aarch64_virt_defconfig
+          sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
+          sed -i '/^BR2_ROOTFS_OVERLAY=/d; /^BR2_ROOTFS_USERS_TABLES=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d; /^BR2_PACKAGE_LIBSECCOMP=/d' "$BUILDROOT_DIR/.config"
+          printf 'BR2_ROOTFS_OVERLAY="%s/board/momo/rootfs-overlay"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_ROOTFS_USERS_TABLES="%s/board/momo/users.table"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\nBR2_PACKAGE_LIBSECCOMP=y\n' >> "$BUILDROOT_DIR/.config"
+          make -C "$BUILDROOT_DIR" olddefconfig
+
+      - name: Restore AArch64 Buildroot cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            buildroot-2026.08.1/output/host/
+            buildroot-2026.08.1/output/build/
+            buildroot-2026.08.1/output/target/
+            buildroot-2026.08.1/output/staging/
+            buildroot-2026.08.1/dl/
+          key: momo-buildroot-2026.08.1-qemu-aarch64-v1
+          restore-keys: |
+            momo-buildroot-2026.08.1-qemu-aarch64-
+
+      - name: Build Linux kernel and MOMO AArch64 root filesystem
+        run: make -C "$BUILDROOT_DIR" -j"$(nproc)"
+
+      - name: Verify image outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$BUILDROOT_DIR/output/images/Image"
+          test -s "$BUILDROOT_DIR/output/images/rootfs.ext4"
+          file "$BUILDROOT_DIR/output/images/Image"
+          file "$BUILDROOT_DIR/output/images/rootfs.ext4"
+          cp "$BUILDROOT_DIR/output/images/Image" "$GITHUB_WORKSPACE/Image"
+          cp "$BUILDROOT_DIR/output/images/rootfs.ext4" "$GITHUB_WORKSPACE/rootfs.ext4"
+
+      - name: Boot MOMO OS under AArch64 QEMU and verify readiness
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          timeout 90s qemu-system-aarch64 -M virt -cpu cortex-a53 -m 1024 \
+            -kernel "$GITHUB_WORKSPACE/Image" \
+            -smp 1 \
+            -drive "file=$GITHUB_WORKSPACE/rootfs.ext4,if=none,format=raw,id=hd0" \
+            -device virtio-blk-device,drive=hd0 \
+            -append "rootwait root=/dev/vda console=ttyAMA0" \
+            -serial stdio -netdev user,id=net0 -device virtio-net-device,netdev=net0 \
+            -display none -no-reboot 2>&1 | tee "$GITHUB_WORKSPACE/qemu-aarch64-boot.log"
+          qemu_status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$qemu_status" -ne 0 && "$qemu_status" -ne 124 ]]; then
+            echo "AArch64 QEMU exited unexpectedly: $qemu_status"
+            exit "$qemu_status"
+          fi
+          grep -F "MOMO OS READY" "$GITHUB_WORKSPACE/qemu-aarch64-boot.log"
+          grep -F '"service": "momo-ipcd"' "$GITHUB_WORKSPACE/qemu-aarch64-boot.log"
+          grep -F '"tool_execution": "disabled"' "$GITHUB_WORKSPACE/qemu-aarch64-boot.log"
+
+      - name: Record build provenance
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "MOMO_COMMIT=$GITHUB_SHA"
+            echo "BUILDROOT_VERSION=2026.08.1"
+            echo "TARGET=qemu_aarch64_virt"
+            echo "WORKFLOW_RUN=$GITHUB_RUN_ID"
+          } > build-metadata-aarch64.txt
+
+      - name: Upload AArch64 image and test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: momo-os-aarch64-${{ github.sha }}
+          path: |
+            Image
+            rootfs.ext4
+            qemu-aarch64-boot.log
+            build-metadata-aarch64.txt
+          if-no-files-found: warn
+          retention-days: 14

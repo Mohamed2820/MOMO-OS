@@ -251,3 +251,41 @@ This closes the persisted dependency-readiness foundation only. It does not deli
 - Repository validation passed with 111 unit tests, including fail-closed state-read and scheduler tests.
 
 This is not a signed audit log and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring and protected storage remain open.
+
+
+## Execution Progress — Versioned Linux IPC Framing (2026-11-13)
+
+Added a version-1 bounded request frame codec: 4-byte network-order length prefix, 64 KiB maximum, strict UTF-8/JSON parsing, duplicate-key rejection, finite-number enforcement, exact top-level schema, request-ID and operation-name validation, and socket stream helpers. Added unit tests and Buildroot source/overlay parity checks.
+
+The parser is transport hygiene only. Peer authentication, UID-to-role mapping, per-operation authorization, deadlines, replay controls, resource quotas, daemon integration and native process sandboxing remain outstanding. No privileged IPC service or tool executor is exposed. PR review and CI are required before this milestone is accepted.
+
+## Milestone — First Unprivileged IPC Service (PR #38 candidate, 2026-11-13)
+
+Implemented a narrow daemon/client path on top of the peer-credential primitive and bounded protocol. Buildroot provisions `momo-ipc`; init starts `momo-ipcd` under that account; the daemon checks kernel peer credentials before parsing; it dispatches only `status.read`; the socket path is protected against unsafe replacement; connection timeouts and backlog are bounded; and `momoctl ipc-status` queries the service. The service has no execution adapter.
+
+Required acceptance: green repository CI, successful Buildroot image build, QEMU boot reaching MOMO OS READY, and an in-guest authenticated status request. Next hardening gates are replay protection, strict operation-specific schemas, service role/capability policy, seccomp/namespaces/LSM/cgroups, and adversarial denial tests. Do not enable tool execution before those gates.
+
+
+## IPC Hardening Increment — Bounded Replay Detection (PR #39 candidate)
+
+Added a lock-protected bounded 1,024-entry request-ID cache, duplicate rejection before dispatch, UUID request IDs in the CLI, and strict client response-shape validation. The cache is volatile and resets on daemon restart. Do not use it as the idempotency authority for mutating tools; durable task/step journal keys and reconciliation remain required.
+
+
+## IPC Process Hardening — Resource Limits and No-New-Privileges (PR #40 candidate)
+
+Added startup restrictions for core dumps, file size, open descriptors and address space, plus Linux `PR_SET_NO_NEW_PRIVS`. A subprocess test verifies limits and kernel state. A cumulative CPU-time hard limit is intentionally omitted to avoid killing a healthy long-lived service. This is not a complete sandbox: syscall allowlisting via seccomp, namespace isolation, cgroup limits and LSM policy remain outstanding.
+
+
+## IPC Syscall Restriction — libseccomp denylist (PR #41 candidate)
+
+Added a required libseccomp runtime dependency and a default-allow syscall denylist installed after socket setup. Dangerous process creation/exec, ptrace, mount/namespace, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory syscalls are denied. CI tests that process creation fails with EPERM. Filter installation is fail-closed. This remains defense in depth, not a strict syscall allowlist; namespace, cgroup and LSM isolation are still required.
+
+
+## Platform Expansion — AArch64 QEMU target (PR #42 candidate)
+
+Added a separate AArch64 Buildroot/QEMU workflow with pinned Buildroot verification, overlay and user-table configuration, libseccomp, cached toolchain/package outputs, image checks, QEMU serial boot and IPC status evidence. Merge/acceptance is gated on workflow success. Physical ARM devices require their own boot chain, kernel, device tree, firmware, drivers and validation.
+
+
+## Historical Image Evidence and Current Gate (2026-11-13)
+
+The initial x86_64 Buildroot baseline passed build, output verification and QEMU boot on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`, reaching `MOMO OS READY` ([run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact `14046724553`). The later revision integrating Step Journal/TaskCoordinator is a distinct image and remains pending in [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). The earlier artifact is not acceptance evidence for the later commit.

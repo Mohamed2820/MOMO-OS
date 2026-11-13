@@ -60,7 +60,7 @@ qemu-system-x86_64 -M pc -m 1024 \
 2. The kernel and root filesystem artifacts exist and are non-empty.
 3. QEMU reaches the MOMO init script.
 4. The serial log contains `MOMO OS READY`.
-5. The `momoctl` health checks pass during boot, including device inventory and permission database initialization.
+5. The `momoctl` health checks pass during boot, including device inventory, permission database initialization, and an authenticated read-only IPC status request through the unprivileged daemon.
 6. Python 3 can import SQLite, create a temporary MOMO task, persist five valid transitions, and restore the completed task.
 7. The device inventory command reports the running architecture and leaves unverified hardware capabilities as `unknown`.
 8. The persistent permission broker initializes its database and exposes its audit/revocation commands.

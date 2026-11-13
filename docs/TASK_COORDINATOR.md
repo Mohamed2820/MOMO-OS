@@ -28,7 +28,7 @@ The event hash chain is tamper-evident against accidental or partial record modi
 ## Not yet implemented
 
 - A worker scheduler and actual execution adapter; no process or tool is dispatched.
-- Fresh authorization bound atomically to dispatch, plus authenticated executor identity and replay-resistant IPC.
+- Fresh authorization bound atomically to dispatch and authenticated executor identity. A status-only authenticated IPC service now exists, with bounded process-lifetime replay detection, but it is not connected to task dispatch and does not authorize execution.
 - Linux namespaces, seccomp/LSM policy and sandbox profiles; Android SELinux/AppOps/Binder enforcement.
 - Downstream propagation and enforcement of idempotency keys by external services.
 - Deadline enforcement, backoff scheduling, concurrency/fairness limits and resource budgets.
@@ -45,4 +45,9 @@ The integrated coordinator, journal, Buildroot overlay and fail-closed dependenc
 
 ## Next milestone
 
-After the current QEMU image passes, define and test a non-executing executor protocol: immutable plan binding, fresh authorization, OS principal identity, idempotency propagation, deadlines, cancellation acknowledgement and independent outcome evidence. Do not enable privileged tool dispatch until native OS isolation and authenticated IPC are in place.
+After the current QEMU image passes, define and test a non-executing executor protocol: immutable plan binding, fresh authorization, OS principal identity, durable idempotency propagation, deadlines, cancellation acknowledgement and independent outcome evidence. The current authenticated IPC daemon is status-only. Do not enable privileged tool dispatch until operation-specific authorization and native OS isolation are in place.
+
+
+## Image Acceptance Evidence — 2026-11-13
+
+The first x86_64 baseline booted successfully under QEMU, but it predates the current Step Journal/TaskCoordinator integration. The integrated revision requires fresh target-image validation in [workflow #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). The earlier QEMU result is not evidence for the integrated revision.

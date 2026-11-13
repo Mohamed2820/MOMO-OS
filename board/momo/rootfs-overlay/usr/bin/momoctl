@@ -16,6 +16,7 @@ Commands:
   tasks        Manage persistent MOMO tasks (create/list/show/transition)
   device       Show detected hardware and verified capability states
   permissions  Inspect or revoke persistent capability grants
+  ipc-status   Query the authenticated read-only local IPC service
   boot-check   Run first-boot readiness checks
   version      Print MOMO OS version
   help         Show this help
@@ -59,6 +60,12 @@ doctor() {
     echo "[FAIL] MOMO task runtime is unavailable"
     failed=1
   fi
+  if /usr/bin/momo-ipcctl status >/dev/null; then
+    echo "[ OK ] Authenticated MOMO IPC status service is available"
+  else
+    echo "[FAIL] MOMO IPC status service is unavailable"
+    failed=1
+  fi
   if /usr/bin/momo-device >/dev/null; then
     echo "[ OK ] Device inventory is available"
   else
@@ -82,7 +89,17 @@ boot_check() {
     echo "[FAIL] Interrupted step recovery failed"
     return 1
   fi
-  if doctor && /usr/bin/momo-task self-test; then
+  if ! doctor; then
+    echo "[MOMO] MOMO OS boot checks failed"
+    return 1
+  fi
+  # Emit the authenticated service response into the serial boot log so
+  # architecture-specific QEMU workflows can verify the actual IPC roundtrip.
+  if ! /usr/bin/momo-ipcctl status; then
+    echo "[FAIL] MOMO IPC status response could not be verified"
+    return 1
+  fi
+  if /usr/bin/momo-task self-test; then
     echo "[MOMO] MOMO OS READY"
     return 0
   fi
@@ -96,6 +113,7 @@ case "${1:-help}" in
   tasks) shift; exec /usr/bin/momo-task "$@" ;;
   device) shift; exec /usr/bin/momo-device "$@" ;;
   permissions) shift; exec /usr/bin/momo-permissions "$@" ;;
+  ipc-status) exec /usr/bin/momo-ipcctl status ;;
   boot-check) boot_check ;;
   version) echo "MOMO OS $VERSION" ;;
   help|-h|--help) usage ;;
