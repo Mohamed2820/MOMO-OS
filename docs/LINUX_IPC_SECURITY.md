@@ -33,3 +33,10 @@ This is process-lifetime replay detection, not durable anti-replay across daemon
 ## Daemon process hardening increment (PR #40 candidate)
 
 Before binding its socket, the IPC daemon applies hard process limits: zero core dumps, 32 open file descriptors, zero file-size growth, 120 seconds CPU time and 256 MiB address space. It also sets Linux `PR_SET_NO_NEW_PRIVS`. These controls reduce impact but are not a syscall allowlist: no seccomp filter, mount/user/network namespace, cgroup policy or LSM profile is installed. Do not describe this as a complete sandbox.
+
+
+## Syscall hardening increment (PR #41 candidate)
+
+The daemon now requires libseccomp and installs a syscall denylist after creating and listening on its AF_UNIX socket. The default action remains ALLOW; process creation/exec, ptrace, mount/namespace changes, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory syscalls are denied with EPERM. The image explicitly includes Buildroot libseccomp, and CI installs libseccomp development headers to test the filter in a subprocess.
+
+This is not a strict syscall allowlist and is not equivalent to a complete sandbox. Filesystem read/write syscalls and many other kernel interfaces remain available. Namespace isolation, cgroup limits and an LSM policy are still required. If libseccomp cannot load or the filter cannot be installed, the daemon refuses to start.
