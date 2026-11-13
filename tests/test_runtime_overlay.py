@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "board/momo/rootfs-overlay"
 RUNTIME_SOURCE = ROOT / "intelligence/runtime"
 RUNTIME_TARGET = OVERLAY / "usr/lib/momo/intelligence/runtime"
+EXECUTION_SOURCE = ROOT / "intelligence/execution"
+EXECUTION_TARGET = OVERLAY / "usr/lib/momo/intelligence/execution"
 BIN = OVERLAY / "usr/bin"
 
 
@@ -28,6 +30,14 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
                 self.assertEqual(
                     (RUNTIME_SOURCE / name).read_text(encoding="utf-8"),
                     (RUNTIME_TARGET / name).read_text(encoding="utf-8"),
+                )
+
+    def test_execution_modules_match_the_source_of_truth(self):
+        for name in ("__init__.py", "step_journal.py"):
+            with self.subTest(module=name):
+                self.assertEqual(
+                    (EXECUTION_SOURCE / name).read_text(encoding="utf-8"),
+                    (EXECUTION_TARGET / name).read_text(encoding="utf-8"),
                 )
 
     def test_python_overlay_commands_compile(self):
