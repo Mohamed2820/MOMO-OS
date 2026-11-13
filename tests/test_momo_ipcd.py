@@ -6,6 +6,10 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "board/momo/rootfs-overlay/usr/lib/momo"))
 
 from intelligence.security.ipc_protocol import encode_request
 from intelligence.security.linux_peercred import PeerCredentialError
