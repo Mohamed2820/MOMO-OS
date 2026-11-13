@@ -12,7 +12,7 @@
 - Reloads the accepted plan after restart and verifies its SHA-256 digest before use.
 - Persists task lifecycle events through the SQLite task journal.
 - Stores canonical plan JSON and SHA-256 digest, binding the plan to its task and rejecting later plan substitution.
-- Returns deterministic dependency-ready steps.
+- Returns deterministic dependency-ready steps using only persisted `succeeded` records; caller-supplied completion claims are rejected, and only journal entries in `ready` state are returned.
 - Requests per-step authorization through the persistent permission broker using exact subject/action/task-resource/risk scope.
 - Requires matching explicit per-action approval for R3/R4 operations according to broker policy.
 - Included in the Buildroot root filesystem overlay and covered by repository tests.

@@ -229,3 +229,14 @@ The journal is integrated into TaskCoordinator: accepted plan steps are register
 3. Add durable dependency-completion records and scheduler deadlines, backoff, concurrency limits and resource budgets.
 4. Design the executor boundary with fresh permission authorization, OS identity, idempotency propagation, cancellation and independent result verification; do not dispatch tools yet.
 5. Implement native OS isolation and IPC identity, then add adversarial tests before enabling any privileged tool.
+
+### Completed sub-milestone: durable dependency readiness
+
+- Removed caller-controlled completion claims from TaskCoordinator's readiness API.
+- Derived completed dependencies only from persisted `succeeded` step records.
+- Restricted returned work to steps in durable `ready` state.
+- Blocked downstream work after failed, cancelled, running or `needs_review` dependencies.
+- Verified exact plan-to-journal step identity and risk consistency.
+- Repository validation passed with 105 unit tests.
+
+This closes the persisted dependency-readiness foundation only. It does not deliver worker scheduling, concurrency control, deadlines, backoff, fairness, quotas, executor dispatch or result verification.

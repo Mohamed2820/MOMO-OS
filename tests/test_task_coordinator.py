@@ -114,10 +114,63 @@ class TaskCoordinatorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.coordinator.create_task(self.plan.goal, Risk.R0, self.plan)
 
-    def test_ready_steps_follow_dependencies(self):
-        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
-        ready = self.coordinator.get_ready_steps(task.task_id, self.plan)
-        self.assertEqual([step.step_id for step in ready], ["inspect"])
+    def test_ready_steps_follow_persisted_successful_dependencies(self):
+        plan = Plan("Inspect then summarize", (
+            PlanStep("inspect", "Inspect public status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1),
+            PlanStep("summarize", "Summarize inspected status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("inspect",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R1, plan)
+        first_ready = self.coordinator.get_ready_steps(task.task_id, plan)
+        self.assertEqual([step.step_id for step in first_ready], ["inspect"])
+
+        self.coordinator.execution.start_step(task.task_id, "inspect")
+        self.coordinator.execution.finish_step(task.task_id, "inspect", True)
+        second_ready = self.coordinator.get_ready_steps(task.task_id, plan)
+        self.assertEqual([step.step_id for step in second_ready], ["summarize"])
+
+    def test_caller_cannot_forge_dependency_completion(self):
+        plan = Plan("Inspect then summarize", (
+            PlanStep("inspect", "Inspect public status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1),
+            PlanStep("summarize", "Summarize inspected status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("inspect",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R1, plan)
+        with self.assertRaises(TypeError):
+            self.coordinator.get_ready_steps(task.task_id, plan, {"inspect"})
+
+    def test_failed_dependency_does_not_unblock_downstream_step(self):
+        plan = Plan("Inspect then summarize", (
+            PlanStep("inspect", "Inspect public status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1),
+            PlanStep("summarize", "Summarize inspected status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("inspect",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R1, plan)
+        self.coordinator.execution.start_step(task.task_id, "inspect")
+        self.coordinator.execution.finish_step(
+            task.task_id, "inspect", False, error="read failed"
+        )
+        self.assertEqual(self.coordinator.get_ready_steps(task.task_id, plan), ())
+
+    def test_needs_review_dependency_does_not_unblock_downstream_step(self):
+        plan = Plan("Inspect device then summarize", (
+            PlanStep("device-check", "Inspect device", "operator", "device",
+                     frozenset({"device.inspect"}), Risk.R3),
+            PlanStep("summarize", "Summarize device state", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("device-check",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R3, plan)
+        self.coordinator.execution.start_step(task.task_id, "device-check")
+        self.coordinator.execution.finish_step(
+            task.task_id, "device-check", False, error="device operation outcome unknown"
+        )
+        self.assertEqual(self.coordinator.get_step_execution(
+            task.task_id, "device-check"
+        ).status, StepExecutionStatus.NEEDS_REVIEW)
+        self.assertEqual(self.coordinator.get_ready_steps(task.task_id, plan), ())
 
     def test_step_is_denied_without_capability_grant(self):
         task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)

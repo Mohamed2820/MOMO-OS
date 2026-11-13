@@ -14,7 +14,9 @@ from .momo_runtime import (
 from .orchestrator import AgentRegistry, Plan, PlanStep, PlanValidator, ready_steps
 from .persistent_permission_broker import PersistentPermissionBroker
 from .task_store import TaskStore
-from intelligence.execution.step_journal import StepExecution, StepExecutionEvent, StepExecutionJournal
+from intelligence.execution.step_journal import (
+    StepExecution, StepExecutionEvent, StepExecutionJournal, StepExecutionStatus,
+)
 
 
 _RISK_LEVEL = {Risk.R0: 0, Risk.R1: 1, Risk.R2: 2, Risk.R3: 3, Risk.R4: 4}
@@ -204,15 +206,34 @@ class TaskCoordinator:
         return plan
 
     def get_ready_steps(
-        self, task_id: str, plan: Plan, completed_step_ids: set[str] | None = None
+        self, task_id: str, plan: Plan
     ) -> tuple[PlanStep, ...]:
+        """Derive readiness only from durable, verified step execution records."""
         task = self.tasks.get_task(task_id)
         if task.status not in {
             TaskStatus.PLANNED, TaskStatus.AWAITING_APPROVAL, TaskStatus.EXECUTING
         }:
             raise ValueError(f"Task is not schedulable in state: {task.status.value}")
         self._validate_task_plan(task, plan)
-        return ready_steps(plan, completed_step_ids or set())
+
+        records = self.execution.list_steps(task_id)
+        by_id = {record.step_id: record for record in records}
+        expected = {step.step_id: step for step in plan.steps}
+        if set(by_id) != set(expected):
+            raise ValueError("Persisted execution ledger does not match the immutable plan")
+        for step_id, step in expected.items():
+            if by_id[step_id].risk != step.risk:
+                raise ValueError(f"Persisted risk does not match plan step: {step_id}")
+
+        completed = {
+            step_id for step_id, record in by_id.items()
+            if record.status is StepExecutionStatus.SUCCEEDED
+        }
+        dependency_ready = ready_steps(plan, completed)
+        return tuple(
+            step for step in dependency_ready
+            if by_id[step.step_id].status is StepExecutionStatus.READY
+        )
 
     def authorize_step(
         self,

@@ -117,3 +117,9 @@ Build the x86_64 Buildroot image and prove it boots under QEMU. This is a develo
 The Runtime and Service Contracts stage has a new tested sub-milestone: a durable per-step execution journal. It records step attempts and events, bounds retries to R0/R1 read-only work, and quarantines side-effecting failures and restart-interrupted work as `needs_review`. Cooperative cancellation requires executor confirmation that no side effect occurred. The repository validation workflow passed with 96 unit tests.
 
 This does **not** complete Stage 2 or Stage 3. The journal is integrated with TaskCoordinator and mirrored into the Buildroot rootfs overlay; accepted plan steps are persisted atomically with their task and immutable plan. The target image has not yet been rebuilt with the coordinator and startup-recovery changes or validated in QEMU. There is no actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff scheduler, concurrency manager or outcome reconciler. The Stage 2/3 exit criteria remain open.
+
+### Runtime scheduling progress — 2026-11-13
+
+A tested dependency-readiness foundation is now integrated: TaskCoordinator trusts only persisted `succeeded` step records, returns only journal entries in `ready` state, and blocks descendants of failed or ambiguous steps. Callers cannot forge completion by supplying an in-memory set. The change is mirrored into the Buildroot overlay and covered by the repository validation suite (105 tests).
+
+The Runtime and Service Contracts stage remains open: there is no worker scheduler, actual executor, deadline/backoff service, concurrency/fairness/resource quotas, independent outcome verifier or OS-enforced sandbox.

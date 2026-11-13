@@ -78,3 +78,9 @@ The repository validation suite currently covers registration, durable state, re
 - The image has not yet been rebuilt with this integration; QEMU and physical hardware validation remain pending.
 
 The next integration milestone is to bind each accepted plan step to this journal atomically, then add an executor interface that can only start after plan-integrity and permission checks. OS-level sandboxing remains a separate mandatory gate.
+
+## Durable dependency readiness
+
+TaskCoordinator obtains step states from `StepExecutionJournal.list_steps(task_id)`. It validates that the journal contains exactly the step IDs and risk levels from the immutable accepted plan. A dependency counts as complete only when its journal state is `succeeded`; caller-supplied completion sets are no longer accepted. The coordinator returns a step only if all dependencies succeeded and that step's own durable state is `ready`.
+
+A `failed`, `running`, `cancelled` or `needs_review` step cannot unblock dependent work. This avoids treating an in-memory assertion or an ambiguous external outcome as proof of completion. Retry and reconciliation remain explicit separate operations.

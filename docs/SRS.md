@@ -533,3 +533,9 @@ The following is an implementation update, not a claim that the complete task ex
 | Result evidence | CI-tested | Optional SHA-256 result digest is persisted | No independent result verifier or signed evidence envelope |
 
 **Traceability:** This increment contributes partial implementation evidence toward FR-AI-011, NFR-REL-001 and NFR-REL-002. It does not close those requirements. The journal is not a tool executor, permission authority or OS sandbox. Native Linux/Android enforcement, authenticated IPC, actual executor integration and image-level validation remain mandatory.
+
+## Implementation Evidence Addendum — Persisted Dependency Readiness (2026-11-13)
+
+TaskCoordinator now derives dependency completion only from durable per-step records whose state is `succeeded`. The API no longer accepts caller-supplied completed-step IDs. A step is returned as ready only when its dependencies are durably successful and its own journal state is `ready`. Failed, running, cancelled and `needs_review` steps do not unblock downstream work. The coordinator verifies that the journal's step IDs and risk levels match the immutable accepted plan.
+
+This is CI-tested and included in the Buildroot overlay source. It is not a concurrent scheduler or execution engine: dispatch, deadlines, backoff, fairness, quotas, durable output verification and OS-enforced isolation remain open requirements.
