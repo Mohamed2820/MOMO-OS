@@ -100,7 +100,9 @@ jobs:
           set +e
           timeout 90s qemu-system-aarch64 -M virt -cpu cortex-a53 -m 1024 \
             -kernel "$GITHUB_WORKSPACE/Image" \
-            -drive "file=$GITHUB_WORKSPACE/rootfs.ext2,if=virtio,format=raw" \
+            -smp 1 \
+            -drive "file=$GITHUB_WORKSPACE/rootfs.ext4,if=none,format=raw,id=hd0" \
+            -device virtio-blk-device,drive=hd0 \
             -append "rootwait root=/dev/vda console=ttyAMA0" \
             -serial stdio -netdev user,id=net0 -device virtio-net-device,netdev=net0 \
             -display none -no-reboot 2>&1 | tee "$GITHUB_WORKSPACE/qemu-aarch64-boot.log"
