@@ -89,7 +89,17 @@ boot_check() {
     echo "[FAIL] Interrupted step recovery failed"
     return 1
   fi
-  if doctor && /usr/bin/momo-task self-test; then
+  if ! doctor; then
+    echo "[MOMO] MOMO OS boot checks failed"
+    return 1
+  fi
+  # Emit the authenticated service response into the serial boot log so
+  # architecture-specific QEMU workflows can verify the actual IPC roundtrip.
+  if ! /usr/bin/momo-ipcctl status; then
+    echo "[FAIL] MOMO IPC status response could not be verified"
+    return 1
+  fi
+  if /usr/bin/momo-task self-test; then
     echo "[MOMO] MOMO OS READY"
     return 0
   fi
