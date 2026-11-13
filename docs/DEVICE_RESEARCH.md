@@ -25,3 +25,11 @@ Do not select an A17 ROM base or produce flashable images yet. Treat this handse
 
 ## Safety
 Do not use kernel exploit code, SELinux-disabling payloads, or untrusted rooted kernels as a substitute for a supported bootloader and reproducible device port. Preserve stock firmware and a verified restore route before any future hardware experiment.
+
+## Reference links
+- [LineageOS device support requirements](https://github.com/LineageOS/charter/blob/main/device-support-requirements.md) — upstream acceptance requirements; not proof that this model is supported.
+- [LineageOS device support FAQ](https://lineageos.github.io/lineage_wiki/faq.html) — unsupported variants are not interchangeable.
+- [Samsung Galaxy A17 model distinction (SM-A175F vs SM-A176B)](https://cdn.shoepping.at/medias/sys_master/cloud-misc-1710-21068400/h21/hde/17394089328670/272867/272867.pdf) — third-party-hosted product specification; verify against Samsung documentation and the actual device.
+- [Public SM-A175F device information](https://specdeviceinfo.com/devices/samsung/sm-a175f-121073/) — third-party index, used only as a lead for further verification.
+
+References are discovery leads. Before device decisions, record official Samsung source archives and exact firmware evidence for the actual handset.
