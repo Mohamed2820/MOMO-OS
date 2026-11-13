@@ -1,8 +1,8 @@
 #!/bin/sh
 #
-# MOMO OS command-line control utility (initial bring-up).
+# MOMO OS command-line control utility.
 #
-VERSION="0.1.0-alpha"
+VERSION="0.2.0-alpha"
 
 usage() {
   cat <<'EOF'
@@ -12,8 +12,9 @@ Usage: momoctl <command>
 
 Commands:
   status       Show OS identity and kernel information
-  doctor       Check essential Linux runtime mounts and devices
-  boot-check   Run the first-boot readiness checks
+  doctor       Check kernel runtime and MOMO task services
+  tasks        Manage persistent MOMO tasks (create/list/show/transition)
+  boot-check   Run first-boot readiness checks
   version      Print MOMO OS version
   help         Show this help
 EOF
@@ -28,6 +29,7 @@ status() {
   echo "Uptime: $(uptime 2>/dev/null || echo unavailable)"
   echo "Root filesystem:"
   df -h /
+  /usr/bin/momo-task list
 }
 
 doctor() {
@@ -48,12 +50,18 @@ doctor() {
     echo "[FAIL] /dev/console is missing"
     failed=1
   fi
+  if /usr/bin/momo-task doctor; then
+    echo "[ OK ] MOMO task runtime and SQLite are available"
+  else
+    echo "[FAIL] MOMO task runtime is unavailable"
+    failed=1
+  fi
   return "$failed"
 }
 
 boot_check() {
   echo "[MOMO] Running first-boot checks..."
-  if doctor; then
+  if doctor && /usr/bin/momo-task self-test; then
     echo "[MOMO] MOMO OS READY"
     return 0
   fi
@@ -64,6 +72,7 @@ boot_check() {
 case "${1:-help}" in
   status) status ;;
   doctor) doctor ;;
+  tasks) shift; exec /usr/bin/momo-task "$@" ;;
   boot-check) boot_check ;;
   version) echo "MOMO OS $VERSION" ;;
   help|-h|--help) usage ;;
