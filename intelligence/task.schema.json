@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-os.example/schemas/task.schema.json",
+  "title": "MOMO Agent Task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "goal", "status", "risk", "created_at", "steps"],
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1},
+    "goal": {"type": "string", "minLength": 1},
+    "status": {"enum": ["received", "classified", "planned", "awaiting_approval", "executing", "verifying", "completed", "partially_completed", "blocked", "failed", "cancelled"]},
+    "risk": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_steps": {"type": "integer", "minimum": 1},
+        "max_delegation_depth": {"type": "integer", "minimum": 0},
+        "max_duration_seconds": {"type": "integer", "minimum": 1},
+        "max_cost_usd": {"type": "number", "minimum": 0}
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step_id", "description", "status"],
+        "properties": {
+          "step_id": {"type": "string"},
+          "description": {"type": "string"},
+          "agent_role": {"type": "string"},
+          "status": {"enum": ["pending", "running", "awaiting_approval", "completed", "failed", "skipped"]},
+          "depends_on": {"type": "array", "items": {"type": "string"}},
+          "evidence_refs": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

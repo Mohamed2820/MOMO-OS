@@ -1,0 +1,33 @@
+# Upstream inventory — candidates only, not build inputs.
+schema_version: 1
+status: research
+policy: "Do not treat candidate entries as approved dependencies."
+
+candidates:
+  - name: AOSP
+    url: https://android.googlesource.com/
+    role: Android platform reference and source ecosystem
+    status: evaluate
+    pinned_revision: null
+    license_review: required
+
+  - name: LineageOS
+    url: https://github.com/LineageOS
+    role: Candidate Android distribution base and device integration patterns
+    status: evaluate
+    pinned_revision: null
+    license_review: required
+
+  - name: GrapheneOS
+    url: https://github.com/GrapheneOS
+    role: Security architecture reference; not assumed to be a compatible base
+    status: research-reference
+    pinned_revision: null
+    license_review: required
+
+  - name: BlissOS
+    url: https://github.com/BlissOS
+    role: Desktop-mode and Android-on-PC UX reference
+    status: research-reference
+    pinned_revision: null
+    license_review: required
