@@ -9,19 +9,19 @@
 
 ---
 
-## Implementation Snapshot (2026-11-13)
+## Implementation Snapshot (2026-11-13, updated after QEMU acceptance)
 
 This snapshot distinguishes source implementation, target-image integration, automated tests and hardware validation.
 
 | Area | Current implementation | Evidence / limitation |
 |---|---|---|
-| x86_64 Linux image | Buildroot configuration, kernel/rootfs pipeline and QEMU serial-boot acceptance check | Latest image run #43437714431 is in progress at kernel/rootfs build; no image artifact or successful QEMU boot yet. Earlier run #43436209791 was cancelled during build and produced metadata only. |
+| x86_64 Linux image | Buildroot 2026.08.1 image built, output files verified, QEMU serial boot reached readiness, artifact downloaded and inspected | QEMU-validated on x86_64 for commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`, run [#43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431); artifact contains `bzImage`, `rootfs.ext2`, `qemu-boot.log` and build metadata. Log confirms permission broker health, task runtime self-test and `MOMO OS READY`. Not physical hardware validation. |
 | Task state machine | Risk-aware lifecycle and transition validation | Repository unit tests pass |
-| Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; image-level execution awaits QEMU boot |
+| Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; QEMU boot passed on the image revision. Newer execution-journal integration is tracked separately and is not included in that image evidence. |
 | Task Coordinator | Plan validation, immutable SHA-256 binding, atomic task/plan/event persistence and permission checks | PR #23 merged; repository tests pass; no tool execution or crash-recovery scheduler yet |
-| Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; target CLI has not yet been exercised in QEMU |
+| Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; boot-time task runtime self-test passed in QEMU. Interactive `momoctl doctor` and full CLI acceptance matrix remain pending. |
 | Device inventory | Runtime OS/kernel/architecture/device identity collection | Source and rootfs overlay included; exact hardware capabilities remain unknown absent verified profile |
-| Persistent permission broker | SQLite grants, expiry, revocation, bounded use, exact R3/R4 approval matching and audit journal | Source and rootfs overlay included; policy layer does not enforce native OS permissions or execute tools |
+| Persistent permission broker | SQLite grants, expiry, revocation, bounded use, exact R3/R4 approval matching and audit journal | QEMU boot log confirms broker initialization and health; policy layer does not enforce native OS permissions or execute tools. |
 | Device profiles | JSON schema and CI validation | Schema validation does not prove a device port boots |
 | Android track | Architecture and requirements only | No AOSP build, Android boot image or phone installation validated |
 | Physical devices | Device support tiers defined | No phone hardware is currently certified |
@@ -533,3 +533,17 @@ The following is an implementation update, not a claim that the complete task ex
 | Result evidence | CI-tested | Optional SHA-256 result digest is persisted | No independent result verifier or signed evidence envelope |
 
 **Traceability:** This increment contributes partial implementation evidence toward FR-AI-011, NFR-REL-001 and NFR-REL-002. It does not close those requirements. The journal is not a tool executor, permission authority or OS sandbox. Native Linux/Android enforcement, authenticated IPC, coordinator integration and image-level validation remain mandatory.
+
+
+## QEMU Acceptance Evidence Addendum — 2026-11-13
+
+The first x86_64 Buildroot target passed its automated QEMU acceptance workflow.
+
+- Workflow: [run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431).
+- Tested source revision: `74398b8d8ab9e379e94a864d35bb9a6db3623d83`.
+- Buildroot: `2026.08.1`; target: `qemu_x86_64`.
+- Job steps for kernel/rootfs build, output verification, QEMU boot/readiness, provenance and artifact upload all completed successfully.
+- Downloaded artifact: `momo-os-x86_64-74398b8d8ab9e379e94a864d35bb9a6db3623d83`, containing `bzImage`, `rootfs.ext2`, `qemu-boot.log` and `build-metadata.txt`.
+- The serial log records persistent permission broker health, task runtime self-test success and `MOMO OS READY`.
+
+**Evidence boundary:** this proves the specific x86_64 QEMU image revision boots and reaches its readiness check. It does not prove physical hardware compatibility, interactive validation of every CLI command, Android/AOSP support, a phone port, native OS sandboxing or production readiness. The artifact is a development image, not an installable phone release.
