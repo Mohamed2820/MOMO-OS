@@ -1,0 +1,28 @@
+#!/usr/bin/python3
+"""Report observable MOMO host identity and evidence-backed capabilities."""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+sys.path.insert(0, "/usr/lib/momo")
+
+from intelligence.runtime.device_inventory import DeviceInventory
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="momo-device",
+        description="Inspect the current MOMO host; unknown capabilities stay unknown.",
+    )
+    parser.add_argument("--profile", default="/etc/momo/device-profile.json")
+    parser.add_argument("--pretty", action="store_true")
+    args = parser.parse_args(argv)
+    snapshot = DeviceInventory(profile_path=args.profile).snapshot().to_dict()
+    print(json.dumps(snapshot, ensure_ascii=False, indent=2 if args.pretty else None))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
