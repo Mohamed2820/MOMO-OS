@@ -2,8 +2,8 @@
 
 Roadmap stages are evidence-gated. Dates are not promised until build capacity, device access, platform baselines and maintainers are confirmed.
 
-## Current stage — Experimental Linux bring-up
-Build the x86_64 Buildroot image and prove it boots under QEMU. This is a development target, not a mobile ROM.
+## Current stage — QEMU-validated Linux x86_64 bring-up
+The first Buildroot x86_64 image has built and booted under QEMU, reaching `MOMO OS READY`. This is a development target, not a mobile ROM. A fresh build from the post-merge canonical `main` revision and further target-side CLI checks remain.
 
 ## Stage 0 — Governance and product baseline
 - [x] Repository and cloud-first development strategy.
@@ -17,12 +17,12 @@ Build the x86_64 Buildroot image and prove it boots under QEMU. This is a develo
 ## Stage 1 — First bootable target (critical path)
 - [x] Buildroot x86_64 configuration and MOMO rootfs overlay.
 - [x] CI workflow for kernel/rootfs build, QEMU serial boot, readiness check and artifact upload.
-- [ ] Successful kernel/rootfs build on latest commit.
-- [ ] Verify image output and artifact integrity.
-- [ ] QEMU boot reaches MOMO OS READY.
+- [x] Successful kernel/rootfs build for the accepted image revision (fresh post-merge main build remains).
+- [x] Verify image outputs and download/inspect the artifact contents.
+- [x] QEMU boot reaches `MOMO OS READY`.
 - [ ] Run momoctl doctor, task self-test, device inventory and permission checks in target.
-- [ ] Inspect boot log, checksums and provenance.
-- [ ] Merge bootable image PR into main only after all gates pass.
+- [x] Inspect boot log and build provenance (artifact-level individual image checksums remain a follow-up).
+- [x] Merge bootable image PR into `main` after acceptance evidence.
 **Exit:** reproducible QEMU-validated image with retained evidence.
 
 ## Stage 2 — Runtime and service contracts
@@ -106,7 +106,7 @@ Build the x86_64 Buildroot image and prove it boots under QEMU. This is a develo
 **Exit:** at least two device families have evidence-backed support tiers and active maintenance.
 
 ## Current blockers
-- Latest QEMU image build is pending; no successful image boot is claimed.
+- First x86_64 QEMU image acceptance passed on run #43437714431; a fresh build from the current post-merge `main` revision remains pending.
 - No Android/AOSP build or Android phone image is validated.
 - No physical device is certified.
 - No OS-enforced MOMO tool sandbox or full tool execution adapter exists yet.
@@ -117,3 +117,14 @@ Build the x86_64 Buildroot image and prove it boots under QEMU. This is a develo
 The Runtime and Service Contracts stage has a new tested sub-milestone: a durable per-step execution journal. It records step attempts and events, bounds retries to R0/R1 read-only work, and quarantines side-effecting failures and restart-interrupted work as `needs_review`. Cooperative cancellation requires executor confirmation that no side effect occurred. The repository validation workflow passed with 96 unit tests.
 
 This does **not** complete Stage 2 or Stage 3. The journal is not yet integrated with TaskCoordinator, Buildroot or QEMU; there is no actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff scheduler, concurrency manager or outcome reconciler. The Stage 2/3 exit criteria remain open.
+
+
+## Progress Evidence Update — QEMU Bring-up Accepted (2026-11-13)
+
+Stage 1 has reached its first QEMU-validated milestone. Buildroot 2026.08.1 built the x86_64 kernel/rootfs, output checks passed, QEMU reached `MOMO OS READY`, and the uploaded artifact was downloaded and inspected. The boot log confirms the persistent permission broker initialized and the task runtime self-test passed. The bootable image PR was merged into `main`.
+
+Evidence: [GitHub Actions run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431).
+
+**Remaining Stage 1 qualification:** build the canonical post-merge `main` revision and run the full target-side CLI acceptance matrix, including `momoctl doctor`, task CLI, device inventory and permission checks. No physical device or Android build is validated.
+
+**Stage 2/3 focus:** integrate and harden the step execution journal with TaskCoordinator, ensure tampered event history fails closed, then add authenticated executor identity and native OS isolation before any tool execution. The journal and coordinator are not yet a safe general-purpose tool execution engine.
