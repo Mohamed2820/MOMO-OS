@@ -89,6 +89,30 @@ class OrchestratorTests(unittest.TestCase):
         after_a = ready_steps(plan, {"a"})
         self.assertEqual([step.step_id for step in after_a], ["b", "c"])
 
+    def test_delegation_depth_budget_enforced(self):
+        plan = Plan("Task", (
+            PlanStep("a", "Delegate too deeply", "researcher", "research",
+                     delegation_depth=3),
+        ), max_delegation_depth=2)
+        with self.assertRaises(PlanValidationError):
+            self.validator.validate(plan)
+
+    def test_duplicate_step_ids_rejected(self):
+        plan = Plan("Task", (
+            PlanStep("a", "First", "researcher", "research"),
+            PlanStep("a", "Duplicate", "writer", "writing"),
+        ))
+        with self.assertRaises(PlanValidationError):
+            self.validator.validate(plan)
+
+    def test_unknown_dependency_rejected(self):
+        plan = Plan("Task", (
+            PlanStep("a", "Depends on missing", "researcher", "research",
+                     depends_on=("missing",)),
+        ))
+        with self.assertRaises(PlanValidationError):
+            self.validator.validate(plan)
+
     def test_unknown_completed_step_rejected(self):
         plan = Plan("Task", (
             PlanStep("a", "A", "researcher", "research"),
