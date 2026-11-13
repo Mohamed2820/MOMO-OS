@@ -171,3 +171,8 @@ A bounded version-1 Linux local IPC framing codec is under review: strict length
 ## IPC Service Progress — 2026-11-13
 
 PR #38 adds a first unprivileged AF_UNIX status daemon with a dedicated Buildroot account, kernel peer authentication, one read-only status operation and a CLI client. It is not a tool executor and is not production-security complete. CI and QEMU acceptance are required before merging into the boot branch. Next: replay protection, explicit role/capability authorization, Linux-native sandboxing and adversarial isolation tests. Android remains a separate Binder/AIDL + SELinux/AppOps track.
+
+
+## IPC Hardening — Replay Detection (2026-11-13)
+
+The local status service now rejects duplicate request IDs using a bounded 1,024-entry process-lifetime cache, and the CLI uses unique IDs and validates server responses strictly. Durable anti-replay for side effects, capability authorization and native sandboxing remain open.
