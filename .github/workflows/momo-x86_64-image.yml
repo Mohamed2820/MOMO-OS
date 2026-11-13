@@ -69,7 +69,7 @@ jobs:
           sed -i '/^BR2_ROOTFS_OVERLAY=/d; /^BR2_ROOTFS_USERS_TABLES=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d' "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_OVERLAY="%s/board/momo/rootfs-overlay"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_USERS_TABLES="%s/board/momo/users.table"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
-          printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\n' >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\nBR2_PACKAGE_LIBSECCOMP=y\n' >> "$BUILDROOT_DIR/.config"
           make -C "$BUILDROOT_DIR" olddefconfig
 
       - name: Build Linux kernel and MOMO root filesystem
