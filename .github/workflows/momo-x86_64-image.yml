@@ -49,6 +49,8 @@ jobs:
           chmod +x board/momo/rootfs-overlay/etc/init.d/S99momo
           chmod +x board/momo/rootfs-overlay/usr/bin/momoctl
           make -C "$BUILDROOT_DIR" qemu_x86_64_defconfig
+          # QEMU is already installed on the GitHub runner; do not build a second host QEMU from source.
+          sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
           sed -i '/^BR2_ROOTFS_OVERLAY=/d' "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_OVERLAY="%s/board/momo/rootfs-overlay"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
           make -C "$BUILDROOT_DIR" olddefconfig
