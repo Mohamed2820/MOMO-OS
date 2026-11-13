@@ -87,18 +87,18 @@ jobs:
         run: |
           set -euo pipefail
           test -s "$BUILDROOT_DIR/output/images/Image"
-          test -s "$BUILDROOT_DIR/output/images/rootfs.ext2"
+          test -s "$BUILDROOT_DIR/output/images/rootfs.ext4"
           file "$BUILDROOT_DIR/output/images/Image"
-          file "$BUILDROOT_DIR/output/images/rootfs.ext2"
+          file "$BUILDROOT_DIR/output/images/rootfs.ext4"
           cp "$BUILDROOT_DIR/output/images/Image" "$GITHUB_WORKSPACE/Image"
-          cp "$BUILDROOT_DIR/output/images/rootfs.ext2" "$GITHUB_WORKSPACE/rootfs.ext2"
+          cp "$BUILDROOT_DIR/output/images/rootfs.ext4" "$GITHUB_WORKSPACE/rootfs.ext4"
 
       - name: Boot MOMO OS under AArch64 QEMU and verify readiness
         shell: bash
         run: |
           set -uo pipefail
           set +e
-          timeout 90s qemu-system-aarch64 -M virt -cpu cortex-a57 -m 1024 \
+          timeout 90s qemu-system-aarch64 -M virt -cpu cortex-a53 -m 1024 \
             -kernel "$GITHUB_WORKSPACE/Image" \
             -drive "file=$GITHUB_WORKSPACE/rootfs.ext2,if=virtio,format=raw" \
             -append "rootwait root=/dev/vda console=ttyAMA0" \
@@ -131,7 +131,7 @@ jobs:
           name: momo-os-aarch64-${{ github.sha }}
           path: |
             Image
-            rootfs.ext2
+            rootfs.ext4
             qemu-aarch64-boot.log
             build-metadata-aarch64.txt
           if-no-files-found: warn
