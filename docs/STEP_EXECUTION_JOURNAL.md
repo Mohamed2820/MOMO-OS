@@ -92,3 +92,5 @@ Each step's event stream is linked with a SHA-256 hash chain. New events include
 This is tamper-evident, not a signed audit log. A privileged attacker able to rewrite the database and recompute hashes can forge a new chain. Stronger assurance requires protected storage permissions, a signing key held outside the database, and/or an external append-only audit anchor.
 
 Before any new lifecycle event is appended, the existing chain is verified using the same SQLite transaction connection. If prior history is corrupt, the state transition fails and rolls back; the journal will not extend or normalize a corrupted event stream.
+
+Step-state reads and task step listings verify the corresponding event chains. TaskCoordinator therefore cannot derive dependency readiness from a step whose audit history is corrupt. Corruption blocks both reads and scheduling; tests verify that state transitions also roll back when the chain fails verification.
