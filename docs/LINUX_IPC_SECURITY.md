@@ -28,3 +28,8 @@ Implement a narrowly scoped unprivileged service using a dedicated UID, authenti
 The status daemon now keeps a bounded 1,024-entry request-ID cache for the lifetime of one daemon process. Duplicate IDs are rejected after peer authentication and before operation dispatch; oldest IDs are evicted when capacity is reached. The CLI generates a fresh UUID-based request ID and validates response framing, exact response fields, duplicate JSON keys and the explicit disabled-execution marker.
 
 This is process-lifetime replay detection, not durable anti-replay across daemon restarts. It is appropriate only for the current read-only status endpoint; future mutating operations require durable idempotency and outcome reconciliation, not merely this in-memory cache.
+
+
+## Daemon process hardening increment (PR #40 candidate)
+
+Before binding its socket, the IPC daemon applies hard process limits: zero core dumps, 32 open file descriptors, zero file-size growth, 120 seconds CPU time and 256 MiB address space. It also sets Linux `PR_SET_NO_NEW_PRIVS`. These controls reduce impact but are not a syscall allowlist: no seccomp filter, mount/user/network namespace, cgroup policy or LSM profile is installed. Do not describe this as a complete sandbox.
