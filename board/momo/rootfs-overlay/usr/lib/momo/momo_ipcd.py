@@ -40,7 +40,6 @@ def apply_process_restrictions() -> None:
         (resource.RLIMIT_CORE, 0),
         (resource.RLIMIT_NOFILE, 32),
         (resource.RLIMIT_FSIZE, 0),
-        (resource.RLIMIT_CPU, 120),
         (resource.RLIMIT_AS, MAX_ADDRESS_SPACE),
     )
     for limit, value in limits:
