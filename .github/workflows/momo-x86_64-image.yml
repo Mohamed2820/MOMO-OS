@@ -72,6 +72,19 @@ jobs:
           printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\nBR2_PACKAGE_LIBSECCOMP=y\n' >> "$BUILDROOT_DIR/.config"
           make -C "$BUILDROOT_DIR" olddefconfig
 
+      - name: Restore Buildroot build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            buildroot-2026.08.1/output/host/
+            buildroot-2026.08.1/output/build/
+            buildroot-2026.08.1/output/target/
+            buildroot-2026.08.1/output/staging/
+            buildroot-2026.08.1/dl/
+          key: momo-buildroot-2026.08.1-qemu-x86_64-v1
+          restore-keys: |
+            momo-buildroot-2026.08.1-qemu-x86_64-
+
       - name: Build Linux kernel and MOMO root filesystem
         run: |
           make -C "$BUILDROOT_DIR" -j"$(nproc)"
