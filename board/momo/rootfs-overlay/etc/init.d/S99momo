@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# MOMO OS first-boot initialization.
+#
+case "$1" in
+  start)
+    echo ""
+    echo "=============================================="
+    echo "              MOMO OS 0.1.0-alpha"
+    echo "       Adaptive computing platform"
+    echo "=============================================="
+    /usr/bin/momoctl boot-check
+    echo "[MOMO] Boot initialization complete."
+    ;;
+  stop)
+    echo "[MOMO] Shutdown requested."
+    ;;
+  restart)
+    "$0" stop
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac
+exit 0
