@@ -572,3 +572,8 @@ The read-only IPC service adds a bounded process-lifetime replay cache (1,024 re
 ## IPC Process Restriction Increment — 2026-11-13 (PR #40 candidate)
 
 The unprivileged IPC daemon now applies bounded core/file/descriptor/CPU/address-space limits and Linux `PR_SET_NO_NEW_PRIVS` before opening its listening socket. These are defense-in-depth process restrictions only; syscall filtering, namespaces, cgroups and LSM policy remain required for a real sandbox.
+
+
+## IPC Syscall Filter Increment — 2026-11-13 (PR #41 candidate)
+
+The unprivileged daemon now requires libseccomp and installs a default-allow syscall denylist that blocks process creation/exec, ptrace, mount and namespace changes, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory access. Failure to load or install the filter prevents service startup. This is not a strict allowlist or complete sandbox; filesystem syscalls remain available, and namespaces/cgroups/LSM enforcement remain open requirements.
