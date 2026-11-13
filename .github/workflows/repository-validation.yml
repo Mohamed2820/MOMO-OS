@@ -1,0 +1,27 @@
+name: Repository validation
+
+on:
+  push:
+    branches: ["main", "foundation/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Validate required documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/AGENT_METHODOLOGY.md docs/LICENSING.md; do
+            test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
+          done
+          grep -q "Reuse" README.md
+          grep -q "Do not" docs/SECURITY.md
+          echo "Repository foundation checks passed."
