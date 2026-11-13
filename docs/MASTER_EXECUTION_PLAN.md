@@ -220,12 +220,34 @@ No fixed delivery date is promised until build capacity, device access, maintain
 
 ### Explicitly not complete
 
-The journal is not yet integrated into TaskCoordinator, the Buildroot overlay or the target image. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered. The current work is a tested persistence foundation only.
+The journal is integrated into TaskCoordinator: accepted plan steps are registered in the same SQLite transaction as the parent task, immutable plan and task events. The journal and coordinator are mirrored into the Buildroot rootfs overlay, with source/overlay parity tests. The target image has not yet been rebuilt with the coordinator integration and startup recovery hook or validated in QEMU. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered.
 
 ### Next execution sequence
 
 1. Keep the x86_64 Buildroot/QEMU acceptance gate independent and do not merge its image PR until the image, boot log and runtime evidence are verified.
-2. Integrate step registration and lifecycle transitions with immutable persisted plans and the parent task journal.
-3. Add an executor interface with idempotency propagation, bounded deadlines and cooperative cancellation; do not execute before fresh permission authorization.
-4. Add restart reconciliation and negative tests for duplicate dispatch, ambiguous external outcomes and cancellation races.
-5. Implement native OS isolation and IPC identity before enabling any privileged tool.
+2. Validate the boot-time recovery hook in the rebuilt QEMU image, including first boot and repeated recovery invocation; before concurrent workers exist, preserve the guarantee that old workers are stopped before recovery.
+3. Add durable dependency-completion records and scheduler deadlines, backoff, concurrency limits and resource budgets.
+4. Design the executor boundary with fresh permission authorization, OS identity, idempotency propagation, cancellation and independent result verification; do not dispatch tools yet.
+5. Implement native OS isolation and IPC identity, then add adversarial tests before enabling any privileged tool.
+
+### Completed sub-milestone: durable dependency readiness
+
+- Removed caller-controlled completion claims from TaskCoordinator's readiness API.
+- Derived completed dependencies only from persisted `succeeded` step records.
+- Restricted returned work to steps in durable `ready` state.
+- Blocked downstream work after failed, cancelled, running or `needs_review` dependencies.
+- Verified exact plan-to-journal step identity and risk consistency.
+- Repository validation passed with 105 unit tests.
+
+This closes the persisted dependency-readiness foundation only. It does not deliver worker scheduling, concurrency control, deadlines, backoff, fairness, quotas, executor dispatch or result verification.
+
+### Completed sub-milestone: tamper-evident step event history
+
+- Added a per-task-step SHA-256 event hash chain.
+- Verify event integrity before returning event history.
+- Block ordinary event updates and deletions through SQLite triggers.
+- Backfill older pre-hash event rows during schema migration.
+- Test normal verification, mutation rejection, trigger-bypass tampering and legacy migration.
+- Repository validation passed with 111 unit tests, including fail-closed state-read and scheduler tests.
+
+This is not a signed audit log and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring and protected storage remain open.

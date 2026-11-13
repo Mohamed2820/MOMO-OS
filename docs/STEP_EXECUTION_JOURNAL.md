@@ -1,6 +1,6 @@
 # MOMO OS — Durable Step Execution Journal
 
-**Status:** Implemented as a tested persistence component; not yet connected to a tool executor or included in the boot image.
+**Status:** Integrated with TaskCoordinator and mirrored into the Buildroot rootfs overlay; repository CI-tested, but not yet validated in the target image and not connected to a tool executor.
 
 ## Purpose
 
@@ -70,8 +70,27 @@ The repository validation suite currently covers registration, durable state, re
 - Source module: `intelligence/execution/step_journal.py`.
 - Tests: `tests/test_step_execution_journal.py`.
 - CI: repository validation workflow, full unittest discovery.
-- Not yet mirrored into the Buildroot root filesystem overlay.
-- Not yet wired into `TaskCoordinator` or `momo-task`.
-- Not yet validated in QEMU or on physical hardware.
+- TaskCoordinator creates all plan-step records in the same SQLite transaction as the task, immutable plan digest and initial task events.
+- TaskCoordinator exposes step-record/event reads and an explicit interrupted-step recovery entry point.
+- The journal and coordinator are mirrored into the Buildroot root filesystem overlay, with CI source/overlay parity checks.
+- `momo-task recover` exposes an explicit interrupted-step quarantine command.
+- `momoctl boot-check` invokes recovery before reporting `MOMO OS READY`; repeated recovery calls are idempotent.
+- The image has not yet been rebuilt with this integration; QEMU and physical hardware validation remain pending.
 
 The next integration milestone is to bind each accepted plan step to this journal atomically, then add an executor interface that can only start after plan-integrity and permission checks. OS-level sandboxing remains a separate mandatory gate.
+
+## Durable dependency readiness
+
+TaskCoordinator obtains step states from `StepExecutionJournal.list_steps(task_id)`. It validates that the journal contains exactly the step IDs and risk levels from the immutable accepted plan. A dependency counts as complete only when its journal state is `succeeded`; caller-supplied completion sets are no longer accepted. The coordinator returns a step only if all dependencies succeeded and that step's own durable state is `ready`.
+
+A `failed`, `running`, `cancelled` or `needs_review` step cannot unblock dependent work. This avoids treating an in-memory assertion or an ambiguous external outcome as proof of completion. Retry and reconciliation remain explicit separate operations.
+
+## Event integrity
+
+Each step's event stream is linked with a SHA-256 hash chain. New events include the previous event hash, and `verify_event_chain` checks the entire sequence. `list_events` verifies integrity before returning history. SQLite triggers reject ordinary UPDATE and DELETE statements. On initialization, legacy event tables are migrated by backfilling hashes before the append-only triggers are installed.
+
+This is tamper-evident, not a signed audit log. A privileged attacker able to rewrite the database and recompute hashes can forge a new chain. Stronger assurance requires protected storage permissions, a signing key held outside the database, and/or an external append-only audit anchor.
+
+Before any new lifecycle event is appended, the existing chain is verified using the same SQLite transaction connection. If prior history is corrupt, the state transition fails and rolls back; the journal will not extend or normalize a corrupted event stream.
+
+Step-state reads and task step listings verify the corresponding event chains. TaskCoordinator therefore cannot derive dependency readiness from a step whose audit history is corrupt. Corruption blocks both reads and scheduling; tests verify that state transitions also roll back when the chain fails verification.

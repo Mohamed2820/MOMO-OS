@@ -7,6 +7,7 @@ from pathlib import Path
 from intelligence.runtime.momo_runtime import Approval, CapabilityGrant, Risk, TaskStatus
 from intelligence.runtime.orchestrator import AgentRegistry, AgentSpec, Plan, PlanStep
 from intelligence.runtime.task_coordinator import TaskCoordinator
+from intelligence.execution.step_journal import StepExecutionStatus
 
 
 class TaskCoordinatorTests(unittest.TestCase):
@@ -39,6 +40,38 @@ class TaskCoordinatorTests(unittest.TestCase):
         self.assertEqual(task.status, TaskStatus.PLANNED)
         self.assertEqual(self.coordinator.tasks.get_task(task.task_id).status,
                          TaskStatus.PLANNED)
+
+    def test_create_task_registers_all_plan_steps(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        execution = self.coordinator.get_step_execution(task.task_id, "inspect")
+        self.assertEqual(execution.status, StepExecutionStatus.READY)
+        self.assertEqual(execution.attempt, 0)
+        self.assertEqual(execution.risk, Risk.R1)
+        self.assertEqual(
+            len(self.coordinator.get_step_execution_events(task.task_id, "inspect")), 1
+        )
+
+    def test_task_plan_and_step_records_are_atomic(self):
+        with sqlite3.connect(self.task_db) as connection:
+            connection.execute("""
+                CREATE TRIGGER reject_step BEFORE INSERT ON task_step_executions
+                BEGIN SELECT RAISE(ABORT, 'injected step insert failure'); END
+            """)
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        self.assertEqual(self.coordinator.tasks.list_tasks(), [])
+        with sqlite3.connect(self.task_db) as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM task_plans").fetchone()[0], 0)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM task_step_executions").fetchone()[0], 0)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM task_step_events").fetchone()[0], 0)
+
+    def test_restart_recovery_quarantines_coordinator_step(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        self.coordinator.execution.start_step(task.task_id, "inspect")
+        restarted = TaskCoordinator(self.registry, self.task_db, self.permission_db)
+        recovered = restarted.recover_interrupted_steps()
+        self.assertEqual(len(recovered), 1)
+        self.assertEqual(recovered[0].status, StepExecutionStatus.NEEDS_REVIEW)
 
     def test_task_and_plan_are_committed_atomically(self):
         with sqlite3.connect(self.task_db) as connection:
@@ -81,10 +114,75 @@ class TaskCoordinatorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.coordinator.create_task(self.plan.goal, Risk.R0, self.plan)
 
-    def test_ready_steps_follow_dependencies(self):
+    def test_ready_steps_follow_persisted_successful_dependencies(self):
+        plan = Plan("Inspect then summarize", (
+            PlanStep("inspect", "Inspect public status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1),
+            PlanStep("summarize", "Summarize inspected status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("inspect",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R1, plan)
+        first_ready = self.coordinator.get_ready_steps(task.task_id, plan)
+        self.assertEqual([step.step_id for step in first_ready], ["inspect"])
+
+        self.coordinator.execution.start_step(task.task_id, "inspect")
+        self.coordinator.execution.finish_step(task.task_id, "inspect", True)
+        second_ready = self.coordinator.get_ready_steps(task.task_id, plan)
+        self.assertEqual([step.step_id for step in second_ready], ["summarize"])
+
+    def test_caller_cannot_forge_dependency_completion(self):
+        plan = Plan("Inspect then summarize", (
+            PlanStep("inspect", "Inspect public status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1),
+            PlanStep("summarize", "Summarize inspected status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("inspect",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R1, plan)
+        with self.assertRaises(TypeError):
+            self.coordinator.get_ready_steps(task.task_id, plan, {"inspect"})
+
+    def test_failed_dependency_does_not_unblock_downstream_step(self):
+        plan = Plan("Inspect then summarize", (
+            PlanStep("inspect", "Inspect public status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1),
+            PlanStep("summarize", "Summarize inspected status", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("inspect",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R1, plan)
+        self.coordinator.execution.start_step(task.task_id, "inspect")
+        self.coordinator.execution.finish_step(
+            task.task_id, "inspect", False, error="read failed"
+        )
+        self.assertEqual(self.coordinator.get_ready_steps(task.task_id, plan), ())
+
+    def test_corrupt_event_chain_blocks_ready_step_scheduling(self):
         task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
-        ready = self.coordinator.get_ready_steps(task.task_id, self.plan)
-        self.assertEqual([step.step_id for step in ready], ["inspect"])
+        with sqlite3.connect(self.task_db) as connection:
+            connection.execute("DROP TRIGGER task_step_events_no_update")
+            connection.execute(
+                "UPDATE task_step_events SET reason = 'tampered' "
+                "WHERE task_id = ? AND step_id = 'inspect'",
+                (task.task_id,),
+            )
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.coordinator.get_ready_steps(task.task_id, self.plan)
+
+    def test_needs_review_dependency_does_not_unblock_downstream_step(self):
+        plan = Plan("Inspect device then summarize", (
+            PlanStep("device-check", "Inspect device", "operator", "device",
+                     frozenset({"device.inspect"}), Risk.R3),
+            PlanStep("summarize", "Summarize device state", "researcher", "research",
+                     frozenset({"web.read"}), Risk.R1, depends_on=("device-check",)),
+        ))
+        task = self.coordinator.create_task(plan.goal, Risk.R3, plan)
+        self.coordinator.execution.start_step(task.task_id, "device-check")
+        self.coordinator.execution.finish_step(
+            task.task_id, "device-check", False, error="device operation outcome unknown"
+        )
+        self.assertEqual(self.coordinator.get_step_execution(
+            task.task_id, "device-check"
+        ).status, StepExecutionStatus.NEEDS_REVIEW)
+        self.assertEqual(self.coordinator.get_ready_steps(task.task_id, plan), ())
 
     def test_step_is_denied_without_capability_grant(self):
         task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)

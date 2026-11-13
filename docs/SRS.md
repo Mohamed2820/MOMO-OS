@@ -525,11 +525,27 @@ The following is an implementation update, not a claim that the complete task ex
 
 | Capability | Evidence level | Current result | Remaining limitation |
 |---|---|---|---|
-| Per-step durable execution state | CI-tested | SQLite journal stores one record per task/step and append-only lifecycle events | Not yet integrated with TaskCoordinator or the target root filesystem |
+| Per-step durable execution state | CI-tested; overlay-integrated | SQLite journal stores one record per task/step and append-only lifecycle events; TaskCoordinator registers every accepted plan step in the same transaction as task and immutable plan | QEMU image validation and real executor integration remain pending |
 | Attempt accounting and retry budget | CI-tested | Explicit bounded retries are restricted to R0/R1 read-only work | No scheduler, deadline manager or backoff service |
 | Side-effect failure handling | CI-tested | R2-R4 failures enter `needs_review` | No independent reconciliation adapter |
-| Restart recovery | CI-tested | In-flight steps become `needs_review`; no automatic replay | Startup integration and QEMU validation remain pending |
+| Restart recovery | CI-tested; boot-hook-integrated | `momoctl boot-check` invokes the idempotent `momo-task recover` command before readiness; in-flight steps become `needs_review` and are never replayed | QEMU boot validation and future worker-supervisor ordering remain pending |
 | Cancellation | CI-tested | Queued work can be cancelled; running work requires executor acknowledgement that no side effect occurred | No running process executor exists yet |
 | Result evidence | CI-tested | Optional SHA-256 result digest is persisted | No independent result verifier or signed evidence envelope |
 
-**Traceability:** This increment contributes partial implementation evidence toward FR-AI-011, NFR-REL-001 and NFR-REL-002. It does not close those requirements. The journal is not a tool executor, permission authority or OS sandbox. Native Linux/Android enforcement, authenticated IPC, coordinator integration and image-level validation remain mandatory.
+**Traceability:** This increment contributes partial implementation evidence toward FR-AI-011, NFR-REL-001 and NFR-REL-002. It does not close those requirements. The journal is not a tool executor, permission authority or OS sandbox. Native Linux/Android enforcement, authenticated IPC, actual executor integration and image-level validation remain mandatory.
+
+## Implementation Evidence Addendum — Persisted Dependency Readiness (2026-11-13)
+
+TaskCoordinator now derives dependency completion only from durable per-step records whose state is `succeeded`. The API no longer accepts caller-supplied completed-step IDs. A step is returned as ready only when its dependencies are durably successful and its own journal state is `ready`. Failed, running, cancelled and `needs_review` steps do not unblock downstream work. The coordinator verifies that the journal's step IDs and risk levels match the immutable accepted plan.
+
+This is CI-tested and included in the Buildroot overlay source. It is not a concurrent scheduler or execution engine: dispatch, deadlines, backoff, fairness, quotas, durable output verification and OS-enforced isolation remain open requirements.
+
+## Implementation Evidence Addendum — Tamper-Evident Step Events (2026-11-13)
+
+The per-step event history now includes a SHA-256 hash chain, verifies the chain before returning event history, and uses SQLite triggers to reject ordinary event updates and deletions. A migration backfills deterministic hashes for databases created by the earlier event-table schema. CI covers normal verification, blocked mutation, tampering after trigger removal and legacy migration.
+
+This is tamper-evident against accidental or partial record modification, not a cryptographic signature or protection against a privileged attacker who can rewrite the database and recompute the chain. Protected key custody, external audit anchoring, native file permissions and OS isolation remain required for stronger assurance.
+
+The journal also verifies the existing event chain before appending. A corrupted history blocks the new transition and the transaction rolls back; new events cannot silently extend a compromised chain.
+
+The integrity check also gates state reads and dependency scheduling: TaskCoordinator verifies all relevant step event chains before returning readiness. Corrupt history blocks the read/scheduling path instead of allowing untrusted state to authorize progress.
