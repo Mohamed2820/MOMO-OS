@@ -33,6 +33,8 @@ jobs:
           grep -q "Reuse" README.md
           grep -q "Do not" docs/SECURITY.md
           echo "Repository validation passed."
+      - name: Install native security test dependency
+        run: sudo apt-get update && sudo apt-get install -y libseccomp-dev
       - name: Install schema validation dependency
         run: python3 -m pip install -r requirements-dev.txt
       - name: Validate device profiles against JSON Schema
