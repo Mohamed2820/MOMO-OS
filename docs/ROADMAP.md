@@ -162,3 +162,8 @@ The integrated revision is undergoing a fresh Buildroot/QEMU run. Until that run
 ### Explicitly incomplete
 
 Stage 2 and Stage 3 remain open. There is no worker scheduler, actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff service, concurrency/resource manager, independent outcome verifier or needs_review reconciler. The 111-test repository result is not a substitute for image or hardware validation.
+
+
+## Stage 3 Progress — IPC protocol framing (2026-11-13)
+
+A bounded version-1 Linux local IPC framing codec is under review: strict length-prefixed frames, maximum payload, strict JSON validation and socket stream helpers, with unit and overlay parity tests. This does not complete service IPC or Stage 3. The codec is not wired to a daemon; peer identity must be checked before request processing, and operation authorization, service-role mapping, deadlines, replay defense, quotas and OS-native isolation remain mandatory.
