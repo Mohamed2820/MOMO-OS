@@ -33,5 +33,9 @@ jobs:
           grep -q "Reuse" README.md
           grep -q "Do not" docs/SECURITY.md
           echo "Repository validation passed."
-      - name: Install schema validation dependency\n        run: python3 -m pip install -r requirements-dev.txt\n      - name: Validate device profiles against JSON Schema\n        run: python3 tools/validate_device_profiles.py\n      - name: Run MOMO runtime unit tests
+      - name: Install schema validation dependency
+        run: python3 -m pip install -r requirements-dev.txt
+      - name: Validate device profiles against JSON Schema
+        run: python3 tools/validate_device_profiles.py
+      - name: Run MOMO runtime unit tests
         run: python3 -m unittest discover -s tests -v
