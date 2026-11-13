@@ -1,10 +1,10 @@
 # MOMO OS
 
-**AI-native hybrid mobile operating system — cloud-first development workspace.**
+**AI-native, device-adaptive mobile computing platform — cloud-first development workspace.**
 
-MOMO OS aims to create a capable mobile computing environment by reusing mature open-source platform components and adding a purpose-built multi-agent AI layer, system services, interface, and security architecture.
+MOMO OS aims to become a Linux-like, multi-device mobile platform: one consistent MOMO experience over separately maintained Android-compatible and mainline-Linux platform tracks, with hardware-specific adapters and evidence-based device support.
 
-> **Status:** Architecture, initial runtime core, and feasibility research. No ROM is currently declared buildable or installable. Samsung Galaxy A17 (SM-A175F) is a research target only; compatibility is not confirmed.
+> **Status:** Architecture, initial runtime core, and feasibility research. No ROM is currently declared buildable or installable. No single phone or Android release defines the product. Galaxy A17 LTE (SM-A175F) is only one possible device-port research candidate; compatibility is not confirmed.
 
 ## Engineering strategy
 
@@ -21,8 +21,8 @@ MOMO OS aims to create a capable mobile computing environment by reusing mature 
 
 | Layer | Responsibility |
 |---|---|
-| Platform base | AOSP/LineageOS-derived Android platform |
-| Device support | Device tree, kernel, vendor components, HAL and hardware validation |
+| Platform tracks | Android-compatible AOSP/ACK track and mainline-Linux mobile track |
+| Device support | Per-device profiles, boot chain, kernel, vendor components, HAL/adapters and hardware validation |
 | MOMO system services | Permission broker, automation, app/task integration and system APIs |
 | MOMO interface | Mobile shell, desktop mode, windows, voice and accessibility |
 | MOMO intelligence | Multi-agent orchestration, planning, memory, model routing, tools and evaluation |
@@ -44,7 +44,7 @@ MOMO OS aims to create a capable mobile computing environment by reusing mature 
 ## Technical specifications
 
 - [Vision](docs/VISION.md)
-- [Technical architecture](docs/ARCHITECTURE.md)
+- [Technical architecture](docs/ARCHITECTURE.md)\n- [Universal platform strategy](docs/UNIVERSAL_PLATFORM_STRATEGY.md)\n- [Device compatibility and porting](docs/DEVICE_COMPATIBILITY.md)\n- [Platform adapter contracts](docs/PLATFORM_ADAPTERS.md)
 - [AI runtime](docs/AI_RUNTIME.md)
 - [Provider routing](intelligence/providers/README.md)
 - [Orchestrator implementation](intelligence/runtime/ORCHESTRATOR.md)
@@ -53,12 +53,12 @@ MOMO OS aims to create a capable mobile computing environment by reusing mature 
 - [Desktop experience](docs/DESKTOP_EXPERIENCE.md)
 - [Cloud build pipeline](docs/CLOUD_BUILD.md)
 - [Test strategy](docs/TEST_STRATEGY.md)
-- [Device research: SM-A175F](docs/DEVICE_RESEARCH.md)
+- [Device research: SM-A175F](docs/DEVICE_RESEARCH.md) (one candidate, not the product target)\n- [Device profile schema](manifests/device-profile.schema.json)\n- [Device profile template](manifests/device-profiles/template.json)
 - [Roadmap](docs/ROADMAP.md)
 
 ## Device feasibility gate
 
-Initial target: Samsung Galaxy A17 LTE, model SM-A175F. Do not confuse it with SM-A176B (Galaxy A17 5G). Before selecting a ROM base or generating flashable images, verify exact firmware/CSC, bootloader unlockability, partition layout, kernel source/configuration, vendor components, device tree completeness, AVB/vbmeta behavior, and a tested recovery/restore path. A recovery tree or kernel repository is not proof of ROM support.
+Device ports are selected by evidence, maintainability and recovery safety—not by the maintainer's personal handset. Each exact model/SKU requires a profile, verified boot and restore path, kernel/vendor provenance, and hardware test matrix. A kernel or recovery repository is not proof of ROM support.
 
 ## Security principles
 
