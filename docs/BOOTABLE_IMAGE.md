@@ -22,7 +22,9 @@ support, firmware, device tree and hardware validation.
 - `/etc/init.d/S99momo`: first-boot banner and readiness check.
 - `/usr/bin/momoctl`: status, doctor, task-management, version and help commands.
 - `/usr/bin/momo-task`: persistent task CLI (create/list/show/transition/self-test).
-- `/usr/lib/momo/intelligence/runtime`: bundled provider-neutral task state machine and SQLite task journal.
+- `/usr/bin/momo-device`: reports OS/kernel/device identity and conservative hardware capability states.
+- `/usr/bin/momo-permissions`: initializes the durable permission journal, displays audit events, and revokes grants.
+- `/usr/lib/momo/intelligence/runtime`: bundled task state machine, SQLite task journal, device inventory, and persistent permission broker.
 - Python 3 with the SQLite module, enabled in the Buildroot target configuration.
 - Build workflow: builds Buildroot, boots the image under QEMU, and requires
   the MOMO readiness marker before uploading artifacts.
@@ -58,8 +60,10 @@ qemu-system-x86_64 -M pc -m 1024 \
 2. The kernel and root filesystem artifacts exist and are non-empty.
 3. QEMU reaches the MOMO init script.
 4. The serial log contains `MOMO OS READY`.
-5. The `momoctl` health checks pass during boot.
+5. The `momoctl` health checks pass during boot, including device inventory and permission database initialization.
 6. Python 3 can import SQLite, create a temporary MOMO task, persist five valid transitions, and restore the completed task.
+7. The device inventory command reports the running architecture and leaves unverified hardware capabilities as `unknown`.
+8. The persistent permission broker initializes its database and exposes its audit/revocation commands.
 
 A successful QEMU boot validates only this x86_64 virtual target. It does not
 establish support for ARM phones or the Samsung Galaxy A17.
