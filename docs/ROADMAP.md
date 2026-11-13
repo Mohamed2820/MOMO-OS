@@ -114,9 +114,9 @@ The first Buildroot x86_64 image has built and booted under QEMU, reaching `MOMO
 
 ## Progress Evidence Update — 2026-11-13
 
-The Runtime and Service Contracts stage has a new tested sub-milestone: a durable per-step execution journal. It records step attempts and events, bounds retries to R0/R1 read-only work, and quarantines side-effecting failures and restart-interrupted work as `needs_review`. Cooperative cancellation requires executor confirmation that no side effect occurred. The repository validation workflow passed with 96 unit tests.
+The Runtime and Service Contracts stage has a durable per-step execution journal integrated with TaskCoordinator and mirrored into the Buildroot overlay through PR #26. Accepted plan steps are registered atomically; dependency readiness uses durable succeeded records; event history is hash chained and verified fail-closed; restart recovery quarantines in-flight work as `needs_review` without replay. Repository validation for PR #26 reported 111 passing tests.
 
-This does **not** complete Stage 2 or Stage 3. The journal is not yet integrated with TaskCoordinator, Buildroot or QEMU; there is no actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff scheduler, concurrency manager or outcome reconciler. The Stage 2/3 exit criteria remain open.
+This does **not** complete Stage 2 or Stage 3. The integrated revision's fresh QEMU build/boot is still pending (run #43446234529 last observed in progress at kernel/rootfs build, no artifact). There is no actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff scheduler, concurrency manager or outcome reconciler. Stage 2/3 exit criteria remain open.
 
 
 ## Progress Evidence Update — QEMU Bring-up Accepted (2026-11-13)
@@ -128,3 +128,12 @@ Evidence: [GitHub Actions run #43437714431](https://github.com/Mohamed2820/MOMO-
 **Remaining Stage 1 qualification:** build the canonical post-merge `main` revision and run the full target-side CLI acceptance matrix, including `momoctl doctor`, task CLI, device inventory and permission checks. No physical device or Android build is validated.
 
 **Stage 2/3 focus:** integrate and harden the step execution journal with TaskCoordinator, ensure tampered event history fails closed, then add authenticated executor identity and native OS isolation before any tool execution. The journal and coordinator are not yet a safe general-purpose tool execution engine.
+
+
+## Progress Evidence Update — Task/Step Journal Integration (2026-11-13)
+
+PR #26 integrated the step journal with TaskCoordinator and the Buildroot rootfs overlay. Accepted plan steps are registered atomically; dependency readiness is derived from durable succeeded records; the event hash chain is verified fail-closed; and boot recovery quarantines interrupted operations without replay. Repository validation reported 111 passing unit tests.
+
+**Pending gate:** [QEMU workflow #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) for integrated commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25` was last observed in progress during kernel/rootfs build, with no artifact. Do not mark the integrated runtime image-validated until it boots and its recovery/CLI checks are inspected.
+
+Next: complete target-image qualification; then implement authenticated IPC and Linux-native service isolation before any external tool executor.
