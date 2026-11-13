@@ -76,6 +76,12 @@ doctor() {
 
 boot_check() {
   echo "[MOMO] Running first-boot checks..."
+  if /usr/bin/momo-task recover; then
+    echo "[ OK ] Interrupted step records quarantined; no work was replayed"
+  else
+    echo "[FAIL] Interrupted step recovery failed"
+    return 1
+  fi
   if doctor && /usr/bin/momo-task self-test; then
     echo "[MOMO] MOMO OS READY"
     return 0
