@@ -7,6 +7,8 @@ on:
       - "bootable/**"
     paths:
       - "board/momo/**"
+      - "intelligence/runtime/**"
+      - "tests/test_task_store.py"
       - "docs/BOOTABLE_IMAGE.md"
       - ".github/workflows/momo-x86_64-image.yml"
 
@@ -51,8 +53,9 @@ jobs:
           make -C "$BUILDROOT_DIR" qemu_x86_64_defconfig
           # QEMU is already installed on the GitHub runner; do not build a second host QEMU from source.
           sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
-          sed -i '/^BR2_ROOTFS_OVERLAY=/d' "$BUILDROOT_DIR/.config"
+          sed -i '/^BR2_ROOTFS_OVERLAY=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d' "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_OVERLAY="%s/board/momo/rootfs-overlay"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\n' >> "$BUILDROOT_DIR/.config"
           make -C "$BUILDROOT_DIR" olddefconfig
 
       - name: Build Linux kernel and MOMO root filesystem
