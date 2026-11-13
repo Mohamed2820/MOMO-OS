@@ -7,6 +7,7 @@
 - Atomically persists task creation, the accepted canonical plan, every plan-step execution record and initial lifecycle events in one SQLite transaction.
 - Exposes per-step execution records and append-only execution events through the coordinator.
 - Recovers in-flight step records to `needs_review` through an explicit restart-recovery method; no interrupted step is replayed automatically.
+- The current init-managed Linux boot path invokes `momo-task recover` before the readiness check; recovery is idempotent.
 - Persists unique plan-bound idempotency keys and bounded retry policy metadata; automatic retries remain restricted to R0/R1 read-only steps.
 - Reloads the accepted plan after restart and verifies its SHA-256 digest before use.
 - Persists task lifecycle events through the SQLite task journal.
