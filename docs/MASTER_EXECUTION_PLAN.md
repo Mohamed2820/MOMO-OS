@@ -264,3 +264,8 @@ The parser is transport hygiene only. Peer authentication, UID-to-role mapping, 
 Implemented a narrow daemon/client path on top of the peer-credential primitive and bounded protocol. Buildroot provisions `momo-ipc`; init starts `momo-ipcd` under that account; the daemon checks kernel peer credentials before parsing; it dispatches only `status.read`; the socket path is protected against unsafe replacement; connection timeouts and backlog are bounded; and `momoctl ipc-status` queries the service. The service has no execution adapter.
 
 Required acceptance: green repository CI, successful Buildroot image build, QEMU boot reaching MOMO OS READY, and an in-guest authenticated status request. Next hardening gates are replay protection, strict operation-specific schemas, service role/capability policy, seccomp/namespaces/LSM/cgroups, and adversarial denial tests. Do not enable tool execution before those gates.
+
+
+## IPC Hardening Increment — Bounded Replay Detection (PR #39 candidate)
+
+Added a lock-protected bounded 1,024-entry request-ID cache, duplicate rejection before dispatch, UUID request IDs in the CLI, and strict client response-shape validation. The cache is volatile and resets on daemon restart. Do not use it as the idempotency authority for mutating tools; durable task/step journal keys and reconciliation remain required.
