@@ -378,6 +378,7 @@ class StepExecutionJournal:
         return self.get_step(task_id, step_id)
 
     def get_step(self, task_id: str, step_id: str) -> StepExecution:
+        self.verify_event_chain(task_id, step_id)
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT * FROM task_step_executions WHERE task_id = ? AND step_id = ?",
@@ -388,7 +389,7 @@ class StepExecutionJournal:
         return self._record(row)
 
     def list_steps(self, task_id: str) -> tuple[StepExecution, ...]:
-        """Return all durable step records for a task in stable step-ID order."""
+        """Return verified durable step records in stable step-ID order."""
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -397,6 +398,10 @@ class StepExecutionJournal:
                 """,
                 (task_id,),
             ).fetchall()
+            for row in rows:
+                self._last_verified_event_hash(
+                    connection, row["task_id"], row["step_id"]
+                )
         return tuple(self._record(row) for row in rows)
 
     def list_events(self, task_id: str, step_id: str) -> tuple[StepExecutionEvent, ...]:

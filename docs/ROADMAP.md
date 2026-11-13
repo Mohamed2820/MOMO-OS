@@ -127,3 +127,5 @@ The Runtime and Service Contracts stage remains open: there is no worker schedul
 ### Audit integrity progress — 2026-11-13
 
 The per-step event ledger now has a verified SHA-256 hash chain, update/delete protection through SQLite triggers and a migration path for legacy event rows. The repository suite covers mutation attempts and tamper detection. This is an integrity foundation only; it is not a signed or externally anchored audit log and does not replace native storage protection.
+
+The coordinator now verifies event chains before reading step state or deriving dependency readiness. Corrupt event history blocks scheduling as well as further writes. This guard is covered by the repository suite.

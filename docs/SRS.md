@@ -547,3 +547,5 @@ The per-step event history now includes a SHA-256 hash chain, verifies the chain
 This is tamper-evident against accidental or partial record modification, not a cryptographic signature or protection against a privileged attacker who can rewrite the database and recompute the chain. Protected key custody, external audit anchoring, native file permissions and OS isolation remain required for stronger assurance.
 
 The journal also verifies the existing event chain before appending. A corrupted history blocks the new transition and the transaction rolls back; new events cannot silently extend a compromised chain.
+
+The integrity check also gates state reads and dependency scheduling: TaskCoordinator verifies all relevant step event chains before returning readiness. Corrupt history blocks the read/scheduling path instead of allowing untrusted state to authorize progress.

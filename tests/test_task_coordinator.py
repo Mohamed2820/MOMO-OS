@@ -155,6 +155,18 @@ class TaskCoordinatorTests(unittest.TestCase):
         )
         self.assertEqual(self.coordinator.get_ready_steps(task.task_id, plan), ())
 
+    def test_corrupt_event_chain_blocks_ready_step_scheduling(self):
+        task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
+        with sqlite3.connect(self.task_db) as connection:
+            connection.execute("DROP TRIGGER task_step_events_no_update")
+            connection.execute(
+                "UPDATE task_step_events SET reason = 'tampered' "
+                "WHERE task_id = ? AND step_id = 'inspect'",
+                (task.task_id,),
+            )
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.coordinator.get_ready_steps(task.task_id, self.plan)
+
     def test_needs_review_dependency_does_not_unblock_downstream_step(self):
         plan = Plan("Inspect device then summarize", (
             PlanStep("device-check", "Inspect device", "operator", "device",

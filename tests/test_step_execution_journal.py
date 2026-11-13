@@ -165,6 +165,20 @@ class StepExecutionJournalTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "hash-chain verification"):
             self.journal.verify_event_chain(self.task.task_id, "read-status")
 
+    def test_corrupt_event_chain_blocks_step_state_reads(self):
+        self.register()
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("DROP TRIGGER task_step_events_no_update")
+            connection.execute(
+                "UPDATE task_step_events SET reason = 'tampered' "
+                "WHERE task_id = ? AND step_id = ?",
+                (self.task.task_id, "read-status"),
+            )
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.journal.get_step(self.task.task_id, "read-status")
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.journal.list_steps(self.task.task_id)
+
     def test_corrupt_event_chain_blocks_new_state_transitions(self):
         self.register()
         with sqlite3.connect(self.database) as connection:
@@ -176,10 +190,13 @@ class StepExecutionJournalTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "hash-chain verification"):
             self.journal.start_step(self.task.task_id, "read-status")
-        self.assertEqual(
-            self.journal.get_step(self.task.task_id, "read-status").status,
-            StepExecutionStatus.READY,
-        )
+        with sqlite3.connect(self.database) as connection:
+            persisted_status = connection.execute(
+                "SELECT status FROM task_step_executions "
+                "WHERE task_id = ? AND step_id = ?",
+                (self.task.task_id, "read-status"),
+            ).fetchone()[0]
+        self.assertEqual(persisted_status, StepExecutionStatus.READY.value)
 
     def test_legacy_event_table_is_migrated_and_backfilled(self):
         legacy_database = Path(self.temp.name) / "legacy.sqlite3"
