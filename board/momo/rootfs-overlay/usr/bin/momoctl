@@ -33,7 +33,7 @@ status() {
 doctor() {
   failed=0
   for path in /proc /sys /dev /run; do
-    if [ -d "$path" ] && mountpoint -q "$path"; then
+    if [ -d "$path" ] && grep -qsE "^[^ ]+ $path " /proc/mounts; then
       echo "[ OK ] $path is mounted"
     elif [ -d "$path" ]; then
       echo "[WARN] $path exists but mount state is unavailable"
