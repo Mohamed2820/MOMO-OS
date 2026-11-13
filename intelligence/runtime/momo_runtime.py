@@ -110,6 +110,7 @@ class CapabilityGrant:
     expires_at: datetime
     approval_mode: str = "per_call"
     max_uses: int = 1
+    grant_id: str = field(default_factory=lambda: str(uuid4()))
 
 
 @dataclass(frozen=True)
@@ -132,10 +133,24 @@ class ToolRequest:
 class AuthorizationDecision:
     allowed: bool
     reason: str
+    grant_id: str | None = None
 
 
 class PermissionBroker:
-    """Pure policy evaluator; actual Android enforcement belongs to system services."""
+    """In-process policy evaluator; platform adapters must enforce OS permissions."""
+
+    _APPROVAL_MODES = {"per_call", "standing_scoped", "never_allowed"}
+
+    def __init__(self) -> None:
+        self._usage: dict[str, int] = {}
+        self._revoked: set[str] = set()
+
+    def revoke(self, grant_id: str) -> bool:
+        """Revoke a grant immediately for this broker instance."""
+        if not grant_id:
+            raise ValueError("Grant ID must not be empty")
+        self._revoked.add(grant_id)
+        return True
 
     def authorize(
         self,
@@ -145,6 +160,8 @@ class PermissionBroker:
         now: datetime | None = None,
     ) -> AuthorizationDecision:
         now = now or datetime.now(timezone.utc)
+        if now.tzinfo is None or now.utcoffset() is None:
+            return AuthorizationDecision(False, "Authorization time must be timezone-aware")
 
         if request.risk in {Risk.R3, Risk.R4}:
             if approval is None or not approval.approved:
@@ -157,16 +174,28 @@ class PermissionBroker:
                 return AuthorizationDecision(False, "Approval does not match this request")
 
         for grant in grants:
+            if grant.grant_id in self._revoked:
+                continue
+            if grant.approval_mode not in self._APPROVAL_MODES:
+                continue
+            if grant.approval_mode == "never_allowed":
+                continue
+            if not grant.grant_id or grant.max_uses < 1:
+                continue
+            if grant.expires_at.tzinfo is None or grant.expires_at.utcoffset() is None:
+                continue
             if grant.expires_at <= now:
                 continue
-            if grant.max_uses < 1:
+            if self._usage.get(grant.grant_id, 0) >= grant.max_uses:
                 continue
             if (
                 grant.subject == request.subject
                 and grant.action == request.action
                 and grant.resource == request.resource
                 and grant.risk == request.risk
-                and grant.approval_mode != "never_allowed"
             ):
-                return AuthorizationDecision(True, "Matching scoped capability grant")
+                self._usage[grant.grant_id] = self._usage.get(grant.grant_id, 0) + 1
+                return AuthorizationDecision(
+                    True, "Matching scoped capability grant", grant.grant_id
+                )
         return AuthorizationDecision(False, "No active matching capability grant")
