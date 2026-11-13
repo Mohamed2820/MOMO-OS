@@ -14,6 +14,7 @@ from .momo_runtime import (
 from .orchestrator import AgentRegistry, Plan, PlanStep, PlanValidator, ready_steps
 from .persistent_permission_broker import PersistentPermissionBroker
 from .task_store import TaskStore
+from intelligence.execution.step_journal import StepExecution, StepExecutionEvent, StepExecutionJournal
 
 
 _RISK_LEVEL = {Risk.R0: 0, Risk.R1: 1, Risk.R2: 2, Risk.R3: 3, Risk.R4: 4}
@@ -89,6 +90,7 @@ class TaskCoordinator:
         self.validator = PlanValidator(registry)
         self.tasks = TaskStore(task_database)
         self.permissions = PersistentPermissionBroker(permission_database)
+        self.execution = StepExecutionJournal(self.tasks.database)
         with sqlite3.connect(str(self.tasks.database), timeout=10) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("PRAGMA busy_timeout = 10000")
@@ -133,6 +135,13 @@ class TaskCoordinator:
             connection.execute(
                 "INSERT INTO task_plans(task_id, plan_sha256, plan_json) VALUES (?, ?, ?)",
                 (task.task_id, digest, encoded),
+            )
+
+            self.execution.register_plan_steps(
+                connection,
+                task.task_id,
+                digest,
+                tuple((step.step_id, step.risk) for step in plan.steps),
             )
 
             task.transition(
@@ -243,3 +252,20 @@ class TaskCoordinator:
         stored_digest, _ = _plan_digest(stored)
         if not hmac.compare_digest(supplied_digest, stored_digest):
             raise ValueError("Supplied plan does not match the immutable task plan")
+
+    def get_step_execution(self, task_id: str, step_id: str) -> StepExecution:
+        """Return the durable execution record for one accepted plan step."""
+        task = self.tasks.get_task(task_id)
+        self.get_persisted_plan(task_id)
+        return self.execution.get_step(task.task_id, step_id)
+
+    def get_step_execution_events(
+        self, task_id: str, step_id: str
+    ) -> tuple[StepExecutionEvent, ...]:
+        """Return append-only execution history for one accepted plan step."""
+        self.get_step_execution(task_id, step_id)
+        return self.execution.list_events(task_id, step_id)
+
+    def recover_interrupted_steps(self) -> tuple[StepExecution, ...]:
+        """Quarantine in-flight step records after a confirmed service restart."""
+        return self.execution.recover_interrupted()
