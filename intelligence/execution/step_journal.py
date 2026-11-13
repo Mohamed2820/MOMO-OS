@@ -154,6 +154,53 @@ class StepExecutionJournal:
             (task_id, step_id, at, previous, current, reason.strip()),
         )
 
+    def register_plan_steps(
+        self,
+        connection: sqlite3.Connection,
+        task_id: str,
+        plan_sha256: str,
+        steps: tuple[tuple[str, Risk], ...],
+    ) -> tuple[str, ...]:
+        """Insert all plan-step records inside the caller's task transaction."""
+        if not isinstance(connection, sqlite3.Connection):
+            raise TypeError("A SQLite connection is required")
+        if (not isinstance(plan_sha256, str) or len(plan_sha256) != 64
+                or any(char not in "0123456789abcdef" for char in plan_sha256)):
+            raise ValueError("Plan digest must be a lowercase SHA-256 hex string")
+        entries = tuple(steps)
+        if not entries:
+            raise ValueError("At least one plan step is required")
+        step_ids = [step_id for step_id, _ in entries]
+        if len(set(step_ids)) != len(step_ids):
+            raise ValueError("Plan step IDs must be unique")
+        for step_id, risk in entries:
+            if not isinstance(step_id, str) or not step_id.strip():
+                raise ValueError("Step ID must not be empty")
+            if not isinstance(risk, Risk):
+                raise ValueError("Step risk must be a Risk value")
+
+        now = self._now()
+        keys = []
+        for step_id, risk in entries:
+            key = hashlib.sha256(
+                f"{task_id}:{plan_sha256}:{step_id}".encode("utf-8")
+            ).hexdigest()
+            connection.execute(
+                """
+                INSERT INTO task_step_executions(
+                    task_id, step_id, risk, status, attempt, retry_limit,
+                    idempotency_key, created_at, updated_at
+                ) VALUES (?, ?, ?, 'ready', 0, 0, ?, ?, ?)
+                """,
+                (task_id, step_id, risk.value, key, now, now),
+            )
+            self._event(
+                connection, task_id, step_id, None, "ready",
+                "Step registered with immutable accepted plan", now,
+            )
+            keys.append(key)
+        return tuple(keys)
+
     def register_step(
         self,
         task_id: str,
@@ -172,7 +219,7 @@ class StepExecutionJournal:
             raise ValueError("A stable idempotency key is required")
         if len(idempotency_key) > 256:
             raise ValueError("Idempotency key exceeds 256 characters")
-        if not isinstance(retry_limit, int) or not 0 <= retry_limit <= self.MAX_RETRIES:
+        if type(retry_limit) is not int or not 0 <= retry_limit <= self.MAX_RETRIES:
             raise ValueError("Retry limit must be between 0 and 5")
         if risk not in {Risk.R0, Risk.R1} and retry_limit:
             raise ValueError("Automatic retries are restricted to R0/R1 read-only work")
@@ -261,7 +308,7 @@ class StepExecutionJournal:
         result_sha256: str | None = None,
         error: str | None = None,
     ) -> StepExecution:
-        if not isinstance(success, bool):
+        if type(success) is not bool:
             raise ValueError("Success must be boolean")
         if result_sha256 is not None:
             if (not isinstance(result_sha256, str) or len(result_sha256) != 64
