@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "board/momo/rootfs-overlay/usr/lib/momo"))
 
 from intelligence.security.ipc_protocol import encode_request
 from intelligence.security.linux_peercred import PeerCredentialError
-from momo_ipcd import handle_connection, prepare_socket_path
+from momo_ipcd import RequestReplayGuard, handle_connection, prepare_socket_path
 
 
 class IPCServiceTests(unittest.TestCase):
@@ -80,6 +80,20 @@ class IPCServiceTests(unittest.TestCase):
         worker.join(timeout=2)
         client.close()
         server.close()
+
+    def test_replay_guard_rejects_duplicates_and_evicts_oldest_bounded_entry(self):
+        guard = RequestReplayGuard(capacity=2)
+        self.assertTrue(guard.claim("one"))
+        self.assertTrue(guard.claim("two"))
+        self.assertFalse(guard.claim("one"))
+        self.assertTrue(guard.claim("three"))
+        self.assertTrue(guard.claim("one"))
+        self.assertFalse(guard.claim("three"))
+
+    def test_replay_guard_rejects_invalid_identifiers(self):
+        guard = RequestReplayGuard()
+        self.assertFalse(guard.claim(""))
+        self.assertFalse(guard.claim(None))
 
     def test_refuses_to_replace_regular_file_or_foreign_path(self):
         with tempfile.TemporaryDirectory() as directory:
