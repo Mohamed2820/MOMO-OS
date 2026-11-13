@@ -50,6 +50,8 @@ class IPCServiceTests(unittest.TestCase):
                 handle_connection(server, frozenset({os.getuid() + 100000}))
             except Exception as exc:
                 errors.append(exc)
+            finally:
+                server.close()
         worker = threading.Thread(target=run)
         worker.start()
         client.sendall(encode_request({
@@ -65,9 +67,12 @@ class IPCServiceTests(unittest.TestCase):
 
     def test_rejects_any_operation_other_than_status_read(self):
         server, client = socket.socketpair()
-        worker = threading.Thread(
-            target=handle_connection, args=(server, frozenset({os.getuid()}))
-        )
+        def run():
+            try:
+                handle_connection(server, frozenset({os.getuid()}))
+            finally:
+                server.close()
+        worker = threading.Thread(target=run)
         worker.start()
         client.sendall(encode_request({
             "version": 1, "request_id": "exec-1",
