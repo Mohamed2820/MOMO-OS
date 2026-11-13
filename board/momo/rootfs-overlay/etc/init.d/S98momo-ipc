@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# Start the unprivileged MOMO local IPC status service.
+#
+PIDFILE=/run/momo-ipcd.pid
+SOCKET=/run/momo/ipc.sock
+
+case "$1" in
+  start)
+    mkdir -p /run/momo
+    chmod 0755 /run/momo
+    if [ -S "$SOCKET" ]; then
+      echo "[MOMO IPC] A socket already exists; refusing blind replacement."
+      exit 1
+    fi
+    start-stop-daemon --start --background --make-pidfile --pidfile "$PIDFILE" \
+      --chuid momo-ipc:momo-ipc --exec /usr/bin/python3 -- \
+      /usr/lib/momo/momo_ipcd.py
+    ;;
+  stop)
+    start-stop-daemon --stop --retry TERM/5/KILL/2 --pidfile "$PIDFILE" 2>/dev/null || true
+    rm -f "$PIDFILE"
+    ;;
+  restart)
+    "$0" stop
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}" >&2
+    exit 1
+    ;;
+esac
+exit 0
