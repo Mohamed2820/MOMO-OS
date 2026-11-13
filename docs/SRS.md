@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS)
 ## MOMO OS — Device-Adaptive Mobile Computing Platform
 
-**Document status:** Active SRS, version 0.2  
+**Document status:** Active SRS, version 0.3  
 **Date:** 2026-11-13  
 **Repository:** Mohamed2820/MOMO-OS  
 **Normative language:** "shall" indicates a requirement; "should" indicates a recommended requirement.  
@@ -11,20 +11,31 @@
 
 ## Implementation Snapshot (2026-11-13)
 
-This snapshot separates source-code progress from runtime/hardware evidence.
+This snapshot distinguishes source implementation, target-image integration, automated tests and hardware validation.
 
 | Area | Current implementation | Evidence / limitation |
 |---|---|---|
-| x86_64 Linux image | Buildroot configuration and MOMO rootfs overlay | QEMU build/boot workflow is still pending; no successful boot claim yet |
-| Task state machine | Risk-aware task lifecycle and transition validation | Unit tests pass in repository CI |
-| Permission policy core | Scoped grants, expiry, revocation, bounded use and exact R3/R4 approval matching | In-process policy evaluator only; native OS enforcement is not implemented by this module |
-| Persistent task journal | SQLite TaskStore with transactional transitions and event history | Unit tests pass in repository CI; target image integration awaits successful QEMU validation |
-| Task CLI | create/list/show/transition/doctor/self-test commands | Added to target overlay; image-level execution is not yet verified |
-| Device profiles | JSON schema and CI validation | Profile validation does not prove a device port boots |
+| x86_64 Linux image | Buildroot configuration, kernel/rootfs pipeline and QEMU serial-boot acceptance check | Latest image run is queued/building; no successful QEMU boot or artifact claim yet |
+| Task state machine | Risk-aware lifecycle and transition validation | Repository unit tests pass |
+| Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; image-level execution awaits QEMU boot |
+| Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; target CLI has not yet been exercised in QEMU |
+| Device inventory | Runtime OS/kernel/architecture/device identity collection | Source and rootfs overlay included; exact hardware capabilities remain unknown absent verified profile |
+| Persistent permission broker | SQLite grants, expiry, revocation, bounded use, exact R3/R4 approval matching and audit journal | Source and rootfs overlay included; policy layer does not enforce native OS permissions or execute tools |
+| Device profiles | JSON schema and CI validation | Schema validation does not prove a device port boots |
 | Android track | Architecture and requirements only | No AOSP build, Android boot image or phone installation validated |
 | Physical devices | Device support tiers defined | No phone hardware is currently certified |
 
-The first target is an x86_64 virtual machine. It is a development and integration target, not a mobile release. A feature is considered integrated only after its target-image test passes. Device support requires exact-SKU boot and hardware evidence.
+**Evidence levels used in this SRS**
+
+1. *Specified*: requirement and design documented.
+2. *Implemented*: source code exists.
+3. *CI-tested*: automated repository tests pass.
+4. *Image-integrated*: files and configuration are included in the target root filesystem.
+5. *QEMU-validated*: target image builds and passes runtime checks in the emulator.
+6. *Hardware-validated*: exact device SKU boots and its required hardware functions pass tests.
+
+A lower level must not be presented as evidence for a higher level. The first target is an x86_64 virtual machine, not a mobile release. Each phone still requires its own boot chain, kernel/vendor support, firmware, device tree, recovery strategy and hardware validation.
+
 
 ## 1. Introduction
 
