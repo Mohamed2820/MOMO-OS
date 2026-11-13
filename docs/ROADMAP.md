@@ -191,3 +191,8 @@ A libseccomp denylist now blocks selected execution, process creation, namespace
 ## Platform Roadmap — AArch64 virtual bring-up (2026-11-13)
 
 A separate AArch64 QEMU build-and-boot workflow is now under review. It shares the portable runtime and security overlay with x86_64. AArch64 support will not be claimed until the ARM64 workflow passes. Physical device enablement remains per-device engineering, not automatic universal compatibility.
+
+
+## Image Evidence Update — 2026-11-13
+
+The first x86_64 Buildroot image is confirmed to have built and booted under QEMU, reaching `MOMO OS READY` on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83` ([run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431)). The later Step Journal/TaskCoordinator integrated revision still requires its own fresh QEMU acceptance ([run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529)).
