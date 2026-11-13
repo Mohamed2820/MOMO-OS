@@ -4,6 +4,8 @@
 
 ## Implemented
 - Validates plans against registered agent roles, domains, capabilities, risk ceilings, dependency graph and delegation budget.
+- Atomically persists task creation, the accepted canonical plan and initial lifecycle events in one SQLite transaction.
+- Reloads the accepted plan after restart and verifies its SHA-256 digest before use.
 - Persists task lifecycle events through the SQLite task journal.
 - Stores canonical plan JSON and SHA-256 digest, binding the plan to its task and rejecting later plan substitution.
 - Returns deterministic dependency-ready steps.
