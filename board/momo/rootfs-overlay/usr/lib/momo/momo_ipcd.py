@@ -5,8 +5,10 @@ It intentionally has no shell, process, filesystem-write, or tool dispatcher.
 """
 from __future__ import annotations
 
+import ctypes
 import json
 import os
+import resource
 import socket
 import stat
 import struct
@@ -28,6 +30,27 @@ from intelligence.security.linux_peercred import (
 SOCKET_PATH = Path("/run/momo/ipc.sock")
 ALLOWED_CLIENT_UIDS = frozenset({0})
 MAX_CLIENTS_PER_LOOP = 8
+MAX_ADDRESS_SPACE = 256 * 1024 * 1024
+
+
+def apply_process_restrictions() -> None:
+    """Apply conservative per-process limits and Linux no_new_privs."""
+    limits = (
+        (resource.RLIMIT_CORE, 0),
+        (resource.RLIMIT_NOFILE, 32),
+        (resource.RLIMIT_FSIZE, 0),
+        (resource.RLIMIT_CPU, 120),
+        (resource.RLIMIT_AS, MAX_ADDRESS_SPACE),
+    )
+    for limit, value in limits:
+        resource.setrlimit(limit, (value, value))
+    libc = ctypes.CDLL(None, use_errno=True)
+    prctl = libc.prctl
+    prctl.restype = ctypes.c_int
+    # Linux PR_SET_NO_NEW_PRIVS = 38. This is not a seccomp filter.
+    if prctl(38, 1, 0, 0, 0) != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error))
 REPLAY_CACHE_CAPACITY = 1024
 
 
@@ -116,6 +139,7 @@ def prepare_socket_path(path: Path) -> None:
 
 
 def serve(path: Path = SOCKET_PATH) -> None:
+    apply_process_restrictions()
     prepare_socket_path(path)
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     replay_guard = RequestReplayGuard()
