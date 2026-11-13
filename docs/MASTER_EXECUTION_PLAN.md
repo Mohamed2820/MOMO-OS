@@ -289,3 +289,18 @@ Added a separate AArch64 Buildroot/QEMU workflow with pinned Buildroot verificat
 ## Historical Image Evidence and Current Gate (2026-11-13)
 
 The initial x86_64 Buildroot baseline passed build, output verification and QEMU boot on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`, reaching `MOMO OS READY` ([run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact `14046724553`). The later revision integrating Step Journal/TaskCoordinator is a distinct image and remains pending in [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). The earlier artifact is not acceptance evidence for the later commit.
+
+
+## Current Integrated Baseline — 2026-11-13
+
+PR #42 has been merged into the bootable development branch. It integrates the status-only authenticated AF_UNIX daemon, bounded IPC protocol, process-lifetime replay cache, process limits, `PR_SET_NO_NEW_PRIVS`, libseccomp default-allow denylist and an AArch64 QEMU build/boot workflow. The daemon runs under the dedicated `momo-ipc` account and accepts only root-owned local status requests. No tool executor is present or enabled.
+
+Integrated commit: `a7a4caf381553d9a697b68a093eff9520d8b0bda`.
+
+Current acceptance runs:
+- x86_64 image: [run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) — build in progress at last inspection.
+- AArch64 image: [run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951) — build in progress at last inspection.
+
+Do not merge further changes to the bootable branch while these image workflows are running. Once complete, inspect kernel/rootfs outputs, QEMU serial logs, IPC status response and uploaded artifacts independently for each architecture. Green repository-validation is not a substitute for either image test.
+
+Remaining gates: resolve image/boot failures; adversarial IPC/seccomp tests; explicit operation/capability authorization; namespace and cgroup isolation plus LSM policy; durable side-effect idempotency and recovery; only then a non-privileged executor adapter. Android remains a separate AOSP/Binder-AIDL/SELinux/AppOps track, followed by per-device bootloader/kernel/DTB/firmware/driver validation.
