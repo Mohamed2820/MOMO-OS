@@ -582,3 +582,8 @@ The unprivileged daemon now requires libseccomp and installs a default-allow sys
 ## AArch64 Platform Target — 2026-11-13 (PR #42 candidate)
 
 A dedicated Buildroot/QEMU AArch64 virtual-target workflow is added using `qemu_aarch64_virt_defconfig`, the MOMO rootfs overlay, libseccomp and the unprivileged IPC status service. Acceptance requires a non-empty ARM64 kernel/rootfs, QEMU boot to `MOMO OS READY`, and the authenticated status response. Until that workflow passes, AArch64 remains a planned/under-validation target, not a verified supported architecture. No physical Android device support is implied.
+
+
+## Historical x86_64 QEMU Baseline Evidence (2026-11-13)
+
+A prior x86_64 Buildroot image on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83` successfully built, passed image-output verification, booted under QEMU, and reached `MOMO OS READY`. Evidence: [workflow #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact ID `14046724553`. This validates only that earlier x86_64 baseline. The newer Step Journal integrated revision at [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) still requires its own fresh image and QEMU acceptance; it must not inherit the older success claim.
