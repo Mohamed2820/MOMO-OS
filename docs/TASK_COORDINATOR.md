@@ -35,3 +35,5 @@ The coordinator never dispatches a tool, calls a model, creates a grant, approve
 These are separate milestones. The coordinator must not be described as an autonomous execution engine until they are implemented and tested.
 
 The step event stream is hash-chained and verified before history is returned. SQLite triggers reject ordinary event updates and deletions, and legacy event rows are backfilled during migration. This does not provide cryptographic authenticity against a privileged database administrator; external anchoring and protected key custody remain separate requirements.
+
+Before deriving readiness, the coordinator verifies every plan step's event chain. A corrupted step history blocks state reads and dependency scheduling rather than being treated as a valid state.
