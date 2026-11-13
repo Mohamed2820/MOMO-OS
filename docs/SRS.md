@@ -587,3 +587,12 @@ A dedicated Buildroot/QEMU AArch64 virtual-target workflow is added using `qemu_
 ## Historical x86_64 QEMU Baseline Evidence (2026-11-13)
 
 A prior x86_64 Buildroot image on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83` successfully built, passed image-output verification, booted under QEMU, and reached `MOMO OS READY`. Evidence: [workflow #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact ID `14046724553`. This validates only that earlier x86_64 baseline. The newer Step Journal integrated revision at [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) still requires its own fresh image and QEMU acceptance; it must not inherit the older success claim.
+
+
+## Integrated Security and Architecture Status — 2026-11-13
+
+PR #42 is merged into `bootable/x86_64-buildroot-mvp-v2`. The integrated branch contains bounded IPC framing, SO_PEERCRED peer authentication, a read-only status daemon running as the dedicated `momo-ipc` account, process-lifetime replay detection, process resource limits, `PR_SET_NO_NEW_PRIVS`, and a required libseccomp default-allow denylist. The daemon exposes only `status.read`; tool execution remains disabled. The syscall policy is defense in depth, not a strict allowlist or complete sandbox.
+
+AArch64 QEMU virtual-target workflow is integrated. Fresh x86_64 and AArch64 image workflows were triggered against commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; both had entered kernel/rootfs build at last inspection. Image verification, QEMU boot, IPC evidence and artifact publication remain unconfirmed. No support claim for this integrated revision is made until both workflows pass.
+
+Physical hardware, Android/AOSP, device-specific drivers, namespaces/cgroups/LSM policy, strict syscall allowlisting, capability authorization and any tool executor remain unaccepted requirements.
