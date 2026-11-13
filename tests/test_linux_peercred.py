@@ -48,13 +48,19 @@ class LinuxPeerCredentialTests(unittest.TestCase):
             require_peer_identity(self.server, allowed_uids={True})
 
     def test_rejects_non_unix_socket(self):
-        left, right = socket.socketpair(socket.AF_INET, socket.SOCK_STREAM)
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect(listener.getsockname())
+        accepted, _ = listener.accept()
         try:
             with self.assertRaises(PeerCredentialError):
-                get_peer_credentials(left)
+                get_peer_credentials(accepted)
         finally:
-            left.close()
-            right.close()
+            accepted.close()
+            client.close()
+            listener.close()
 
 
 if __name__ == "__main__":
