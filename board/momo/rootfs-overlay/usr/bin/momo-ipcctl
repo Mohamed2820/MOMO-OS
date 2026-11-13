@@ -4,6 +4,7 @@ import json
 import socket
 import struct
 import sys
+import uuid
 sys.path.insert(0, "/usr/lib/momo")
 
 from intelligence.security.ipc_protocol import MAX_FRAME_BYTES, encode_request
@@ -21,13 +22,22 @@ def receive_exact(connection, count):
     return bytes(data)
 
 
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate response JSON key")
+        result[key] = value
+    return result
+
+
 def main():
     if len(sys.argv) != 2 or sys.argv[1] != "status":
         print("Usage: momo-ipcctl status", file=sys.stderr)
         return 2
     request = {
         "version": 1,
-        "request_id": "momoctl-status",
+        "request_id": "momoctl-" + uuid.uuid4().hex,
         "operation": "status.read",
         "args": {},
     }
@@ -39,8 +49,20 @@ def main():
             length = struct.unpack("!I", receive_exact(connection, 4))[0]
             if length <= 0 or length > MAX_FRAME_BYTES:
                 raise RuntimeError("Invalid IPC response frame length")
-            payload = json.loads(receive_exact(connection, length).decode("utf-8"))
-        if payload.get("version") != 1 or payload.get("request_id") != request["request_id"] or payload.get("ok") is not True:
+            payload = json.loads(
+                receive_exact(connection, length).decode("utf-8"),
+                object_pairs_hook=lambda pairs: _unique_object(pairs),
+            )
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"version", "request_id", "ok", "peer_pid", "result"}
+            or payload.get("version") != 1
+            or payload.get("request_id") != request["request_id"]
+            or payload.get("ok") is not True
+            or type(payload.get("peer_pid")) is not int
+            or not isinstance(payload.get("result"), dict)
+            or payload["result"].get("tool_execution") != "disabled"
+        ):
             raise RuntimeError("IPC response failed protocol validation")
         print(json.dumps(payload["result"], indent=2, sort_keys=True))
         return 0
