@@ -1,30 +1,16 @@
-"""Policy-aware bridge between durable tasks, plans and capability grants.
-
-This coordinator validates and schedules work but deliberately does not execute
-tools, call models, or treat a plan as authorization. Every step still requires
-a matching capability grant; R3/R4 steps additionally require per-action
-approval through the permission broker.
-"""
+"""Policy-aware bridge between durable tasks, plans and capability grants."""
 from __future__ import annotations
 
+import hashlib
+import json
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 
 from .momo_runtime import (
-    Approval,
-    AuthorizationDecision,
-    Risk,
-    Task,
-    TaskStatus,
-    ToolRequest,
+    Approval, AuthorizationDecision, Risk, Task, TaskStatus, ToolRequest,
 )
-from .orchestrator import (
-    AgentRegistry,
-    Plan,
-    PlanStep,
-    PlanValidator,
-    ready_steps,
-)
+from .orchestrator import AgentRegistry, Plan, PlanStep, PlanValidator, ready_steps
 from .persistent_permission_broker import PersistentPermissionBroker
 from .task_store import TaskStore
 
@@ -32,12 +18,37 @@ from .task_store import TaskStore
 _RISK_LEVEL = {Risk.R0: 0, Risk.R1: 1, Risk.R2: 2, Risk.R3: 3, Risk.R4: 4}
 
 
-class TaskCoordinator:
-    """Coordinate plan validation, task persistence and per-step authorization.
+def _plan_document(plan: Plan) -> dict:
+    """Canonical, JSON-safe representation used to bind a plan to its task."""
+    return {
+        "goal": plan.goal.strip(),
+        "max_steps": plan.max_steps,
+        "max_delegation_depth": plan.max_delegation_depth,
+        "steps": [
+            {
+                "step_id": step.step_id,
+                "description": step.description,
+                "agent_role": step.agent_role,
+                "domain": step.domain,
+                "required_capabilities": sorted(step.required_capabilities),
+                "risk": step.risk.value,
+                "depends_on": list(step.depends_on),
+                "delegation_depth": step.delegation_depth,
+            }
+            for step in plan.steps
+        ],
+    }
 
-    Plans are supplied by the caller and revalidated on each authorization.
-    This first version intentionally does not persist plans or dispatch tools.
-    """
+
+def _plan_digest(plan: Plan) -> tuple[str, str]:
+    encoded = json.dumps(
+        _plan_document(plan), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest(), encoded
+
+
+class TaskCoordinator:
+    """Validate, persist, schedule and authorize plans; never dispatch tools."""
 
     def __init__(
         self,
@@ -48,21 +59,39 @@ class TaskCoordinator:
         self.validator = PlanValidator(registry)
         self.tasks = TaskStore(task_database)
         self.permissions = PersistentPermissionBroker(permission_database)
+        with sqlite3.connect(str(self.tasks.database)) as connection:
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS task_plans (
+                    task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+                    plan_sha256 TEXT NOT NULL,
+                    plan_json TEXT NOT NULL
+                )
+                """
+            )
 
     def create_task(self, goal: str, risk: Risk, plan: Plan) -> Task:
-        """Validate a bounded plan and persist its initial classified state."""
         self.validator.validate(plan)
         if plan.goal.strip() != goal.strip():
             raise ValueError("Task goal must match the validated plan goal")
         if any(_RISK_LEVEL[step.risk] > _RISK_LEVEL[risk] for step in plan.steps):
             raise ValueError("A plan step exceeds the task risk ceiling")
 
+        digest, encoded = _plan_digest(plan)
         task = self.tasks.create_task(goal, risk)
+        with sqlite3.connect(str(self.tasks.database)) as connection:
+            connection.execute(
+                "INSERT INTO task_plans(task_id, plan_sha256, plan_json) VALUES (?, ?, ?)",
+                (task.task_id, digest, encoded),
+            )
         task = self.tasks.transition(
-            task.task_id, TaskStatus.CLASSIFIED, "Plan passed structural and agent-policy validation"
+            task.task_id, TaskStatus.CLASSIFIED,
+            "Plan passed structural and agent-policy validation",
         )
         task = self.tasks.transition(
-            task.task_id, TaskStatus.PLANNED, "Validated plan accepted by task coordinator"
+            task.task_id, TaskStatus.PLANNED,
+            "Validated plan accepted by task coordinator",
         )
         if risk in {Risk.R3, Risk.R4}:
             task = self.tasks.transition(
@@ -90,7 +119,7 @@ class TaskCoordinator:
         approval: Approval | None = None,
         now: datetime | None = None,
     ) -> AuthorizationDecision:
-        """Consume one narrowly scoped grant; never execute the authorized step."""
+        """Consume one narrowly scoped grant; successful authorization is not execution."""
         task = self.tasks.get_task(task_id)
         if task.status not in {
             TaskStatus.PLANNED, TaskStatus.AWAITING_APPROVAL, TaskStatus.EXECUTING
@@ -115,3 +144,10 @@ class TaskCoordinator:
             raise ValueError("Supplied plan does not belong to this task")
         if any(_RISK_LEVEL[step.risk] > _RISK_LEVEL[task.risk] for step in plan.steps):
             raise ValueError("A plan step exceeds the persisted task risk ceiling")
+        digest, _ = _plan_digest(plan)
+        with sqlite3.connect(str(self.tasks.database)) as connection:
+            row = connection.execute(
+                "SELECT plan_sha256 FROM task_plans WHERE task_id = ?", (task.task_id,)
+            ).fetchone()
+        if row is None or row[0] != digest:
+            raise ValueError("Supplied plan does not match the immutable task plan")
