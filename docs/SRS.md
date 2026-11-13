@@ -518,3 +518,18 @@ Each requirement shall have unique ID, priority, owner/workstream, implementatio
 - MOMO-owned code license and contribution governance.
 
 No unresolved decision may be silently treated as selected. Each ADR records alternatives, evidence, decision, consequences and review date.
+
+## Implementation Evidence Addendum — Durable Step Execution Journal (2026-11-13)
+
+The following is an implementation update, not a claim that the complete task execution subsystem is finished.
+
+| Capability | Evidence level | Current result | Remaining limitation |
+|---|---|---|---|
+| Per-step durable execution state | CI-tested | SQLite journal stores one record per task/step and append-only lifecycle events | Not yet integrated with TaskCoordinator or the target root filesystem |
+| Attempt accounting and retry budget | CI-tested | Explicit bounded retries are restricted to R0/R1 read-only work | No scheduler, deadline manager or backoff service |
+| Side-effect failure handling | CI-tested | R2-R4 failures enter `needs_review` | No independent reconciliation adapter |
+| Restart recovery | CI-tested | In-flight steps become `needs_review`; no automatic replay | Startup integration and QEMU validation remain pending |
+| Cancellation | CI-tested | Queued work can be cancelled; running work requires executor acknowledgement that no side effect occurred | No running process executor exists yet |
+| Result evidence | CI-tested | Optional SHA-256 result digest is persisted | No independent result verifier or signed evidence envelope |
+
+**Traceability:** This increment contributes partial implementation evidence toward FR-AI-011, NFR-REL-001 and NFR-REL-002. It does not close those requirements. The journal is not a tool executor, permission authority or OS sandbox. Native Linux/Android enforcement, authenticated IPC, coordinator integration and image-level validation remain mandatory.
