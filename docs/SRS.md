@@ -539,3 +539,9 @@ The following is an implementation update, not a claim that the complete task ex
 TaskCoordinator now derives dependency completion only from durable per-step records whose state is `succeeded`. The API no longer accepts caller-supplied completed-step IDs. A step is returned as ready only when its dependencies are durably successful and its own journal state is `ready`. Failed, running, cancelled and `needs_review` steps do not unblock downstream work. The coordinator verifies that the journal's step IDs and risk levels match the immutable accepted plan.
 
 This is CI-tested and included in the Buildroot overlay source. It is not a concurrent scheduler or execution engine: dispatch, deadlines, backoff, fairness, quotas, durable output verification and OS-enforced isolation remain open requirements.
+
+## Implementation Evidence Addendum — Tamper-Evident Step Events (2026-11-13)
+
+The per-step event history now includes a SHA-256 hash chain, verifies the chain before returning event history, and uses SQLite triggers to reject ordinary event updates and deletions. A migration backfills deterministic hashes for databases created by the earlier event-table schema. CI covers normal verification, blocked mutation, tampering after trigger removal and legacy migration.
+
+This is tamper-evident against accidental or partial record modification, not a cryptographic signature or protection against a privileged attacker who can rewrite the database and recompute the chain. Protected key custody, external audit anchoring, native file permissions and OS isolation remain required for stronger assurance.
