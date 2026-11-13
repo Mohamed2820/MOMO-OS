@@ -15,13 +15,23 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-      - name: Validate required documentation
+      - name: Validate required documentation and JSON contracts
         shell: bash
         run: |
           set -euo pipefail
-          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/AGENT_METHODOLOGY.md docs/LICENSING.md; do
+          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/DEVICE_RESEARCH.md docs/AGENT_METHODOLOGY.md docs/AI_RUNTIME.md docs/TOOL_AND_PERMISSION_MODEL.md docs/CLOUD_BUILD.md docs/DESKTOP_EXPERIENCE.md docs/TEST_STRATEGY.md docs/LICENSING.md intelligence/README.md; do
             test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
           done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for path in sorted(Path(".").rglob("*.json")):
+              with path.open(encoding="utf-8") as stream:
+                  json.load(stream)
+              print(f"Valid JSON: {path}")
+          PY
           grep -q "Reuse" README.md
           grep -q "Do not" docs/SECURITY.md
-          echo "Repository foundation checks passed."
+          echo "Repository validation passed."
+      - name: Run MOMO runtime unit tests
+        run: python3 -m unittest discover -s tests -v
