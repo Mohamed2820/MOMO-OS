@@ -42,8 +42,10 @@ Milestones are gated by evidence and acceptance criteria, not calendar promises.
 **Exit:** usable shell prototype and reviewed privilege model.
 
 ## M4 — MOMO Multi-Agent Intelligence
-- [ ] Specify agent/tool protocol and typed schemas.
-- [ ] Implement planner, orchestrator, specialist registry, and model router.
+- [x] Specify initial typed task and capability schemas.
+- [x] Implement deterministic plan validation, agent capability registry, and dependency-aware scheduling.
+- [x] Implement initial privacy-aware provider profile selection with local-only handling for sensitive/restricted data.
+- [ ] Implement model-backed planning, real agent execution, specialist delegation, and provider SDK adapters.
 - [ ] Add memory controls, provenance, retention, and deletion behavior.
 - [ ] Add evaluator, sandboxed tool execution, budget and cancellation.
 - [ ] Build benchmark tasks and adversarial tests.
