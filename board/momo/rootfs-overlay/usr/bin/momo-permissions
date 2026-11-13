@@ -1,0 +1,46 @@
+#!/usr/bin/python3
+"""Inspect and revoke persistent MOMO capability grants."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, "/usr/lib/momo")
+
+from intelligence.runtime.persistent_permission_broker import PersistentPermissionBroker
+
+DATABASE = os.environ.get("MOMO_PERMISSION_DB", "/var/lib/momo/permissions.sqlite3")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="momo-permissions",
+        description="Inspect the policy audit journal; this tool does not execute actions.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("doctor", help="Initialize and verify the permission database")
+    audit = sub.add_parser("audit", help="Show recent authorization decisions")
+    audit.add_argument("--limit", type=int, default=50)
+    revoke = sub.add_parser("revoke", help="Revoke a grant by its exact ID")
+    revoke.add_argument("grant_id")
+    args = parser.parse_args(argv)
+
+    broker = PersistentPermissionBroker(DATABASE)
+    if args.command == "doctor":
+        print(f"[MOMO] Permission database: {broker.database}")
+        print("[MOMO] Persistent permission broker healthy")
+    elif args.command == "audit":
+        print(json.dumps(broker.list_events(args.limit), ensure_ascii=False, indent=2))
+    elif args.command == "revoke":
+        if broker.revoke(args.grant_id):
+            print("[MOMO] Grant revoked and audit event recorded")
+        else:
+            print("[MOMO] Grant not found or already revoked")
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
