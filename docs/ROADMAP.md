@@ -181,3 +181,8 @@ The local status service now rejects duplicate request IDs using a bounded 1,024
 ## IPC Process Hardening — Initial Restrictions (2026-11-13)
 
 The IPC daemon now runs unprivileged with explicit resource limits and `PR_SET_NO_NEW_PRIVS`. This is defense in depth, not a complete sandbox. Seccomp, namespaces, cgroups and LSM enforcement remain future gates before any executor can be enabled.
+
+
+## IPC Syscall Filtering — 2026-11-13
+
+A libseccomp denylist now blocks selected execution, process creation, namespace, kernel-control and cross-process-memory syscalls in the daemon. It is fail-closed and tested in a subprocess. The policy defaults to allow and is not a complete sandbox; strict syscall allowlisting, namespaces, cgroups and LSM enforcement remain future gates.
