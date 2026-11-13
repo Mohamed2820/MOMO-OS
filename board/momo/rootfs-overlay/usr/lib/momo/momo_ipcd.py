@@ -13,6 +13,9 @@ import struct
 from pathlib import Path
 from typing import Any
 
+import sys
+sys.path.insert(0, "/usr/lib/momo")
+
 from intelligence.security.ipc_protocol import (
     IPCProtocolError, MAX_FRAME_BYTES, decode_frame, recv_request,
 )
