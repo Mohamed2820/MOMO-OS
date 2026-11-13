@@ -41,6 +41,10 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 - `tests/` — automated validation and compatibility checks.
 - `.github/workflows/` — repository-level validation workflows.
 
+## First bootable target
+
+- [x86_64 QEMU bring-up image](docs/BOOTABLE_IMAGE.md) — Buildroot-based experimental Linux image with MOMO startup and diagnostics. The image is not a phone ROM; QEMU boot evidence is required before calling the target bootable.
+
 ## Technical specifications
 
 - [Vision](docs/VISION.md)
