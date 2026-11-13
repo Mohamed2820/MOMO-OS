@@ -122,11 +122,28 @@ class PersistentPermissionBroker:
             raise ValueError("Grant ID must not be empty")
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT subject, action, resource, risk FROM capability_grants WHERE grant_id = ?",
+                (grant_id,),
+            ).fetchone()
             cursor = connection.execute(
                 "UPDATE capability_grants SET revoked = 1 WHERE grant_id = ? AND revoked = 0",
                 (grant_id,),
             )
             changed = cursor.rowcount > 0
+            if changed and row is not None:
+                connection.execute(
+                    """
+                    INSERT INTO authorization_events(
+                        at, subject, action, resource, risk, allowed, reason, grant_id
+                    ) VALUES (?, ?, ?, ?, ?, 0, 'Capability grant revoked', ?)
+                    """,
+                    (
+                        datetime.now(timezone.utc).isoformat(),
+                        row["subject"], row["action"], row["resource"],
+                        row["risk"], grant_id,
+                    ),
+                )
             connection.commit()
         return changed
 
