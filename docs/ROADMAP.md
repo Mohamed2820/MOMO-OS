@@ -2,70 +2,95 @@
 
 Roadmap stages are evidence-gated. Dates are not promised until build capacity, device access, platform baselines and maintainers are confirmed.
 
-## Current stage — Experimental Linux bring-up
-Build the x86_64 Buildroot image and prove it boots under QEMU. This is a development target, not a mobile ROM.
+## Current stage — Experimental Linux bring-up and runtime integration
+
+The first x86_64 Buildroot image has booted successfully in QEMU. The merged TaskCoordinator execution-journal integration is now being rebuilt and must pass the same image, QEMU and readiness checks. This remains a development target, not a mobile ROM.
 
 ## Stage 0 — Governance and product baseline
+
 - [x] Repository and cloud-first development strategy.
 - [x] Initial architecture, security, device compatibility, AI runtime and licensing documents.
 - [x] Initial task state machine, task journal, device inventory and persistent permission broker.
 - [x] Initial Task Coordinator with immutable plan binding and scoped permission checks.
-- [ ] Complete SRS, product overview, master plan and evidence-based roadmap.
+- [x] SRS, project overview, master execution plan and evidence-based roadmap.
 - [ ] Dependency/license inventory, contribution governance and security reporting process.
+
 **Exit:** product scope and governance approved; claims mapped to evidence.
 
 ## Stage 1 — First bootable target (critical path)
+
 - [x] Buildroot x86_64 configuration and MOMO rootfs overlay.
 - [x] CI workflow for kernel/rootfs build, QEMU serial boot, readiness check and artifact upload.
-- [ ] Successful kernel/rootfs build on latest commit.
-- [ ] Verify image output and artifact integrity.
-- [ ] QEMU boot reaches MOMO OS READY.
-- [ ] Run momoctl doctor, task self-test, device inventory and permission checks in target.
-- [ ] Inspect boot log, checksums and provenance.
-- [ ] Merge bootable image PR into main only after all gates pass.
-**Exit:** reproducible QEMU-validated image with retained evidence.
+- [x] Kernel/rootfs build and image-output verification for the initial bootable revision.
+- [x] QEMU serial boot reached MOMO OS READY on the initial bootable revision.
+- [x] Target boot checks confirmed device inventory, persistent permission broker and task-runtime self-test.
+- [x] Build metadata and QEMU boot log retained in the workflow artifact.
+- [x] Initial bootable image PR merged into main after successful QEMU evidence.
+- [ ] Rebuild and validate the latest merged coordinator/journal integration in QEMU.
+
+**Initial image evidence:** workflow run 43437714431, commit 74398b8d8ab9e379e94a864d35bb9a6db3623d83, artifact 14046724553. The ZIP is 20,463,168 bytes and its SHA-256 is fbff57ca80e88c0189a70a46d696905dede4986e7498f82eab4afb27466dc2ba. It contains bzImage, rootfs.ext2, qemu-boot.log and build-metadata.txt. This evidence applies to the initial bootable revision, not automatically to later runtime changes.
+
+**Exit:** reproducible QEMU-validated image for the declared x86_64 virtual target, with retained evidence.
 
 ## Stage 2 — Runtime and service contracts
+
 - [x] Task state machine and durable event journal.
-- [x] Plan validation, agent registry and dependency-aware scheduling.
-- [x] Initial Task Coordinator, persistent permission integration and immutable plan digest.
-- [ ] Complete cancellation, deadline, idempotency, retries and crash recovery.
-- [ ] Define versioned contracts for device, permissions, tasks, storage, apps, notifications, power, update and audit.
-- [ ] Add IPC identity, structured errors, health checks and migration tests.
-**Exit:** durable service layer with negative authorization and restart tests.
+- [x] Plan validation, agent registry and dependency-aware readiness.
+- [x] TaskCoordinator, persistent permission integration and immutable plan digest.
+- [x] Atomic creation of task, immutable plan and all step journal records.
+- [x] Durable step lifecycle, bounded read-only retry metadata, conservative restart recovery and cancellation requests.
+- [x] Dependency readiness derived only from verified durable succeeded records.
+- [x] Per-step hash-chained event history with fail-closed reads and scheduling.
+- [x] Buildroot overlay integration and boot-time recovery hook in source.
+- [ ] Latest coordinator-integrated image passes QEMU recovery and readiness checks.
+- [ ] Complete executor protocol, deadlines, backoff, concurrency/fairness limits and resource budgets.
+- [ ] Independent outcome verification and needs_review reconciliation.
+- [ ] Define remaining versioned contracts for storage, apps, notifications, power, update and audit.
+- [ ] Add authenticated IPC identity, structured errors and service health checks.
+
+**Exit:** durable service layer persists, authorizes and recovers tasks without unauthorized side effects; execution dispatch remains blocked until native enforcement is available.
 
 ## Stage 3 — OS-enforced security
+
 - [ ] Linux service identities, namespaces, seccomp/LSM policy and sandbox profiles.
 - [ ] Android Binder/AIDL, SELinux, AppOps and signature-level enforcement.
 - [ ] Secure secret storage, audit redaction and retention/deletion policy.
 - [ ] Adversarial tests: prompt injection, confused deputy, replay, path traversal and privilege escalation.
 - [ ] Independent security review.
-**Exit:** unauthorized actions rejected by native OS boundaries, not only app-level policy.
+
+**Exit:** unauthorized actions rejected at native OS boundaries, not only app-level policy.
 
 ## Stage 4 — Platform selection and reproducible upstream builds
+
 - [ ] Evaluate and pin Android-compatible base and API baseline.
 - [ ] Evaluate mainline-Linux userspace, shell/compositor, package and update strategy.
 - [ ] Build unmodified platform baselines before MOMO patches.
 - [ ] Record source manifests, licenses, firmware provenance, toolchain and SBOM.
+
 **Exit:** two documented, reproducible platform tracks with selected baselines.
 
 ## Stage 5 — First exact-device port
+
 - [ ] Select first device by source availability, unlock/recovery and test access.
 - [ ] Confirm exact SKU, codename, region, boot chain, partitions, AVB, kernel and vendor dependencies.
 - [ ] Build and boot without risking the only device.
 - [ ] Validate display, touch, storage, charging, thermal, radios, audio, camera, sensors, biometrics and encryption.
 - [ ] Test OTA, rollback, restore and data preservation.
+
 **Exit:** at least Tier 2 boot-tested; Tier 3 required for daily-use candidate.
 
 ## Stage 6 — MOMO mobile and desktop experience
+
 - [ ] Launcher/shell, navigation, quick settings, notifications and settings.
 - [ ] Permissions dashboard, task/activity history and approval UX.
 - [ ] Arabic RTL and English LTR localization.
 - [ ] Screen reader, scalable UI, contrast and alternative input.
 - [ ] Desktop/convergence mode on qualified hardware.
+
 **Exit:** coherent shell usable without AI and with understandable automation controls.
 
 ## Stage 7 — Core services
+
 - [ ] Storage Broker and scoped file access.
 - [ ] App Broker and lifecycle integration.
 - [ ] Notification Broker.
@@ -73,59 +98,67 @@ Build the x86_64 Buildroot image and prove it boots under QEMU. This is a develo
 - [ ] Power and Thermal service.
 - [ ] Audit/diagnostics service.
 - [ ] Update and Recovery Manager.
+
 **Exit:** P0/P1 services pass contract, integration, restart and permission tests on target platform.
 
 ## Stage 8 — AI assistant and multi-agent execution
+
 - [ ] Model provider adapters and user-configured credentials.
 - [ ] Local model runtime discovery and cloud routing policy.
 - [ ] Planner, agent execution, tool gateway and sandbox adapters.
 - [ ] User-controlled memory, provenance, retention and deletion.
 - [ ] Approval UX, cancellation, budgets, rate limits and outcome verification.
 - [ ] Benchmark and adversarial safety suite.
+
 **Exit:** measured task completion with no critical safety bypass.
 
 ## Stage 9 — Applications and ecosystem
+
 - [ ] Essential first-party apps and settings.
 - [ ] Android compatibility validation on Android track.
 - [ ] Native Linux app/package strategy on Linux track.
 - [ ] Stable service SDK/contracts and sample integrations.
+
 **Exit:** minimum app set works on qualified targets with permission conformance.
 
 ## Stage 10 — Release engineering
+
 - [ ] Protected artifact signing and key custody.
 - [ ] SBOM, checksums, source provenance and license notices.
 - [ ] Staged updates, health checks, rollback and recovery.
 - [ ] Release channels, support lifecycle, security response and installation guides.
+
 **Exit:** signed reproducible release candidate passes full qualification.
 
 ## Stage 11 — Multi-device expansion and maintenance
+
 - [ ] Port a second distinct device family.
 - [ ] Cross-device conformance and regression automation.
 - [ ] Kernel/security update process and upstream synchronization.
 - [ ] Public support matrix and end-of-life policy.
+
 **Exit:** at least two device families have evidence-backed support tiers and active maintenance.
 
 ## Current blockers
-- Latest QEMU image build is pending; no successful image boot is claimed.
+
+- Latest coordinator-integrated image build and QEMU recovery check are pending.
 - No Android/AOSP build or Android phone image is validated.
 - No physical device is certified.
-- No OS-enforced MOMO tool sandbox or full tool execution adapter exists yet.
+- No actual tool executor, authenticated IPC or OS-enforced MOMO sandbox exists.
 - No final Android base, first phone SKU, cloud build host or release signing infrastructure is selected.
 
 ## Progress Evidence Update — 2026-11-13
 
-The Runtime and Service Contracts stage has a new tested sub-milestone: a durable per-step execution journal. It records step attempts and events, bounds retries to R0/R1 read-only work, and quarantines side-effecting failures and restart-interrupted work as `needs_review`. Cooperative cancellation requires executor confirmation that no side effect occurred. The repository validation workflow passed with 96 unit tests.
+### Initial x86_64 bootable target
 
-This does **not** complete Stage 2 or Stage 3. The journal is integrated with TaskCoordinator and mirrored into the Buildroot rootfs overlay; accepted plan steps are persisted atomically with their task and immutable plan. The target image has not yet been rebuilt with the coordinator and startup-recovery changes or validated in QEMU. There is no actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff scheduler, concurrency manager or outcome reconciler. The Stage 2/3 exit criteria remain open.
+The initial Buildroot 2026.08.1 x86_64 image built and booted successfully under QEMU. The serial log reached MOMO OS READY after device inventory, persistent permission broker and task-runtime self-tests. The workflow retained a 20,463,168-byte artifact with kernel, root filesystem, boot log and build metadata. The artifact digest and run/commit identifiers are recorded in Stage 1 above. PR #15 was merged into main after this evidence was inspected.
 
-### Runtime scheduling progress — 2026-11-13
+### Integrated durable step execution
 
-A tested dependency-readiness foundation is now integrated: TaskCoordinator trusts only persisted `succeeded` step records, returns only journal entries in `ready` state, and blocks descendants of failed or ambiguous steps. Callers cannot forge completion by supplying an in-memory set. The change is mirrored into the Buildroot overlay and covered by the repository validation suite (105 tests).
+PR #26 was merged into the bootable development branch after repository validation passed with 111 unit tests. TaskCoordinator now atomically stores each accepted plan step with the task and immutable plan. The journal persists attempts, cancellation requests, result digests and unique plan-bound idempotency keys. Restart recovery quarantines in-flight steps as needs_review; no ambiguous side effect is replayed. Dependency readiness comes only from durable succeeded records. A SHA-256 hash chain and SQLite mutation guards protect the event history, and corrupted history blocks reads and scheduling. The source is mirrored into the Buildroot overlay and the boot path invokes recovery before readiness.
 
-The Runtime and Service Contracts stage remains open: there is no worker scheduler, actual executor, deadline/backoff service, concurrency/fairness/resource quotas, independent outcome verifier or OS-enforced sandbox.
+The integrated revision is undergoing a fresh Buildroot/QEMU run. Until that run passes, the initial QEMU evidence must not be treated as validation of the newer integrated code.
 
-### Audit integrity progress — 2026-11-13
+### Explicitly incomplete
 
-The per-step event ledger now has a verified SHA-256 hash chain, update/delete protection through SQLite triggers and a migration path for legacy event rows. The repository suite covers mutation attempts and tamper detection. This is an integrity foundation only; it is not a signed or externally anchored audit log and does not replace native storage protection.
-
-The coordinator now verifies event chains before reading step state or deriving dependency readiness. Corrupt event history blocks scheduling as well as further writes. This guard is covered by the repository suite.
+Stage 2 and Stage 3 remain open. There is no worker scheduler, actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff service, concurrency/resource manager, independent outcome verifier or needs_review reconciler. The 111-test repository result is not a substitute for image or hardware validation.
