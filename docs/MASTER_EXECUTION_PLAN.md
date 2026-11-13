@@ -274,3 +274,8 @@ Added a lock-protected bounded 1,024-entry request-ID cache, duplicate rejection
 ## IPC Process Hardening — Resource Limits and No-New-Privileges (PR #40 candidate)
 
 Added startup restrictions for core dumps, file size, open descriptors, CPU time and address space, plus Linux `PR_SET_NO_NEW_PRIVS`. A subprocess test verifies limits and kernel state. This is not a complete sandbox: syscall allowlisting via seccomp, namespace isolation, cgroup limits and LSM policy remain outstanding.
+
+
+## IPC Syscall Restriction — libseccomp denylist (PR #41 candidate)
+
+Added a required libseccomp runtime dependency and a default-allow syscall denylist installed after socket setup. Dangerous process creation/exec, ptrace, mount/namespace, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory syscalls are denied. CI tests that process creation fails with EPERM. Filter installation is fail-closed. This remains defense in depth, not a strict syscall allowlist; namespace, cgroup and LSM isolation are still required.
