@@ -166,8 +166,11 @@ class StepExecutionJournalTests(unittest.TestCase):
             self.journal.verify_event_chain(self.task.task_id, "read-status")
 
     def test_legacy_event_table_is_migrated_and_backfilled(self):
+        legacy_database = Path(self.temp.name) / "legacy.sqlite3"
+        legacy_tasks = TaskStore(legacy_database)
+        legacy_task = legacy_tasks.create_task("Migrate legacy step journal", Risk.R1)
         now = "2026-11-13T14:00:00+00:00"
-        with sqlite3.connect(self.database) as connection:
+        with sqlite3.connect(legacy_database) as connection:
             connection.execute("""
                 CREATE TABLE task_step_executions (
                     task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
@@ -204,15 +207,15 @@ class StepExecutionJournalTests(unittest.TestCase):
                     task_id, step_id, risk, status, attempt, retry_limit,
                     idempotency_key, created_at, updated_at
                 ) VALUES (?, 'legacy-step', 'R1', 'ready', 0, 0, 'legacy:key', ?, ?)
-            """, (self.task.task_id, now, now))
+            """, (legacy_task.task_id, now, now))
             connection.execute("""
                 INSERT INTO task_step_events(task_id, step_id, at, previous, current, reason)
                 VALUES (?, 'legacy-step', ?, NULL, 'ready', 'Legacy event before hash migration')
-            """, (self.task.task_id, now))
+            """, (legacy_task.task_id, now))
 
-        migrated = StepExecutionJournal(self.database)
-        self.assertTrue(migrated.verify_event_chain(self.task.task_id, "legacy-step"))
-        events = migrated.list_events(self.task.task_id, "legacy-step")
+        migrated = StepExecutionJournal(legacy_database)
+        self.assertTrue(migrated.verify_event_chain(legacy_task.task_id, "legacy-step"))
+        events = migrated.list_events(legacy_task.task_id, "legacy-step")
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].reason, "Legacy event before hash migration")
 
