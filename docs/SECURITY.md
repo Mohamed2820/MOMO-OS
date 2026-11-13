@@ -60,3 +60,8 @@ The user may configure narrowly scoped standing approvals later, but never silen
 
 ## Incident response
 Document affected versions, severity, reproduction, mitigations, disclosure coordination, and fixed releases. Do not publish exploit details before a fix is available when disclosure would create immediate user risk.
+
+
+## Linux local IPC identity primitive
+
+The Linux development track includes a helper that reads kernel-provided `SO_PEERCRED` from connected AF_UNIX sockets and enforces explicit UID and optional primary-GID allowlists. It is an identity primitive only: a peer identity is not an authorization decision. Services must still validate protocol schemas, bind identities to roles, enforce per-operation capabilities and run with OS-native least privilege and sandboxing. Supplementary groups are not represented by `SO_PEERCRED`. Android uses a separate Binder/AIDL and SELinux/AppOps security design.
