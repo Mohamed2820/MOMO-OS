@@ -279,3 +279,8 @@ Added startup restrictions for core dumps, file size, open descriptors, CPU time
 ## IPC Syscall Restriction — libseccomp denylist (PR #41 candidate)
 
 Added a required libseccomp runtime dependency and a default-allow syscall denylist installed after socket setup. Dangerous process creation/exec, ptrace, mount/namespace, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory syscalls are denied. CI tests that process creation fails with EPERM. Filter installation is fail-closed. This remains defense in depth, not a strict syscall allowlist; namespace, cgroup and LSM isolation are still required.
+
+
+## Platform Expansion — AArch64 QEMU target (PR #42 candidate)
+
+Added a separate AArch64 Buildroot/QEMU workflow with pinned Buildroot verification, overlay and user-table configuration, libseccomp, cached toolchain/package outputs, image checks, QEMU serial boot and IPC status evidence. Merge/acceptance is gated on workflow success. Physical ARM devices require their own boot chain, kernel, device tree, firmware, drivers and validation.
