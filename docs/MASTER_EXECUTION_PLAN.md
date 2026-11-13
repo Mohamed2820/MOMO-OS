@@ -269,3 +269,8 @@ Required acceptance: green repository CI, successful Buildroot image build, QEMU
 ## IPC Hardening Increment — Bounded Replay Detection (PR #39 candidate)
 
 Added a lock-protected bounded 1,024-entry request-ID cache, duplicate rejection before dispatch, UUID request IDs in the CLI, and strict client response-shape validation. The cache is volatile and resets on daemon restart. Do not use it as the idempotency authority for mutating tools; durable task/step journal keys and reconciliation remain required.
+
+
+## IPC Process Hardening — Resource Limits and No-New-Privileges (PR #40 candidate)
+
+Added startup restrictions for core dumps, file size, open descriptors, CPU time and address space, plus Linux `PR_SET_NO_NEW_PRIVS`. A subprocess test verifies limits and kernel state. This is not a complete sandbox: syscall allowlisting via seccomp, namespace isolation, cgroup limits and LSM policy remain outstanding.
