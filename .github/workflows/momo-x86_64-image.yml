@@ -118,6 +118,8 @@ jobs:
             exit "$qemu_status"
           fi
           grep -F "MOMO OS READY" "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"service": "momo-ipcd"' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"tool_execution": "disabled"' "$GITHUB_WORKSPACE/qemu-boot.log"
 
       - name: Record build provenance
         if: always()
