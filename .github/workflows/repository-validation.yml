@@ -43,5 +43,8 @@ jobs:
           sh -n board/momo/rootfs-overlay/usr/bin/momoctl
           sh board/momo/rootfs-overlay/usr/bin/momoctl version
           sh board/momo/rootfs-overlay/usr/bin/momoctl help
+          python3 -m py_compile intelligence/runtime/momo_runtime.py intelligence/runtime/task_store.py board/momo/rootfs-overlay/usr/bin/momo-task
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 board/momo/rootfs-overlay/usr/bin/momo-task self-test
+          MOMO_TASK_DB="$RUNNER_TEMP/momo-task-ci.sqlite3" PYTHONPATH="$GITHUB_WORKSPACE" python3 board/momo/rootfs-overlay/usr/bin/momo-task doctor
       - name: Run MOMO runtime unit tests
         run: python3 -m unittest discover -s tests -v
