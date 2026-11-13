@@ -21,3 +21,10 @@
 ## Next integration gate
 
 Implement a narrowly scoped unprivileged service using a dedicated UID, authenticate the peer before parsing, apply socket deadlines and message quotas, validate operation-specific argument schemas, bind each operation to a capability check, and run it under native Linux sandbox controls (namespaces, seccomp and LSM). Add adversarial tests for path replacement, replay, malformed frames, slow clients, resource exhaustion and unauthorized peer identities. Keep the tool executor disabled until these controls are verified.
+
+
+## Replay defense increment (PR #39 candidate)
+
+The status daemon now keeps a bounded 1,024-entry request-ID cache for the lifetime of one daemon process. Duplicate IDs are rejected after peer authentication and before operation dispatch; oldest IDs are evicted when capacity is reached. The CLI generates a fresh UUID-based request ID and validates response framing, exact response fields, duplicate JSON keys and the explicit disabled-execution marker.
+
+This is process-lifetime replay detection, not durable anti-replay across daemon restarts. It is appropriate only for the current read-only status endpoint; future mutating operations require durable idempotency and outcome reconciliation, not merely this in-memory cache.
