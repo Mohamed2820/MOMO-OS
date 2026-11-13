@@ -45,4 +45,4 @@ The integrated coordinator, journal, Buildroot overlay and fail-closed dependenc
 
 ## Next milestone
 
-After the current QEMU image passes, define and test a non-executing executor protocol: immutable plan binding, fresh authorization, OS principal identity, idempotency propagation, deadlines, cancellation acknowledgement and independent outcome evidence. Do not enable privileged tool dispatch until native OS isolation and authenticated IPC are in place.
+After the current QEMU image passes, define and test a non-executing executor protocol: immutable plan binding, fresh authorization, OS principal identity, durable idempotency propagation, deadlines, cancellation acknowledgement and independent outcome evidence. The current authenticated IPC daemon is status-only. Do not enable privileged tool dispatch until operation-specific authorization and native OS isolation are in place.
