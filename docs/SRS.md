@@ -528,7 +528,7 @@ The following is an implementation update, not a claim that the complete task ex
 | Per-step durable execution state | CI-tested; overlay-integrated | SQLite journal stores one record per task/step and append-only lifecycle events; TaskCoordinator registers every accepted plan step in the same transaction as task and immutable plan | QEMU image validation and real executor integration remain pending |
 | Attempt accounting and retry budget | CI-tested | Explicit bounded retries are restricted to R0/R1 read-only work | No scheduler, deadline manager or backoff service |
 | Side-effect failure handling | CI-tested | R2-R4 failures enter `needs_review` | No independent reconciliation adapter |
-| Restart recovery | CI-tested; coordinator-integrated | Explicit coordinator recovery moves in-flight steps to `needs_review`; no automatic replay | A boot/service supervisor must invoke recovery once per confirmed restart; QEMU validation remains pending |
+| Restart recovery | CI-tested; boot-hook-integrated | `momoctl boot-check` invokes the idempotent `momo-task recover` command before readiness; in-flight steps become `needs_review` and are never replayed | QEMU boot validation and future worker-supervisor ordering remain pending |
 | Cancellation | CI-tested | Queued work can be cancelled; running work requires executor acknowledgement that no side effect occurred | No running process executor exists yet |
 | Result evidence | CI-tested | Optional SHA-256 result digest is persisted | No independent result verifier or signed evidence envelope |
 

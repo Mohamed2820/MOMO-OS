@@ -73,7 +73,8 @@ The repository validation suite currently covers registration, durable state, re
 - TaskCoordinator creates all plan-step records in the same SQLite transaction as the task, immutable plan digest and initial task events.
 - TaskCoordinator exposes step-record/event reads and an explicit interrupted-step recovery entry point.
 - The journal and coordinator are mirrored into the Buildroot root filesystem overlay, with CI source/overlay parity checks.
-- `momo-task` does not yet expose execution-journal commands.
+- `momo-task recover` exposes an explicit interrupted-step quarantine command.
+- `momoctl boot-check` invokes recovery before reporting `MOMO OS READY`; repeated recovery calls are idempotent.
 - The image has not yet been rebuilt with this integration; QEMU and physical hardware validation remain pending.
 
 The next integration milestone is to bind each accepted plan step to this journal atomically, then add an executor interface that can only start after plan-integrity and permission checks. OS-level sandboxing remains a separate mandatory gate.
