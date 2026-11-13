@@ -132,7 +132,7 @@ Evidence: [GitHub Actions run #43437714431](https://github.com/Mohamed2820/MOMO-
 
 ## Progress Evidence Update — Task/Step Journal Integration (2026-11-13)
 
-PR #26 integrated the step journal with TaskCoordinator and the Buildroot rootfs overlay. Accepted plan steps are registered atomically; dependency readiness is derived from durable succeeded records; the event hash chain is verified fail-closed; and boot recovery quarantines interrupted operations without replay. Repository validation reported 111 passing unit tests.
+PR #26 integrated the step journal with TaskCoordinator and the Buildroot rootfs overlay on `bootable/x86_64-buildroot-mvp-v2`; this integration has not yet been promoted to `main`. Accepted plan steps are registered atomically; dependency readiness is derived from durable succeeded records; the event hash chain is verified fail-closed; and boot recovery quarantines interrupted operations without replay. Repository validation reported 111 passing unit tests.
 
 **Pending gate:** [QEMU workflow #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) for integrated commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25` was last observed in progress during kernel/rootfs build, with no artifact. Do not mark the integrated runtime image-validated until it boots and its recovery/CLI checks are inspected.
 
