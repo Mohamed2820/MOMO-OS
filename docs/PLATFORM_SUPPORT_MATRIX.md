@@ -5,7 +5,8 @@
 
 | Platform target | Build path | Current evidence | Status |
 |---|---|---|---|
-| Linux x86_64 QEMU baseline | Buildroot `qemu_x86_64_defconfig` | Successful build and QEMU boot on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`; run [#43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431); artifact ID `14046724553`; log reached `MOMO OS READY` | Baseline validated in QEMU |\n| Linux x86_64 with integrated Step Journal | Same Buildroot target | Run [#43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529), commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25`, was still building kernel/rootfs at last check; no artifact or fresh QEMU proof yet | Fresh acceptance pending |
+| Linux x86_64 QEMU baseline | Buildroot `qemu_x86_64_defconfig` | Successful build and QEMU boot on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`; run [#43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431); artifact ID `14046724553`; log reached `MOMO OS READY` | Baseline validated in QEMU |
+| Linux x86_64 with integrated Step Journal | Same Buildroot target | Run [#43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529), commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25`, was still building kernel/rootfs at last check; no artifact or fresh QEMU proof yet | Fresh acceptance pending |
 | Linux AArch64 QEMU virt | Buildroot `qemu_aarch64_virt_defconfig` | Workflow definition in PR #42; no target build/boot result yet | Planned / CI pending |
 | Android / AOSP | AOSP + Android Common Kernel + Binder/AIDL + SELinux/AppOps adapters | Architecture documented; no AOSP image or device boot evidence | Not implemented |
 | Physical ARM phones | Per-device boot chain, kernel, DT, firmware, vendor modules and hardware validation | No physical-device qualification | Not supported |
