@@ -22,6 +22,16 @@ class TaskStateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             task.transition(TaskStatus.COMPLETED, "Skip all controls")
 
+    def test_high_risk_task_cannot_skip_approval(self):
+        task = Task(goal="Send a message", risk=Risk.R3)
+        task.transition(TaskStatus.CLASSIFIED, "Classified as external side effect")
+        task.transition(TaskStatus.PLANNED, "Prepared a message draft")
+        with self.assertRaises(ValueError):
+            task.transition(TaskStatus.EXECUTING, "Attempt without approval")
+        task.transition(TaskStatus.AWAITING_APPROVAL, "Waiting for user confirmation")
+        task.transition(TaskStatus.EXECUTING, "User approved the exact action")
+        self.assertEqual(task.status, TaskStatus.EXECUTING)
+
     def test_terminal_task_cannot_resume(self):
         task = Task(goal="Read public data", risk=Risk.R0)
         task.transition(TaskStatus.CLASSIFIED, "Classified")
