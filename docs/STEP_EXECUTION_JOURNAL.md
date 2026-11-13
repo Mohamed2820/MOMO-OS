@@ -1,19 +1,25 @@
 # MOMO OS — Durable Step Execution Journal
 
-**Status:** Implemented as a tested persistence component; not yet connected to a tool executor or included in the boot image.
+**Status:** Implemented, integrated with TaskCoordinator, mirrored into the Buildroot rootfs overlay, and covered by repository tests. The integrated revision is awaiting its fresh QEMU image acceptance run. It is not a tool executor or OS sandbox.
 
 ## Purpose
 
-The Step Execution Journal records the lifecycle of individual plan steps independently from the parent task lifecycle. It is designed to make restart behavior conservative: a step that was running when the system stopped is not assumed to have failed safely and is never replayed automatically.
+The Step Execution Journal records each immutable plan step independently from the parent task lifecycle. Restart behavior is conservative: an operation found in progress after a service restart is quarantined for review and is never replayed automatically.
 
 ## Persistence model
 
-The journal shares the SQLite database initialized by `TaskStore` and creates two tables:
+The journal shares the SQLite database initialized by `TaskStore`:
 
 - `task_step_executions`: one durable record per `(task_id, step_id)`, including risk, state, attempt count, retry budget, stable idempotency key, cancellation flag, error summary and optional result SHA-256.
-- `task_step_events`: append-only state-transition and cancellation-request events.
+- `task_step_events`: append-only transition and cancellation-request events, protected by a SHA-256 event chain and SQLite update/delete guards.
 
-Foreign keys bind every execution record to an existing task. The composite primary key prevents duplicate records for the same task step, and the unique idempotency-key constraint prevents reusing a key for another step.
+Foreign keys bind execution records to existing tasks. Composite and unique constraints prevent duplicate task steps and idempotency-key reuse.
+
+## Integrated lifecycle
+
+When TaskCoordinator accepts a plan, task, canonical immutable plan and initial step execution records are persisted atomically. The coordinator validates the persisted plan digest before use. Step registration is bound to the accepted plan; the Buildroot overlay contains the same runtime module as the source tree.
+
+The boot recovery path invokes `momo-task recover` before the readiness marker. Interrupted `running` steps become `needs_review`; recovery is idempotent and does not replay work.
 
 ## State model
 
@@ -21,57 +27,35 @@ Foreign keys bind every execution record to an existing task. The composite prim
 READY ──start──> RUNNING ──success──> SUCCEEDED
                     │
                     ├──R0/R1 failure──> FAILED ──explicit bounded retry──> RUNNING
-                    │
                     ├──R2-R4 failure──> NEEDS_REVIEW
-                    │
                     ├──restart recovery──> NEEDS_REVIEW
-                    │
                     └──cancel request──> RUNNING(cancel_requested)
-                                              │
                                               └──executor confirms no side effect──> CANCELLED
-
 READY ──cancel──> CANCELLED
 ```
 
-`NEEDS_REVIEW`, `SUCCEEDED` and `CANCELLED` cannot be started again through this component. Reconciliation is a separate future responsibility.
+Dependency readiness is derived from durable succeeded step records; caller-supplied completion claims are not trusted. Journal integrity is verified before relevant reads, appends and scheduling; tampering fails closed.
 
-## Retry and side-effect policy
+## Retry, side effects and cancellation
 
-- Automatic retry budgets are accepted only for R0/R1 read-only work.
-- A retry must be explicitly requested and must remain within the registered retry budget.
-- R2/R3/R4 steps cannot receive an automatic retry budget.
-- A failed R2/R3/R4 step becomes `needs_review`, because a transport or process error does not prove that the external side effect did not occur.
-- A process restart converts every `running` step to `needs_review`, regardless of risk. Recovery never replays an in-flight operation.
-- An idempotency key is persisted and unique. A future executor must pass this key to a downstream service when that service supports idempotency; persistence alone does not make an external operation idempotent.
+- Retry budgets are limited to R0/R1 read-only work and must be explicitly requested within the registered budget.
+- R2-R4 operations do not receive automatic retry budgets.
+- Ambiguous outcomes and restart-interrupted work become `needs_review`.
+- A persisted idempotency key is unique and plan-bound. Persistence alone does not make an external system idempotent.
+- Cancelling a running step records a request; it does not claim that execution stopped. The future executor must confirm that no side effect occurred before the state can become `cancelled`.
 
-## Cancellation semantics
+## Security boundary and remaining limitations
 
-Cancelling a step in `ready` state moves it directly to `cancelled`. Cancelling a running step records a cancellation request but does not claim that execution has stopped. The executor must acknowledge cancellation and confirm that no side effect occurred before the journal marks it `cancelled`. If the executor cannot establish that fact, the step must remain unresolved and be reconciled.
+This component does not spawn processes, invoke tools, call models, grant capabilities, authenticate an executor, or enforce Linux namespaces, seccomp, LSM, Android SELinux or AppOps. It does not independently determine whether an external side effect happened, nor does it provide deadline scheduling, backoff, concurrency quotas, outcome reconciliation or a complete tool sandbox.
 
-## Security boundary and limitations
+A future execution adapter must verify the immutable plan, obtain fresh permission authorization, enforce native OS isolation, pass idempotency keys downstream and produce independently verifiable outcome evidence. The journal and its caller are not a security boundary.
 
-This module is a durable state component only. It does not:
+## Source, overlay and tests
 
-- Spawn a process, invoke a tool, call a model or execute a plan.
-- Grant capabilities or approve an operation.
-- Authenticate an executor or enforce Linux namespaces, seccomp, LSM/SELinux or Android permissions.
-- Determine whether an external side effect actually happened.
-- Schedule deadlines, backoff timers, concurrency quotas or resource budgets.
-- Reconcile `needs_review` records or safely retry side-effecting work.
+- Source: `intelligence/execution/step_journal.py`.
+- Target overlay: `board/momo/rootfs-overlay/usr/lib/momo/intelligence/execution/step_journal.py`.
+- Tests: `tests/test_step_execution_journal.py`, `tests/test_task_coordinator.py`, and overlay parity tests.
+- Integration: TaskCoordinator atomically registers accepted plan steps; `momo-task recover` is invoked by the first-boot readiness path.
+- Evidence: PR #26 repository validation reported 111 passing unit tests. A new QEMU image run for integrated revision `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25` is [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529); its latest observed state is still in progress, with no artifact yet.
 
-The future execution adapter must validate the immutable task plan, obtain a fresh Permission Broker decision, enforce native OS isolation, pass idempotency keys downstream, and produce independently verifiable outcome evidence. The journal's caller is not itself a security boundary.
-
-## Test coverage
-
-The repository validation suite currently covers registration, durable state, result digest validation, explicit and bounded R0/R1 retries, rejection of side-effect retry budgets, side-effect failure quarantine, restart recovery, recovery idempotence, queued cancellation, executor-confirmed running cancellation, duplicate step/idempotency-key rejection and unknown-step handling.
-
-## Integration status
-
-- Source module: `intelligence/execution/step_journal.py`.
-- Tests: `tests/test_step_execution_journal.py`.
-- CI: repository validation workflow, full unittest discovery.
-- Not yet mirrored into the Buildroot root filesystem overlay.
-- Not yet wired into `TaskCoordinator` or `momo-task`.
-- Not yet validated in QEMU or on physical hardware.
-
-The next integration milestone is to bind each accepted plan step to this journal atomically, then add an executor interface that can only start after plan-integrity and permission checks. OS-level sandboxing remains a separate mandatory gate.
+**Evidence boundary:** repository tests and source/overlay parity do not establish that the integrated revision has booted. QEMU acceptance for this revision remains pending; physical hardware, Android/AOSP and native OS sandboxing remain unvalidated.
