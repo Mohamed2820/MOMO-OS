@@ -196,3 +196,12 @@ A separate AArch64 QEMU build-and-boot workflow is now under review. It shares t
 ## Image Evidence Update — 2026-11-13
 
 The first x86_64 Buildroot image is confirmed to have built and booted under QEMU, reaching `MOMO OS READY` on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83` ([run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431)). The later Step Journal/TaskCoordinator integrated revision still requires its own fresh QEMU acceptance ([run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529)).
+
+
+## Integrated Baseline Update — 2026-11-13
+
+PR #42 is merged into `bootable/x86_64-buildroot-mvp-v2`, integrating the read-only authenticated IPC status daemon, bounded replay detection, process limits, `PR_SET_NO_NEW_PRIVS`, libseccomp denylist and AArch64 QEMU target workflow. The service is intentionally non-executing. The syscall policy is a default-allow denylist, not a complete sandbox.
+
+Fresh x86_64 and AArch64 image workflows are running against integrated commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`: [x86_64](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) and [AArch64](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951). At last inspection, both were in the kernel/rootfs build stage; QEMU acceptance and artifacts remain pending. Historical x86_64 baseline evidence must not be used to claim this integrated revision passed.
+
+Next gates: fresh image/QEMU evidence on both architectures; adversarial security tests; explicit capability authorization; namespace/cgroup/LSM isolation; durable execution/idempotency design; then separate AOSP/Binder-AIDL/SELinux/AppOps implementation and per-device hardware enablement. No universal physical-device compatibility is claimed.
