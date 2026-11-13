@@ -59,6 +59,7 @@ class PermissionBrokerTests(unittest.TestCase):
     def test_matching_active_grant_allows(self):
         result = self.broker.authorize(self.request, [self.grant], now=self.now)
         self.assertTrue(result.allowed)
+        self.assertEqual(result.grant_id, self.grant.grant_id)
 
     def test_expired_grant_denies(self):
         expired = CapabilityGrant(
@@ -92,6 +93,42 @@ class PermissionBrokerTests(unittest.TestCase):
         request = ToolRequest("agent:secretary", "message.send", "contact:42", Risk.R3)
         approval = Approval("agent:secretary", "message.send", "contact:99", True)
         result = self.broker.authorize(request, [self.grant], approval, now=self.now)
+        self.assertFalse(result.allowed)
+
+    def test_single_use_grant_cannot_be_replayed(self):
+        self.assertTrue(self.broker.authorize(self.request, [self.grant], now=self.now).allowed)
+        replay = self.broker.authorize(self.request, [self.grant], now=self.now)
+        self.assertFalse(replay.allowed)
+        self.assertIn("No active", replay.reason)
+
+    def test_multi_use_grant_stops_at_limit(self):
+        grant = CapabilityGrant(
+            self.grant.subject, self.grant.action, self.grant.resource,
+            self.grant.risk, self.grant.expires_at, max_uses=2
+        )
+        self.assertTrue(self.broker.authorize(self.request, [grant], now=self.now).allowed)
+        self.assertTrue(self.broker.authorize(self.request, [grant], now=self.now).allowed)
+        self.assertFalse(self.broker.authorize(self.request, [grant], now=self.now).allowed)
+
+    def test_revoked_grant_is_denied(self):
+        self.broker.revoke(self.grant.grant_id)
+        result = self.broker.authorize(self.request, [self.grant], now=self.now)
+        self.assertFalse(result.allowed)
+
+    def test_never_allowed_grant_is_denied(self):
+        grant = CapabilityGrant(
+            self.grant.subject, self.grant.action, self.grant.resource,
+            self.grant.risk, self.grant.expires_at, approval_mode="never_allowed"
+        )
+        result = self.broker.authorize(self.request, [grant], now=self.now)
+        self.assertFalse(result.allowed)
+
+    def test_naive_expiry_is_denied(self):
+        grant = CapabilityGrant(
+            self.grant.subject, self.grant.action, self.grant.resource,
+            self.grant.risk, datetime.now()
+        )
+        result = self.broker.authorize(self.request, [grant], now=self.now)
         self.assertFalse(result.allowed)
 
 
