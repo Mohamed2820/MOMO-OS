@@ -230,6 +230,32 @@ class StepExecutionJournal:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     @staticmethod
+    def _last_verified_event_hash(
+        connection: sqlite3.Connection, task_id: str, step_id: str
+    ) -> str:
+        rows = connection.execute(
+            """
+            SELECT at, previous, current, reason, previous_hash, event_hash
+            FROM task_step_events
+            WHERE task_id = ? AND step_id = ?
+            ORDER BY event_id
+            """,
+            (task_id, step_id),
+        ).fetchall()
+        expected_previous = "0" * 64
+        for row in rows:
+            expected_hash = StepExecutionJournal._calculate_event_hash(
+                task_id, step_id, row[0], row[1], row[2], row[3], expected_previous
+            )
+            if (
+                not hmac.compare_digest(row[4], expected_previous)
+                or not hmac.compare_digest(row[5], expected_hash)
+            ):
+                raise ValueError("Step execution event hash-chain verification failed")
+            expected_previous = expected_hash
+        return expected_previous
+
+    @staticmethod
     def _event(
         connection: sqlite3.Connection,
         task_id: str,
@@ -240,15 +266,9 @@ class StepExecutionJournal:
         at: str,
     ) -> None:
         normalized_reason = reason.strip()
-        row = connection.execute(
-            """
-            SELECT event_hash FROM task_step_events
-            WHERE task_id = ? AND step_id = ?
-            ORDER BY event_id DESC LIMIT 1
-            """,
-            (task_id, step_id),
-        ).fetchone()
-        previous_hash = row[0] if row else "0" * 64
+        previous_hash = StepExecutionJournal._last_verified_event_hash(
+            connection, task_id, step_id
+        )
         event_hash = StepExecutionJournal._calculate_event_hash(
             task_id, step_id, at, previous, current, normalized_reason, previous_hash
         )
@@ -268,28 +288,7 @@ class StepExecutionJournal:
     def verify_event_chain(self, task_id: str, step_id: str) -> bool:
         """Verify the append-only event hash chain for one task step."""
         with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT task_id, step_id, at, previous, current, reason,
-                       previous_hash, event_hash
-                FROM task_step_events
-                WHERE task_id = ? AND step_id = ?
-                ORDER BY event_id
-                """,
-                (task_id, step_id),
-            ).fetchall()
-        expected_previous = "0" * 64
-        for row in rows:
-            expected_hash = self._calculate_event_hash(
-                row["task_id"], row["step_id"], row["at"], row["previous"],
-                row["current"], row["reason"], expected_previous,
-            )
-            if (
-                not hmac.compare_digest(row["previous_hash"], expected_previous)
-                or not hmac.compare_digest(row["event_hash"], expected_hash)
-            ):
-                raise ValueError("Step execution event hash-chain verification failed")
-            expected_previous = expected_hash
+            self._last_verified_event_hash(connection, task_id, step_id)
         return True
 
     def register_plan_steps(
