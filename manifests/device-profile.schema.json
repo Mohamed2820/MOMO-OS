@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-os.example/schemas/device-profile.schema.json",
+  "title": "MOMO OS Device Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_version",
+    "identity",
+    "platform_track",
+    "architecture",
+    "support_tier",
+    "evidence",
+    "features"
+  ],
+  "properties": {
+    "profile_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manufacturer",
+        "model",
+        "codename",
+        "soc"
+      ],
+      "properties": {
+        "manufacturer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "codename": {
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "soc": {
+          "type": "string",
+          "minLength": 1
+        },
+        "firmware_build": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "platform_track": {
+      "enum": [
+        "android",
+        "mainline-linux",
+        "virtual"
+      ]
+    },
+    "architecture": {
+      "enum": [
+        "arm64",
+        "arm32",
+        "x86_64",
+        "riscv64"
+      ]
+    },
+    "boot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bootloader_unlock": {
+          "enum": [
+            "unknown",
+            "available",
+            "restricted",
+            "unavailable",
+            "not_applicable"
+          ]
+        },
+        "verified_boot": {
+          "enum": [
+            "unknown",
+            "avb",
+            "uefi-secure-boot",
+            "other",
+            "not_applicable"
+          ]
+        },
+        "recovery_path": {
+          "enum": [
+            "unknown",
+            "documented",
+            "tested",
+            "none"
+          ]
+        },
+        "partition_map_verified": {
+          "type": "boolean"
+        }
+      }
+    },
+    "kernel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "config_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "support_tier": {
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "maintainer": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last_validated": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": [
+          "unknown",
+          "not_supported",
+          "build_only",
+          "boot_tested",
+          "functional",
+          "regression_tested"
+        ]
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim",
+          "level",
+          "reference"
+        ],
+        "properties": {
+          "claim": {
+            "type": "string",
+            "minLength": 1
+          },
+          "level": {
+            "enum": [
+              "documented",
+              "inspected",
+              "built",
+              "boot_tested",
+              "function_tested",
+              "maintained"
+            ]
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 1
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
