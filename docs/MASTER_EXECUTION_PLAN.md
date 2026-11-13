@@ -206,3 +206,26 @@ Parallel documentation and UI prototyping are allowed. Physical flashing cannot 
 6. Select the first phone target only after device feasibility research.
 
 No fixed delivery date is promised until build capacity, device access, maintainers and platform baseline are confirmed.
+
+## Execution Progress Record — 2026-11-13
+
+### Completed sub-milestone: durable per-step execution journal
+
+- Added a SQLite-backed per-step ledger and append-only event history.
+- Added attempt counters, stable unique idempotency keys and bounded R0/R1-only retry budgets.
+- Quarantined R2-R4 failures and all restart-interrupted executions as `needs_review`; no automatic replay is permitted.
+- Added cooperative cancellation semantics that distinguish a request from confirmed safe cancellation.
+- Added result SHA-256 persistence and repository tests.
+- Repository validation passed, including full unittest discovery (96 tests).
+
+### Explicitly not complete
+
+The journal is not yet integrated into TaskCoordinator, the Buildroot overlay or the target image. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered. The current work is a tested persistence foundation only.
+
+### Next execution sequence
+
+1. Keep the x86_64 Buildroot/QEMU acceptance gate independent and do not merge its image PR until the image, boot log and runtime evidence are verified.
+2. Integrate step registration and lifecycle transitions with immutable persisted plans and the parent task journal.
+3. Add an executor interface with idempotency propagation, bounded deadlines and cooperative cancellation; do not execute before fresh permission authorization.
+4. Add restart reconciliation and negative tests for duplicate dispatch, ambiguous external outcomes and cancellation races.
+5. Implement native OS isolation and IPC identity before enabling any privileged tool.
