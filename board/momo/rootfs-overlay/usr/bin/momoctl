@@ -1,0 +1,75 @@
+#!/bin/sh
+#
+# MOMO OS command-line control utility (initial bring-up).
+#
+VERSION="0.1.0-alpha"
+
+usage() {
+  cat <<'EOF'
+MOMO OS control utility
+
+Usage: momoctl <command>
+
+Commands:
+  status       Show OS identity and kernel information
+  doctor       Check essential Linux runtime mounts and devices
+  boot-check   Run the first-boot readiness checks
+  version      Print MOMO OS version
+  help         Show this help
+EOF
+}
+
+status() {
+  echo "MOMO OS $VERSION"
+  echo "Track: Linux x86_64 (QEMU bring-up target)"
+  echo "Kernel: $(uname -sr)"
+  echo "Architecture: $(uname -m)"
+  echo "Hostname: $(hostname)"
+  echo "Uptime: $(uptime 2>/dev/null || echo unavailable)"
+  echo "Root filesystem:"
+  df -h /
+}
+
+doctor() {
+  failed=0
+  for path in /proc /sys /dev /run; do
+    if [ -d "$path" ] && mountpoint -q "$path"; then
+      echo "[ OK ] $path is mounted"
+    elif [ -d "$path" ]; then
+      echo "[WARN] $path exists but mount state is unavailable"
+    else
+      echo "[FAIL] $path is missing"
+      failed=1
+    fi
+  done
+  if [ -c /dev/console ]; then
+    echo "[ OK ] /dev/console is present"
+  else
+    echo "[FAIL] /dev/console is missing"
+    failed=1
+  fi
+  return "$failed"
+}
+
+boot_check() {
+  echo "[MOMO] Running first-boot checks..."
+  if doctor; then
+    echo "[MOMO] MOMO OS READY"
+    return 0
+  fi
+  echo "[MOMO] MOMO OS boot checks failed"
+  return 1
+}
+
+case "${1:-help}" in
+  status) status ;;
+  doctor) doctor ;;
+  boot-check) boot_check ;;
+  version) echo "MOMO OS $VERSION" ;;
+  help|-h|--help) usage ;;
+  *)
+    echo "Unknown command: $1" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
