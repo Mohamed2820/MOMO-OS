@@ -1,13 +1,30 @@
 # Software Requirements Specification (SRS)
 ## MOMO OS — Device-Adaptive Mobile Computing Platform
 
-**Document status:** Baseline SRS, version 0.1  
+**Document status:** Active SRS, version 0.2  
 **Date:** 2026-11-13  
 **Repository:** Mohamed2820/MOMO-OS  
 **Normative language:** "shall" indicates a requirement; "should" indicates a recommended requirement.  
-**Implementation status:** This SRS specifies the intended product. It is not evidence that all requirements have been implemented or validated.
+**Implementation status:** Requirements are tracked against source implementation and test evidence. This document is not evidence that every requirement has been implemented or validated.
 
 ---
+
+## Implementation Snapshot (2026-11-13)
+
+This snapshot separates source-code progress from runtime/hardware evidence.
+
+| Area | Current implementation | Evidence / limitation |
+|---|---|---|
+| x86_64 Linux image | Buildroot configuration and MOMO rootfs overlay | QEMU build/boot workflow is still pending; no successful boot claim yet |
+| Task state machine | Risk-aware task lifecycle and transition validation | Unit tests pass in repository CI |
+| Permission policy core | Scoped grants, expiry, revocation, bounded use and exact R3/R4 approval matching | In-process policy evaluator only; native OS enforcement is not implemented by this module |
+| Persistent task journal | SQLite TaskStore with transactional transitions and event history | Unit tests pass in repository CI; target image integration awaits successful QEMU validation |
+| Task CLI | create/list/show/transition/doctor/self-test commands | Added to target overlay; image-level execution is not yet verified |
+| Device profiles | JSON schema and CI validation | Profile validation does not prove a device port boots |
+| Android track | Architecture and requirements only | No AOSP build, Android boot image or phone installation validated |
+| Physical devices | Device support tiers defined | No phone hardware is currently certified |
+
+The first target is an x86_64 virtual machine. It is a development and integration target, not a mobile release. A feature is considered integrated only after its target-image test passes. Device support requires exact-SKU boot and hardware evidence.
 
 ## 1. Introduction
 
