@@ -261,7 +261,7 @@ Focused tests cover approval/start digest agreement, changed-payload rejection, 
 
 ## Current candidate verification status — PR #48
 
-Latest inspected PR #48 head: `794a8eeb693e4d21aa9d580d0845c66b0724a39e`. The previous repository validation [#43598435793](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435793) passed on older head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; it predates the strict argument-binding integration and its new tests. It cannot be used to claim the current candidate is CI-tested.
+Latest inspected PR #48 head: `5ca006a5631edc9355a628412396ee344c846540`. The previous repository validation [#43598435793](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435793) passed on older head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; it predates the strict argument-binding integration and its new tests. It cannot be used to claim the current candidate is CI-tested.
 
 The x86_64 run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) and AArch64 run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) are also tied to the older `eac08aed...` head. At last inspection x86_64 remained in kernel/rootfs compilation and AArch64 completed image verification, QEMU readiness, provenance and artifact upload successfully; neither is evidence for the current PR head. Do not merge PR #48 or close Section 1 on these stale runs.
 
@@ -287,3 +287,8 @@ Current-head x86_64 and AArch64 Buildroot/QEMU acceptance is being run on the de
 Added a shared Buildroot kernel fragment requesting UTS/IPC/user/PID/network namespaces, cgroups with PID/CPU/memory/freezer/device controllers, seccomp filtering and Landlock. Both x86_64 and AArch64 image workflows now apply the fragment and validate the generated kernel `.config` before image acceptance. A validator and four unit tests cover missing options and inactive Landlock.
 
 This is groundwork only. A configured kernel does not isolate a service by itself. Service launch still needs explicit namespace setup, cgroup assignment, Landlock rules, filesystem/network policy, authenticated principal mapping and adversarial integration tests. Fresh image builds must prove the options survive Buildroot configuration on both architectures.
+
+
+## Latest kernel-prerequisite validation — 2026-11-14
+
+Repository validation [#43602800965](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602800965) passed **200 tests** and validated the kernel fragment, workflow YAML, shell utilities, device profiles, Python compilation and rootfs parity. Fresh image workflows now run on the integration candidate with the kernel fragment enabled: x86_64 [#43602898660](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602898660) and AArch64 [#43602902414](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602902414). Both must finish the kernel build, verify the generated security config, pass QEMU readiness and upload artifacts. They have not yet reached those acceptance gates.
