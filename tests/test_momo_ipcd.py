@@ -41,6 +41,10 @@ class IPCServiceTests(unittest.TestCase):
         self.assertEqual(response["request_id"], "status-1")
         self.assertEqual(response["result"]["tool_execution"], "disabled")
         self.assertEqual(response["result"]["capabilities"], ["status.read"])
+        self.assertEqual(
+            set(response["result"]["sandbox"]),
+            {"namespaces", "cgroup", "landlock", "seccomp", "network_socket_creation"},
+        )
         client.close()
         server.close()
 
