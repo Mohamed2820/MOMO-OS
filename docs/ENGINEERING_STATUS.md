@@ -67,3 +67,26 @@ The documentation updates in this branch must also pass the PR validation workfl
 ## 6. Product-level completion criteria
 
 MOMO OS is not a production-ready mobile operating system until it has reproducible platform builds, exact-device boot and hardware evidence, native security enforcement, usable core services and interface, verified AI/tool behavior, signed updates with tested recovery, and a maintained support matrix covering at least two distinct device families. QEMU success and repository CI are necessary engineering evidence, not substitutes for those release gates.
+
+
+## Fresh execution-gate image acceptance — 2026-11-14
+
+The execution-gate integration is now included in the bootable branch and has passed fresh image builds on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25` after fixing the Buildroot cache/output issue.
+
+- **x86_64:** [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201). Kernel/rootfs build, missing-image recovery check, output verification, QEMU boot, `MOMO OS READY`, `momo-ipcd` status response and artifact upload all succeeded. Artifact ID 14115143750; ZIP SHA-256 `be9ddc17b04ef756aed4e620a6f8c51d606c9aaa3637299c2c426f348d340e18`.
+- **AArch64:** [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262). Kernel/rootfs build, missing-image recovery check, output verification, QEMU boot, `MOMO OS READY`, `momo-ipcd` status response and artifact upload all succeeded. Artifact ID 14114803046; ZIP SHA-256 `598ca75526241e80699932040185efa1484b4500f9c9eb970948ed149b3dd1f7`.
+
+Both guest responses reported the correct architecture and `tool_execution: disabled`. This is virtual-target validation of the integrated execution-gate revision. It is not physical-device support and does not enable tool execution.
+
+### Build pipeline correction
+PR #49 added a kernel-image recovery step for restored Buildroot caches. The prior failed runs showed that package-cache stamps could be restored while the final kernel image was absent from `output/images`. The workflows now detect the missing artifact, force `linux-rebuild`, rerun Buildroot, list outputs and retain strict image checks. Both architectures passed after this correction.
+
+### Updated next engineering sequence
+1. Implement authenticated human approver identity and broker-only approval issuance.
+2. Canonicalize actual typed operation arguments inside the trusted executor; do not accept a caller-declared digest as proof.
+3. Make low-risk grant reservation atomic with dispatch intent.
+4. Implement per-task Linux worker isolation (namespaces, cgroups, LSM and strict operation-specific seccomp).
+5. Add typed executor protocol, idempotency propagation, deadlines, cancellation and independent result verification; keep arbitrary shell disabled.
+6. Implement core services and the Android Binder/AIDL + SELinux + AppOps track.
+7. Select exact physical device SKUs only after unlock, provenance and stock recovery are verified.
+8. Complete UI/AI/apps, signed updates, rollback and multi-device release qualification.
