@@ -26,3 +26,18 @@
 ## Important interpretation
 
 A successful x86_64 QEMU image does not imply AArch64 support. A successful AArch64 QEMU virt image does not imply support for an arbitrary ARM phone. Android is a distinct platform track and requires Binder/AIDL, SELinux, AppOps, HAL and vendor integration. No universal boot binary is promised.
+
+
+## Current integration PR status — 2026-11-14
+
+The integrated runtime/IPC revision is proposed in [PR #48](https://github.com/Mohamed2820/MOMO-OS/pull/48), head `6129409528a78455ce2cdc871addb27a7a4c1999`.
+
+| Validation | Current evidence | Status |
+|---|---|---|
+| Repository validation | Run [#43597582878](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597582878): documentation/JSON, device-profile schema, shell utilities and 167 runtime tests all passed | Passed |
+| x86_64 QEMU with execution gate + IPC daemon | Workflow definition updated; no successful fresh boot evidence recorded for this exact integration head | Pending |
+| AArch64 QEMU virt with execution gate + IPC daemon | Workflow definition added; no successful fresh boot evidence recorded for this exact integration head | Pending |
+| Android/AOSP | No AOSP build, Binder/AIDL adapter or phone boot evidence | Not implemented |
+| Physical devices | No exact-SKU boot and hardware evidence | Not supported |
+
+The x86_64 and AArch64 workflows currently trigger on pushes to `bootable/**` or manual dispatch. Their results must be attached to the exact commit tested. A prior successful run for another commit cannot be reused as evidence for this revision.
