@@ -141,6 +141,14 @@ jobs:
           grep -F "MOMO OS READY" "$GITHUB_WORKSPACE/qemu-boot.log"
           grep -F '"service": "momo-ipcd"' "$GITHUB_WORKSPACE/qemu-boot.log"
           grep -F '"tool_execution": "disabled"' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"mnt": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"ipc": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"uts": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"net": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"cgroup": "0::/momo-ipc"' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"landlock": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"seccomp": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"network_socket_creation": "blocked"' "$GITHUB_WORKSPACE/qemu-boot.log"
 
       - name: Record build provenance
         if: always()
