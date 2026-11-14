@@ -299,3 +299,8 @@ Repository validation [#43602800965](https://github.com/Mohamed2820/MOMO-OS/acti
 The unprivileged read-only IPC daemon now applies Landlock after binding its socket and loading seccomp. It can read/execute from `/usr`, read from `/etc`, and inspect/remove its own socket under `/run/momo`; other handled filesystem access is denied. The setup is fail-closed. A subprocess test checks allowed reads, denied reads outside the allowlist and denied writes.
 
 This is a real filesystem restriction for the status daemon, not a complete MOMO sandbox. Per-service namespaces, cgroups, network isolation, a strict syscall allowlist, authenticated principal mapping and security enforcement for future task/executor services remain open. The Landlock code and test require fresh CI and QEMU boot evidence before promotion.
+
+
+## Landlock CI verification — 2026-11-14
+
+The Landlock status-daemon implementation, source and test changes passed repository validation [#43603174498](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43603174498): **201 tests passed**, including the subprocess check that allows reads only from an explicit directory and denies unrelated reads and writes. The x86_64 and AArch64 Buildroot/QEMU workflows are currently running on commit `3bc18a52976909d72f3e82da4fccdbc54a7edad9`: [x86_64 #43603174532](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43603174532) and [AArch64 #43603174676](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43603174676). QEMU readiness and artifact upload remain pending.
