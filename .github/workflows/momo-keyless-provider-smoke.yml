@@ -1,0 +1,26 @@
+name: MOMO keyless provider smoke test
+
+on:
+  push:
+    branches: ["feature/momo-engineering-integrations"]
+    paths:
+      - ".github/workflows/momo-keyless-provider-smoke.yml"
+      - "tools/probe_ovh_anonymous.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ovh-anonymous:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out provider probe
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe OVH anonymous completion (no secrets)
+        run: python tools/probe_ovh_anonymous.py
