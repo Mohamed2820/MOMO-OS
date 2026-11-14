@@ -22,7 +22,7 @@ A successful authorization is not proof of execution. A process exit code or mod
 | TaskCoordinator | Validates agent roles, capabilities, risk ceilings and dependencies; persists canonical plan and digest | Does not dispatch operations |
 | StepExecutionJournal | Persists step state, attempts, idempotency key, cancellation and append-only event hash chain | Does not execute or reconcile external effects |
 | ApprovalStore | Issues random, expiring, single-use tokens; task approvals use plan binding and step approvals now require strict JSON argument payloads whose digest is computed inside the store | Approver identity is still an asserted string, not independently authenticated identity |
-| ExecutionGate | Public step-start API accepts raw JSON arguments; the gate parses and canonicalizes them internally, binds the computed digest to approval, and returns the exact deeply immutable parsed arguments with the durable start | In-process guard only; database owner can bypass it; no typed adapter dispatch is enabled |
+| ExecutionGate | Public `start_step()` accepts raw JSON and derives the digest internally; `start_step_with_arguments()` returns deeply immutable parsed values with the durable start | In-process guard only; database owner can bypass it; no typed adapter dispatch is enabled |
 | Linux IPC | Bounded AF_UNIX framing, SO_PEERCRED, status-only daemon | No operation dispatcher or privileged executor |
 | Rootfs integration | Mirrors runtime modules and starts the read-only IPC daemon | Fresh QEMU validation of the integrated revision remains required |
 
