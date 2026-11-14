@@ -362,3 +362,10 @@ Added `board/momo/kernel-security.fragment` to request namespaces, cgroups and r
 The unprivileged read-only IPC daemon now applies Landlock after binding its socket and loading seccomp. It can read/execute from `/usr`, read from `/etc`, and inspect/remove its own socket under `/run/momo`; other handled filesystem access is denied. The setup is fail-closed. A subprocess test checks allowed reads, denied reads outside the allowlist and denied writes.
 
 This is a real filesystem restriction for the status daemon, not a complete MOMO sandbox. Per-service namespaces, cgroups, network isolation, a strict syscall allowlist, authenticated principal mapping and security enforcement for future task/executor services remain open. The Landlock code and test require fresh CI and QEMU boot evidence before promotion.
+
+
+## IPC status-service namespace and cgroup profile — 2026-11-14
+
+Added `momo-ipc-sandbox`, a root-started launcher that moves the daemon into a dedicated cgroup before dropping privileges, creates private mount/IPC/UTS/network namespaces, makes mount propagation private, clears supplementary groups, drops to the dedicated `momo-ipc` UID/GID and sets `no_new_privs`. Init script `S98momo-ipc` now requires cgroup v2 CPU/memory/PID controllers and sets a 50% CPU quota, 128 MiB memory limit and 16-process limit. The daemon then applies its existing seccomp denylist and Landlock filesystem boundary.
+
+This is a per-service sandbox profile for the read-only status daemon only. PID/user namespaces, task/executor service isolation, authenticated human/session identity, a strict syscall allowlist, network firewall policy, and adversarial QEMU tests remain open. The wrapper/init changes have not yet passed a fresh CI/QEMU run; do not mark the sandbox gate complete until they do.
