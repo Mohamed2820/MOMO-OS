@@ -1,6 +1,6 @@
 # MOMO OS — Linux Service Isolation and Sandbox Design
 
-**Status:** The read-only Buildroot IPC daemon now runs as a dedicated UID inside private mount, IPC, UTS and network namespaces; it is placed in a cgroup v2 with CPU, memory and PID limits, and applies `no_new_privs`, a required libseccomp denylist and Landlock filesystem confinement. The shared kernel fragment enables the required primitives for x86_64/AArch64. This is a narrow profile for the status daemon only: there is no PID/user namespace, no sandbox profile for task/executor services, no authenticated human/session principal and no side-effecting tool executor.
+**Status:** The read-only Buildroot IPC daemon now runs as a dedicated UID inside private mount, IPC, UTS and network namespaces; it is placed in a cgroup v2 with CPU, memory and PID limits, and applies `no_new_privs`, a required libseccomp denylist (including post-bind socket creation/connect denial) and Landlock filesystem confinement. The shared kernel fragment enables the required primitives for x86_64/AArch64. This is a narrow profile for the status daemon only: there is no PID/user namespace, no sandbox profile for task/executor services, no authenticated human/session principal and no side-effecting tool executor.
 
 ## 1. Objectives
 
@@ -56,7 +56,7 @@ The existing daemon accepts root UID only and exposes `status.read`. That policy
 
 `board/momo/kernel-security.fragment` requests UTS/IPC/user/PID/network namespaces, cgroups and the PID/CPU/memory/freezer/device controllers, seccomp filtering, and Landlock. Both x86_64 and AArch64 Buildroot workflows pass this fragment to the Linux kernel configuration and run `tools/validate_kernel_security_config.py` against the generated kernel `.config` before accepting the image. Repository CI also validates the fragment itself.
 
-The IPC status daemon now enters mount/IPC/UTS/network namespaces through `momo-ipc-sandbox`, receives cgroup v2 CPU/memory/PID limits from `S98momo-ipc`, and applies Landlock filesystem rules after binding its socket. QEMU boot is still required to prove the kernel supports the complete startup path. Other MOMO services do not yet receive these controls.
+The IPC status daemon now enters mount/IPC/UTS/network namespaces through `momo-ipc-sandbox`, receives cgroup v2 CPU/memory/PID limits from `S98momo-ipc`, and applies Landlock filesystem rules after binding its socket. The status endpoint reports namespace isolation, cgroup membership and active Landlock/seccomp state; both QEMU workflows now assert those fields at boot. Other MOMO services do not yet receive these controls.
 
 ### 5.2 Identity and privilege
 
