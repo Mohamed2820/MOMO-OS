@@ -242,3 +242,10 @@ The current PR #48 head is `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`.
 This supersedes the earlier PR #48 CI run references above for the current candidate. It does not supersede or reuse historical QEMU evidence from older commits. PR #48 remains open and unmerged.
 
 **Engineering boundary remains unchanged:** the Linux IPC endpoint is read-only; there is no authenticated human principal, trusted executor-side argument canonicalization, typed side-effecting executor, full native Linux sandbox, Android Binder/AIDL adapter or physical-device qualification. Do not enable tool execution or claim Stage 2/3 completion until their explicit exit gates are evidenced.
+
+
+## Follow-up engineering increment — canonical argument binding
+
+After the image workflows recorded above started, PR #48 received an additional runtime increment on later commits. A bounded strict-JSON argument binding primitive now rejects duplicate object keys, invalid UTF-8/Unicode, non-standard numeric constants, excessive payload size/depth/node count and out-of-range integers; it emits deterministic canonical JSON and SHA-256. The module is mirrored into the Buildroot rootfs overlay, with focused unit tests and an overlay-parity assertion.
+
+This is a serialization primitive, not an authorization boundary. It is not yet connected to an authenticated executor or the ExecutionGate, and the current gate still accepts a caller-supplied digest. The x86_64/AArch64 runs listed above started before this addition and do not contain it. The new tests have not yet been executed by a fresh CI run; do not promote this increment to CI-tested until that evidence exists.
