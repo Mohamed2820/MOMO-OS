@@ -51,6 +51,125 @@ def apply_process_restrictions() -> None:
     if prctl(38, 1, 0, 0, 0) != 0:
         error = ctypes.get_errno()
         raise OSError(error, os.strerror(error))
+# Landlock syscall numbers are shared by the supported x86_64/AArch64 Linux ABIs.
+_LANDLOCK_CREATE_RULESET = 444
+_LANDLOCK_ADD_RULE = 445
+_LANDLOCK_RESTRICT_SELF = 446
+_LANDLOCK_CREATE_RULESET_VERSION = 1
+_LANDLOCK_RULE_PATH_BENEATH = 1
+
+_LANDLOCK_EXECUTE = 1 << 0
+_LANDLOCK_WRITE_FILE = 1 << 1
+_LANDLOCK_READ_FILE = 1 << 2
+_LANDLOCK_READ_DIR = 1 << 3
+_LANDLOCK_REMOVE_DIR = 1 << 4
+_LANDLOCK_REMOVE_FILE = 1 << 5
+_LANDLOCK_MAKE_CHAR = 1 << 6
+_LANDLOCK_MAKE_DIR = 1 << 7
+_LANDLOCK_MAKE_REG = 1 << 8
+_LANDLOCK_MAKE_SOCK = 1 << 9
+_LANDLOCK_MAKE_FIFO = 1 << 10
+_LANDLOCK_MAKE_BLOCK = 1 << 11
+_LANDLOCK_MAKE_SYM = 1 << 12
+_LANDLOCK_REFER = 1 << 13
+_LANDLOCK_TRUNCATE = 1 << 14
+_LANDLOCK_IOCTL_DEV = 1 << 15
+
+
+def apply_landlock_restrictions(
+    read_paths: tuple[Path, ...] = (Path("/usr"), Path("/etc")),
+    removable_paths: tuple[Path, ...] = (Path("/run/momo"),),
+) -> None:
+    """Restrict filesystem access to read-only runtime paths and socket cleanup.
+
+    This is a filesystem boundary for the status daemon, not a general-purpose
+    executor sandbox. The socket is bound before this function is called.
+    """
+    if not hasattr(os, "O_PATH"):
+        raise RuntimeError("O_PATH is required for Landlock path rules")
+    libc = ctypes.CDLL(None, use_errno=True)
+    syscall = libc.syscall
+    syscall.restype = ctypes.c_long
+
+    version = syscall(
+        _LANDLOCK_CREATE_RULESET, None, 0, _LANDLOCK_CREATE_RULESET_VERSION,
+    )
+    if version < 1:
+        error = ctypes.get_errno()
+        raise OSError(error or errno.ENOSYS, "Landlock is unavailable")
+
+    handled = (
+        _LANDLOCK_EXECUTE | _LANDLOCK_WRITE_FILE | _LANDLOCK_READ_FILE
+        | _LANDLOCK_READ_DIR | _LANDLOCK_REMOVE_DIR | _LANDLOCK_REMOVE_FILE
+        | _LANDLOCK_MAKE_CHAR | _LANDLOCK_MAKE_DIR | _LANDLOCK_MAKE_REG
+        | _LANDLOCK_MAKE_SOCK | _LANDLOCK_MAKE_FIFO | _LANDLOCK_MAKE_BLOCK
+        | _LANDLOCK_MAKE_SYM
+    )
+    if version >= 2:
+        handled |= _LANDLOCK_REFER
+    if version >= 3:
+        handled |= _LANDLOCK_TRUNCATE
+    if version >= 5:
+        handled |= _LANDLOCK_IOCTL_DEV
+
+    class RulesetAttr(ctypes.Structure):
+        _fields_ = [("handled_access_fs", ctypes.c_uint64)]
+
+    class PathBeneathAttr(ctypes.Structure):
+        _fields_ = [
+            ("allowed_access", ctypes.c_uint64),
+            ("parent_fd", ctypes.c_int32),
+            ("reserved", ctypes.c_uint32),
+        ]
+
+    ruleset_attr = RulesetAttr(handled)
+    ruleset_fd = syscall(
+        _LANDLOCK_CREATE_RULESET,
+        ctypes.byref(ruleset_attr),
+        ctypes.sizeof(ruleset_attr),
+        0,
+    )
+    if ruleset_fd < 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), "landlock_create_ruleset")
+
+    def add_path_rule(path: Path, allowed_access: int) -> None:
+        path_fd = os.open(str(path), os.O_PATH | os.O_CLOEXEC)
+        try:
+            rule = PathBeneathAttr(allowed_access, path_fd, 0)
+            result = syscall(
+                _LANDLOCK_ADD_RULE,
+                ruleset_fd,
+                _LANDLOCK_RULE_PATH_BENEATH,
+                ctypes.byref(rule),
+                0,
+            )
+            if result < 0:
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error), f"landlock_add_rule: {path}")
+        finally:
+            os.close(path_fd)
+
+    try:
+        read_access = _LANDLOCK_EXECUTE | _LANDLOCK_READ_FILE | _LANDLOCK_READ_DIR
+        for path in read_paths:
+            add_path_rule(Path(path), read_access)
+        cleanup_access = _LANDLOCK_READ_DIR | _LANDLOCK_REMOVE_FILE
+        for path in removable_paths:
+            add_path_rule(Path(path), cleanup_access)
+
+        # Landlock requires no_new_privs before restricting an unprivileged process.
+        if libc.prctl(38, 1, 0, 0, 0) != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error), "PR_SET_NO_NEW_PRIVS")
+        result = syscall(_LANDLOCK_RESTRICT_SELF, ruleset_fd, 0)
+        if result < 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error), "landlock_restrict_self")
+    finally:
+        os.close(ruleset_fd)
+
+
 REPLAY_CACHE_CAPACITY = 1024
 
 
@@ -196,6 +315,7 @@ def serve(path: Path = SOCKET_PATH) -> None:
         os.chmod(path, 0o660)
         server.listen(MAX_CLIENTS_PER_LOOP)
         server.settimeout(1.0)
+        apply_landlock_restrictions()
         apply_seccomp_filter()
         while True:
             try:
