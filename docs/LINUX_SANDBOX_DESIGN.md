@@ -1,6 +1,6 @@
 # MOMO OS — Linux Service Isolation and Sandbox Design
 
-**Status:** Security design baseline. The current Buildroot IPC daemon uses a dedicated UID, resource limits, `no_new_privs`, a required libseccomp default-allow denylist and Landlock filesystem confinement. A shared kernel config fragment now requests namespaces, cgroups v2 controllers, seccomp filtering and Landlock for both QEMU architectures; the image workflows verify the resulting kernel `.config`. Service-level namespace/cgroup/Landlock enforcement is not yet implemented. No side-effecting tool executor is enabled.
+**Status:** The read-only Buildroot IPC daemon now runs as a dedicated UID inside private mount, IPC, UTS and network namespaces; it is placed in a cgroup v2 with CPU, memory and PID limits, and applies `no_new_privs`, a required libseccomp denylist and Landlock filesystem confinement. The shared kernel fragment enables the required primitives for x86_64/AArch64. This is a narrow profile for the status daemon only: there is no PID/user namespace, no sandbox profile for task/executor services, no authenticated human/session principal and no side-effecting tool executor.
 
 ## 1. Objectives
 
@@ -42,7 +42,7 @@ The current prototype stores task and permission databases under `/var/lib/momo`
 - AF_UNIX socket paths are created by the supervisor in a root-controlled directory.
 - The service verifies socket type, owner and permissions before removing/replacing an existing path.
 - The kernel-provided peer credentials are read from the connected socket.
-- UID maps to a fixed principal configured by root; request JSON cannot set principal, UID, GID, role or capability.
+- Current status daemon permits only kernel peer UID 0. A root-owned UID-to-human/session-principal mapping is not implemented; request JSON cannot set UID, GID, role or capability.
 - Each operation has its own strict schema and capability requirement.
 - The service applies receive/send deadlines, bounded frames, connection limits, request quotas and replay/idempotency policy.
 - A transport-authenticated peer is not automatically authorized for an operation.
@@ -56,7 +56,7 @@ The existing daemon accepts root UID only and exposes `status.read`. That policy
 
 `board/momo/kernel-security.fragment` requests UTS/IPC/user/PID/network namespaces, cgroups and the PID/CPU/memory/freezer/device controllers, seccomp filtering, and Landlock. Both x86_64 and AArch64 Buildroot workflows pass this fragment to the Linux kernel configuration and run `tools/validate_kernel_security_config.py` against the generated kernel `.config` before accepting the image. Repository CI also validates the fragment itself.
 
-This proves only that the kernel exposes the required primitives. It does not prove that MOMO services enter namespaces, receive cgroup limits, or apply Landlock rules. Those enforcement and adversarial tests remain mandatory.
+The IPC status daemon now enters mount/IPC/UTS/network namespaces through `momo-ipc-sandbox`, receives cgroup v2 CPU/memory/PID limits from `S98momo-ipc`, and applies Landlock filesystem rules after binding its socket. QEMU boot is still required to prove the kernel supports the complete startup path. Other MOMO services do not yet receive these controls.
 
 ### 5.2 Identity and privilege
 
@@ -68,14 +68,13 @@ This proves only that the kernel exposes the required primitives. It does not pr
 
 ### 5.3 Namespaces
 
-Evaluate and enable per service as supported by the target kernel:
-- Mount namespace with a minimal read-only root view.
-- PID namespace for process visibility/isolation.
-- Network namespace with no interfaces for offline services.
-- IPC namespace where System V/POSIX IPC is unnecessary.
-- User namespace only after UID/GID mapping and kernel support are verified.
+Current IPC status daemon profile:
+- Mount namespace with recursive private propagation.
+- IPC namespace.
+- UTS namespace.
+- Network namespace with no configured external interfaces; AF_UNIX status socket remains the only intended communication path.
 
-Namespace availability and configuration must be tested on the exact target kernel; a configuration file alone is not proof.
+Not yet implemented: PID namespace and user namespace. Namespace startup is performed by the root-started `momo-ipc-sandbox` wrapper before dropping to the dedicated UID. The QEMU boot gate must verify the socket remains reachable from the host guest namespace.
 
 ### 5.4 Seccomp
 
@@ -96,14 +95,7 @@ Select and document an LSM strategy for the production Linux platform:
 
 ### 5.6 Resource controls
 
-Use cgroups v2 or the platform's supported equivalent to bound:
-- CPU quota and weight.
-- Memory and swap.
-- Process count.
-- I/O bandwidth where relevant.
-- Network egress through namespace/firewall policy.
-
-RLIMIT values remain defense in depth, not a substitute for service-level resource control.
+The IPC status daemon is assigned to `/sys/fs/cgroup/momo-ipc` with `cpu.max=50000 100000`, `memory.max=134217728` and `pids.max=16`. The init script fails closed if cgroup v2 or the cpu/memory/pids controllers are unavailable. Swap and I/O limits are not configured. Future services need separate cgroups and per-service budgets. RLIMIT values remain defense in depth.
 
 ## 6. Service manager integration
 
