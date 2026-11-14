@@ -67,3 +67,12 @@ qemu-system-x86_64 -M pc -m 1024 \
 
 A successful QEMU boot validates only this x86_64 virtual target. It does not
 establish support for ARM phones or the Samsung Galaxy A17.
+
+
+## Runtime security integration validation — 2026-11-14
+
+The current development branch adds the durable plan-bound step journal, the execution approval gate, and a local read-only IPC status daemon. The daemon runs under the dedicated `momo-ipc` account, authenticates local peers using Linux `SO_PEERCRED`, enforces bounded protocol frames, applies process limits and `no_new_privs`, and requires a libseccomp syscall denylist before serving the status-only operation.
+
+The x86_64 and AArch64 workflows now include the daemon and require the boot log to show both `MOMO OS READY` and the IPC service marker with tool execution explicitly disabled.
+
+**Evidence boundary:** these additions are not covered by the earlier QEMU acceptance run. A fresh successful run of each workflow is required before claiming that the updated image boots on either virtual target. Neither virtual target proves physical phone compatibility.
