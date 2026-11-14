@@ -58,7 +58,7 @@ def main() -> int:
         return 1
 
     try:
-        content = result["choices"][0]["message"]["content"]
+        choice = result["choices"][0]
     except (KeyError, IndexError, TypeError):
         print(
             json.dumps(
@@ -66,6 +66,28 @@ def main() -> int:
                     "status": "invalid-response",
                     "provider": "ovh-anonymous",
                     "top_level_keys": sorted(result) if isinstance(result, dict) else [],
+                }
+            )
+        )
+        return 1
+
+    message = choice.get("message") if isinstance(choice, dict) else None
+    content = None
+    if isinstance(message, dict):
+        content = message.get("content")
+    if not content and isinstance(choice, dict):
+        content = choice.get("text")
+    if not content and isinstance(choice, dict) and isinstance(choice.get("delta"), dict):
+        content = choice["delta"].get("content")
+    if not content:
+        print(
+            json.dumps(
+                {
+                    "status": "invalid-response",
+                    "provider": "ovh-anonymous",
+                    "choice_keys": sorted(choice) if isinstance(choice, dict) else [],
+                    "message_keys": sorted(message) if isinstance(message, dict) else [],
+                    "finish_reason": choice.get("finish_reason") if isinstance(choice, dict) else None,
                 }
             )
         )
