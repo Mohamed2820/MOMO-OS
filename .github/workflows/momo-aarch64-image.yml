@@ -70,9 +70,10 @@ jobs:
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-ipcctl
           make -C "$BUILDROOT_DIR" qemu_aarch64_virt_defconfig
           sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
-          sed -i '/^BR2_ROOTFS_OVERLAY=/d; /^BR2_ROOTFS_USERS_TABLES=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d; /^BR2_PACKAGE_LIBSECCOMP=/d' "$BUILDROOT_DIR/.config"
+          sed -i '/^BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES=/d; /^BR2_ROOTFS_OVERLAY=/d; /^BR2_ROOTFS_USERS_TABLES=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d; /^BR2_PACKAGE_LIBSECCOMP=/d' "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_OVERLAY="%s/board/momo/rootfs-overlay"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_USERS_TABLES="%s/board/momo/users.table"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="%s/board/momo/kernel-security.fragment"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
           printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\nBR2_PACKAGE_LIBSECCOMP=y\n' >> "$BUILDROOT_DIR/.config"
           make -C "$BUILDROOT_DIR" olddefconfig
 
@@ -91,6 +92,14 @@ jobs:
 
       - name: Build Linux kernel and MOMO AArch64 root filesystem
         run: make -C "$BUILDROOT_DIR" -j"$(nproc)"
+
+      - name: Verify kernel security primitives
+        shell: bash
+        run: |
+          set -euo pipefail
+          kernel_config="$(find "$BUILDROOT_DIR/output/build" -maxdepth 2 -type f -path '*/linux-*/.config' ! -path '*/linux-headers*' -print -quit)"
+          test -n "$kernel_config"
+          python3 tools/validate_kernel_security_config.py "$kernel_config"
 
       - name: Verify image outputs
         shell: bash
