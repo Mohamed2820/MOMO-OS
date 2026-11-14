@@ -38,7 +38,7 @@ jobs:
             --publish 127.0.0.1:8080:8080 \
             ghcr.io/ggml-org/llama.cpp:server \
             --model /models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf \
-            --ctx-size 8192 --threads 2 --host 0.0.0.0 --port 8080 \
+            --ctx-size 12288 --threads 2 --host 0.0.0.0 --port 8080 \
             --alias momo-local-coder --n-predict 3072
           for attempt in $(seq 1 90); do
             if curl --silent --fail http://127.0.0.1:8080/health >/dev/null; then
@@ -68,6 +68,10 @@ jobs:
       - name: Save local-model candidate patch
         if: always()
         run: git diff -- intelligence platform_adapters tests docs board/momo/rootfs-overlay/usr/lib/momo board/momo/rootfs-overlay/usr/bin > "$RUNNER_TEMP/momo-local-model-candidate.patch"
+
+      - name: Capture local inference server log
+        if: always()
+        run: docker logs momo-local-model > "$RUNNER_TEMP/momo-llama-server.log" 2>&1 || true
 
       - name: Upload local-model evidence
         if: always()
