@@ -1,0 +1,43 @@
+name: MOMO anonymous autonomous engineering dry run
+
+on:
+  push:
+    branches: ["feature/momo-engineering-integrations"]
+    paths:
+      - ".github/workflows/momo-keyless-autonomy-dryrun.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  anonymous-engineering-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out MOMO
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run one bounded anonymous engineering cycle
+        env:
+          MOMO_AGENT_API_URL: https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions
+        run: python3 -m intelligence.autonomy.runner
+      - name: Validate candidate patch
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -m unittest discover -s tests -v
+      - name: Save dry-run diff
+        if: always()
+        run: git diff -- intelligence platform_adapters tests docs board/momo/rootfs-overlay/usr/lib/momo board/momo/rootfs-overlay/usr/bin > "$RUNNER_TEMP/momo-anonymous-candidate.patch"
+      - name: Upload candidate patch for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: momo-anonymous-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/momo-anonymous-candidate.patch
+          if-no-files-found: warn
+          retention-days: 7
