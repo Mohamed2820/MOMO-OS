@@ -14,18 +14,18 @@ from intelligence.autonomy.runner import (
 
 class AutonomyPolicyTests(unittest.TestCase):
     def test_keyless_mode_defaults_to_restricted_ovh_provider(self):
-        url, model, key, keyless = _provider_configuration({})
+        url, model, key, provider = _provider_configuration({})
         self.assertEqual(url, OVH_ANONYMOUS_API_URL)
         self.assertEqual(model, OVH_ANONYMOUS_MODEL)
         self.assertIsNone(key)
-        self.assertTrue(keyless)
+        self.assertEqual(provider, "anonymous-ovh")
 
     def test_keyless_mode_accepts_ovh_base_url_only(self):
-        url, model, key, keyless = _provider_configuration({
+        url, model, key, provider = _provider_configuration({
             "MOMO_AGENT_API_URL": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
         })
         self.assertEqual(url, OVH_ANONYMOUS_API_URL)
-        self.assertTrue(keyless)
+        self.assertEqual(provider, "anonymous-ovh")
 
     def test_keyless_mode_refuses_untrusted_or_arbitrary_providers(self):
         with self.assertRaises(WorkerError):
@@ -36,7 +36,7 @@ class AutonomyPolicyTests(unittest.TestCase):
     def test_authenticated_mode_requires_model_and_preserves_provider_config(self):
         with self.assertRaises(WorkerError):
             _provider_configuration({"MOMO_AGENT_API_KEY": "test-secret"})
-        url, model, key, keyless = _provider_configuration({
+        url, model, key, provider = _provider_configuration({
             "MOMO_AGENT_API_KEY": "test-secret",
             "MOMO_AGENT_MODEL": "provider/model",
             "MOMO_AGENT_API_URL": "https://gateway.example/v1/chat/completions",
@@ -44,7 +44,36 @@ class AutonomyPolicyTests(unittest.TestCase):
         self.assertEqual(url, "https://gateway.example/v1/chat/completions")
         self.assertEqual(model, "provider/model")
         self.assertEqual(key, "test-secret")
-        self.assertFalse(keyless)
+        self.assertEqual(provider, "authenticated")
+
+    def test_local_provider_defaults_to_loopback_and_needs_no_key(self):
+        url, model, key, provider = _provider_configuration({"MOMO_AGENT_PROVIDER": "local"})
+        self.assertEqual(url, "http://127.0.0.1:8080/v1/chat/completions")
+        self.assertEqual(model, "momo-local-coder")
+        self.assertIsNone(key)
+        self.assertEqual(provider, "local")
+
+    def test_local_provider_accepts_explicit_loopback_only(self):
+        url, _, _, provider = _provider_configuration({
+            "MOMO_AGENT_PROVIDER": "local",
+            "MOMO_AGENT_API_URL": "http://localhost:8080/v1/chat/completions",
+        })
+        self.assertEqual(url, "http://localhost:8080/v1/chat/completions")
+        self.assertEqual(provider, "local")
+
+    def test_local_provider_rejects_public_hosts(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({
+                "MOMO_AGENT_PROVIDER": "local",
+                "MOMO_AGENT_API_URL": "http://example.com/v1/chat/completions",
+            })
+
+    def test_local_provider_rejects_credentials(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({
+                "MOMO_AGENT_PROVIDER": "local",
+                "MOMO_AGENT_API_KEY": "must-not-be-used",
+            })
 
     def test_extracts_plain_json_completion(self):
         document = _extract_completion_document({
