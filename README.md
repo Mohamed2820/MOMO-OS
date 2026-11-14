@@ -61,6 +61,9 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 - [Complete product description](docs/PROJECT_OVERVIEW.md)
 - [Master execution plan](docs/MASTER_EXECUTION_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Current engineering status](docs/ENGINEERING_STATUS.md)
+- [Execution authorization gate](docs/EXECUTION_AUTHORIZATION_GATE.md)
+- [Linux executor isolation specification](docs/LINUX_EXECUTION_SANDBOX.md)
 
 ## Device feasibility gate
 
