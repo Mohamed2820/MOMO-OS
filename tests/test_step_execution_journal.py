@@ -135,6 +135,123 @@ class StepExecutionJournalTests(unittest.TestCase):
                 f"{self.task.task_id}:read-status:v1",
             )
 
+    def test_event_hash_chain_verifies_and_database_is_append_only(self):
+        self.register()
+        self.journal.start_step(self.task.task_id, "read-status")
+        self.journal.finish_step(self.task.task_id, "read-status", True)
+        self.assertTrue(self.journal.verify_event_chain(self.task.task_id, "read-status"))
+        with sqlite3.connect(self.database) as connection:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "append-only"):
+                connection.execute(
+                    "UPDATE task_step_events SET reason = 'rewritten' "
+                    "WHERE task_id = ? AND step_id = ?",
+                    (self.task.task_id, "read-status"),
+                )
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "append-only"):
+                connection.execute(
+                    "DELETE FROM task_step_events WHERE task_id = ? AND step_id = ?",
+                    (self.task.task_id, "read-status"),
+                )
+
+    def test_hash_chain_detects_tampering_if_trigger_is_bypassed(self):
+        self.register()
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("DROP TRIGGER task_step_events_no_update")
+            connection.execute(
+                "UPDATE task_step_events SET reason = 'tampered' "
+                "WHERE task_id = ? AND step_id = ?",
+                (self.task.task_id, "read-status"),
+            )
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.journal.verify_event_chain(self.task.task_id, "read-status")
+
+    def test_corrupt_event_chain_blocks_step_state_reads(self):
+        self.register()
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("DROP TRIGGER task_step_events_no_update")
+            connection.execute(
+                "UPDATE task_step_events SET reason = 'tampered' "
+                "WHERE task_id = ? AND step_id = ?",
+                (self.task.task_id, "read-status"),
+            )
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.journal.get_step(self.task.task_id, "read-status")
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.journal.list_steps(self.task.task_id)
+
+    def test_corrupt_event_chain_blocks_new_state_transitions(self):
+        self.register()
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("DROP TRIGGER task_step_events_no_update")
+            connection.execute(
+                "UPDATE task_step_events SET reason = 'tampered' "
+                "WHERE task_id = ? AND step_id = ?",
+                (self.task.task_id, "read-status"),
+            )
+        with self.assertRaisesRegex(ValueError, "hash-chain verification"):
+            self.journal.start_step(self.task.task_id, "read-status")
+        with sqlite3.connect(self.database) as connection:
+            persisted_status = connection.execute(
+                "SELECT status FROM task_step_executions "
+                "WHERE task_id = ? AND step_id = ?",
+                (self.task.task_id, "read-status"),
+            ).fetchone()[0]
+        self.assertEqual(persisted_status, StepExecutionStatus.READY.value)
+
+    def test_legacy_event_table_is_migrated_and_backfilled(self):
+        legacy_database = Path(self.temp.name) / "legacy.sqlite3"
+        legacy_tasks = TaskStore(legacy_database)
+        legacy_task = legacy_tasks.create_task("Migrate legacy step journal", Risk.R1)
+        now = "2026-11-13T14:00:00+00:00"
+        with sqlite3.connect(legacy_database) as connection:
+            connection.execute("""
+                CREATE TABLE task_step_executions (
+                    task_id TEXT NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+                    step_id TEXT NOT NULL,
+                    risk TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attempt INTEGER NOT NULL,
+                    retry_limit INTEGER NOT NULL,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    cancel_requested INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    result_sha256 TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(task_id, step_id)
+                )
+            """)
+            connection.execute("""
+                CREATE TABLE task_step_events (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT NOT NULL,
+                    step_id TEXT NOT NULL,
+                    at TEXT NOT NULL,
+                    previous TEXT,
+                    current TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    FOREIGN KEY(task_id, step_id)
+                        REFERENCES task_step_executions(task_id, step_id)
+                        ON DELETE CASCADE
+                )
+            """)
+            connection.execute("""
+                INSERT INTO task_step_executions(
+                    task_id, step_id, risk, status, attempt, retry_limit,
+                    idempotency_key, created_at, updated_at
+                ) VALUES (?, 'legacy-step', 'R1', 'ready', 0, 0, 'legacy:key', ?, ?)
+            """, (legacy_task.task_id, now, now))
+            connection.execute("""
+                INSERT INTO task_step_events(task_id, step_id, at, previous, current, reason)
+                VALUES (?, 'legacy-step', ?, NULL, 'ready', 'Legacy event before hash migration')
+            """, (legacy_task.task_id, now))
+
+        migrated = StepExecutionJournal(legacy_database)
+        self.assertTrue(migrated.verify_event_chain(legacy_task.task_id, "legacy-step"))
+        events = migrated.list_events(legacy_task.task_id, "legacy-step")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].reason, "Legacy event before hash migration")
+
     def test_unknown_step_is_reported(self):
         with self.assertRaises(StepExecutionNotFoundError):
             self.journal.get_step(self.task.task_id, "missing")
