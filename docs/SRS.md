@@ -9,19 +9,19 @@
 
 ---
 
-## Implementation Snapshot (2026-11-13)
+## Implementation Snapshot (2026-11-13, updated after QEMU acceptance)
 
 This snapshot distinguishes source implementation, target-image integration, automated tests and hardware validation.
 
 | Area | Current implementation | Evidence / limitation |
 |---|---|---|
-| x86_64 Linux image | Buildroot configuration, kernel/rootfs pipeline and QEMU serial-boot acceptance check | Latest image run #43437714431 is in progress at kernel/rootfs build; no image artifact or successful QEMU boot yet. Earlier run #43436209791 was cancelled during build and produced metadata only. |
+| x86_64 Linux image | Buildroot 2026.08.1 image built, output files verified, QEMU serial boot reached readiness, artifact downloaded and inspected | QEMU-validated on x86_64 for commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`, run [#43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431); artifact contains `bzImage`, `rootfs.ext2`, `qemu-boot.log` and build metadata. Log confirms permission broker health, task runtime self-test and `MOMO OS READY`. Not physical hardware validation. |
 | Task state machine | Risk-aware lifecycle and transition validation | Repository unit tests pass |
-| Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; image-level execution awaits QEMU boot |
+| Persistent task journal | SQLite TaskStore and append-only transition history | Included in Buildroot overlay; QEMU boot passed on the image revision. Newer execution-journal integration is tracked separately and is not included in that image evidence. |
 | Task Coordinator | Plan validation, immutable SHA-256 binding, atomic task/plan/event persistence and permission checks | PR #23 merged; repository tests pass; no tool execution or crash-recovery scheduler yet |
-| Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; target CLI has not yet been exercised in QEMU |
+| Task CLI | create/list/show/transition/doctor/self-test | Included in rootfs overlay; boot-time task runtime self-test passed in QEMU. Interactive `momoctl doctor` and full CLI acceptance matrix remain pending. |
 | Device inventory | Runtime OS/kernel/architecture/device identity collection | Source and rootfs overlay included; exact hardware capabilities remain unknown absent verified profile |
-| Persistent permission broker | SQLite grants, expiry, revocation, bounded use, exact R3/R4 approval matching and audit journal | Source and rootfs overlay included; policy layer does not enforce native OS permissions or execute tools |
+| Persistent permission broker | SQLite grants, expiry, revocation, bounded use, exact R3/R4 approval matching and audit journal | QEMU boot log confirms broker initialization and health; policy layer does not enforce native OS permissions or execute tools. |
 | Device profiles | JSON schema and CI validation | Schema validation does not prove a device port boots |
 | Android track | Architecture and requirements only | No AOSP build, Android boot image or phone installation validated |
 | Physical devices | Device support tiers defined | No phone hardware is currently certified |
@@ -525,111 +525,25 @@ The following is an implementation update, not a claim that the complete task ex
 
 | Capability | Evidence level | Current result | Remaining limitation |
 |---|---|---|---|
-| Per-step durable execution state | CI-tested; overlay-integrated | SQLite journal stores one record per task/step and append-only lifecycle events; TaskCoordinator registers every accepted plan step in the same transaction as task and immutable plan | QEMU image validation and real executor integration remain pending |
+| Per-step durable execution state | CI-tested | SQLite journal stores one record per task/step and append-only lifecycle events | Not yet integrated with TaskCoordinator or the target root filesystem |
 | Attempt accounting and retry budget | CI-tested | Explicit bounded retries are restricted to R0/R1 read-only work | No scheduler, deadline manager or backoff service |
 | Side-effect failure handling | CI-tested | R2-R4 failures enter `needs_review` | No independent reconciliation adapter |
-| Restart recovery | CI-tested; boot-hook-integrated | `momoctl boot-check` invokes the idempotent `momo-task recover` command before readiness; in-flight steps become `needs_review` and are never replayed | QEMU boot validation and future worker-supervisor ordering remain pending |
+| Restart recovery | CI-tested | In-flight steps become `needs_review`; no automatic replay | Startup integration and QEMU validation remain pending |
 | Cancellation | CI-tested | Queued work can be cancelled; running work requires executor acknowledgement that no side effect occurred | No running process executor exists yet |
 | Result evidence | CI-tested | Optional SHA-256 result digest is persisted | No independent result verifier or signed evidence envelope |
 
-**Traceability:** This increment contributes partial implementation evidence toward FR-AI-011, NFR-REL-001 and NFR-REL-002. It does not close those requirements. The journal is not a tool executor, permission authority or OS sandbox. Native Linux/Android enforcement, authenticated IPC, actual executor integration and image-level validation remain mandatory.
-
-## Implementation Evidence Addendum — Persisted Dependency Readiness (2026-11-13)
-
-TaskCoordinator now derives dependency completion only from durable per-step records whose state is `succeeded`. The API no longer accepts caller-supplied completed-step IDs. A step is returned as ready only when its dependencies are durably successful and its own journal state is `ready`. Failed, running, cancelled and `needs_review` steps do not unblock downstream work. The coordinator verifies that the journal's step IDs and risk levels match the immutable accepted plan.
-
-This is CI-tested and included in the Buildroot overlay source. It is not a concurrent scheduler or execution engine: dispatch, deadlines, backoff, fairness, quotas, durable output verification and OS-enforced isolation remain open requirements.
-
-## Implementation Evidence Addendum — Tamper-Evident Step Events (2026-11-13)
-
-The per-step event history now includes a SHA-256 hash chain, verifies the chain before returning event history, and uses SQLite triggers to reject ordinary event updates and deletions. A migration backfills deterministic hashes for databases created by the earlier event-table schema. CI covers normal verification, blocked mutation, tampering after trigger removal and legacy migration.
-
-This is tamper-evident against accidental or partial record modification, not a cryptographic signature or protection against a privileged attacker who can rewrite the database and recompute the chain. Protected key custody, external audit anchoring, native file permissions and OS isolation remain required for stronger assurance.
-
-The journal also verifies the existing event chain before appending. A corrupted history blocks the new transition and the transaction rolls back; new events cannot silently extend a compromised chain.
-
-The integrity check also gates state reads and dependency scheduling: TaskCoordinator verifies all relevant step event chains before returning readiness. Corrupt history blocks the read/scheduling path instead of allowing untrusted state to authorize progress.
+**Traceability:** This increment contributes partial implementation evidence toward FR-AI-011, NFR-REL-001 and NFR-REL-002. It does not close those requirements. The journal is not a tool executor, permission authority or OS sandbox. Native Linux/Android enforcement, authenticated IPC, coordinator integration and image-level validation remain mandatory.
 
 
-## Linux IPC Protocol Foundation — Implementation Note (2026-11-13)
+## QEMU Acceptance Evidence Addendum — 2026-11-13
 
-A versioned, bounded local IPC framing layer has been added alongside the Linux peer-credential helper. Version 1 uses a four-byte network-order length prefix and a 64 KiB payload ceiling. The parser rejects duplicate JSON keys, non-finite values, invalid UTF-8, malformed/truncated/trailing frames, unsupported versions and invalid request fields. Source and Buildroot overlay parity is tested.
+The first x86_64 Buildroot target passed its automated QEMU acceptance workflow.
 
-This is partial evidence toward the local service protocol requirements. The parser does not authenticate peers, authorize operations, prevent replay, impose deadlines or dispatch tools. It is not wired into a daemon. No tool execution is enabled.
+- Workflow: [run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431).
+- Tested source revision: `74398b8d8ab9e379e94a864d35bb9a6db3623d83`.
+- Buildroot: `2026.08.1`; target: `qemu_x86_64`.
+- Job steps for kernel/rootfs build, output verification, QEMU boot/readiness, provenance and artifact upload all completed successfully.
+- Downloaded artifact: `momo-os-x86_64-74398b8d8ab9e379e94a864d35bb9a6db3623d83`, containing `bzImage`, `rootfs.ext2`, `qemu-boot.log` and `build-metadata.txt`.
+- The serial log records persistent permission broker health, task runtime self-test success and `MOMO OS READY`.
 
-## IPC Service Increment — 2026-11-13 (PR #38 candidate)
-
-A first unprivileged local status service is implemented as a narrow integration milestone. Buildroot provisions a dedicated `momo-ipc` account; init starts the daemon under that account; AF_UNIX peers are authenticated through `SO_PEERCRED`; only the root UID is accepted by the current single-user image policy; and only the read-only `status.read` operation is dispatched. The `momoctl ipc-status` client exposes the status response. No command or tool execution exists in this service.
-
-Acceptance remains conditional on CI and a fresh QEMU image run. This does not satisfy the full security or execution requirements: replay protection, multi-user roles, per-operation capability grants, sandboxing, resource quotas, and Android Binder/SELinux/AppOps remain open.
-
-
-## IPC Replay Protection Increment — 2026-11-13 (PR #39 candidate)
-
-The read-only IPC service adds a bounded process-lifetime replay cache (1,024 request IDs), rejects duplicate IDs before dispatch, and uses unique CLI request IDs. Client response validation rejects duplicate JSON keys, unexpected fields and mismatched request IDs. This is not durable replay protection across daemon restart and is not sufficient for side-effecting operations.
-
-
-## IPC Process Restriction Increment — 2026-11-13 (PR #40 candidate)
-
-The unprivileged IPC daemon now applies bounded core/file/descriptor/address-space limits and Linux `PR_SET_NO_NEW_PRIVS` before opening its listening socket. These are defense-in-depth process restrictions only; syscall filtering, namespaces, cgroups and LSM policy remain required for a real sandbox.
-
-
-## IPC Syscall Filter Increment — 2026-11-13 (PR #41 candidate)
-
-The unprivileged daemon now requires libseccomp and installs a default-allow syscall denylist that blocks process creation/exec, ptrace, mount and namespace changes, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory access. Failure to load or install the filter prevents service startup. This is not a strict allowlist or complete sandbox; filesystem syscalls remain available, and namespaces/cgroups/LSM enforcement remain open requirements.
-
-
-## AArch64 Platform Target — 2026-11-13 (PR #42 candidate)
-
-A dedicated Buildroot/QEMU AArch64 virtual-target workflow is added using `qemu_aarch64_virt_defconfig`, the MOMO rootfs overlay, libseccomp and the unprivileged IPC status service. Acceptance requires a non-empty ARM64 kernel/rootfs, QEMU boot to `MOMO OS READY`, and the authenticated status response. Until that workflow passes, AArch64 remains a planned/under-validation target, not a verified supported architecture. No physical Android device support is implied.
-
-
-## Historical x86_64 QEMU Baseline Evidence (2026-11-13)
-
-A prior x86_64 Buildroot image on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83` successfully built, passed image-output verification, booted under QEMU, and reached `MOMO OS READY`. Evidence: [workflow #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact ID `14046724553`. This validates only that earlier x86_64 baseline. The newer Step Journal integrated revision at [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529) still requires its own fresh image and QEMU acceptance; it must not inherit the older success claim.
-
-
-## Integrated Security and Architecture Status — 2026-11-13
-
-PR #42 is merged into `bootable/x86_64-buildroot-mvp-v2`. The integrated branch contains bounded IPC framing, SO_PEERCRED peer authentication, a read-only status daemon running as the dedicated `momo-ipc` account, process-lifetime replay detection, process resource limits, `PR_SET_NO_NEW_PRIVS`, and a required libseccomp default-allow denylist. The daemon exposes only `status.read`; tool execution remains disabled. The syscall policy is defense in depth, not a strict allowlist or complete sandbox.
-
-AArch64 QEMU virtual-target workflow is integrated. Fresh x86_64 and AArch64 image workflows were triggered against commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; both had entered kernel/rootfs build at last inspection. Image verification, QEMU boot, IPC evidence and artifact publication remain unconfirmed. No support claim for this integrated revision is made until both workflows pass.
-
-Physical hardware, Android/AOSP, device-specific drivers, namespaces/cgroups/LSM policy, strict syscall allowlisting, capability authorization and any tool executor remain unaccepted requirements.
-
-
----
-
-## Implementation Evidence Addendum — 2026-11-14
-
-This addendum updates implementation evidence without changing the normative product requirements above.
-
-### Execution authorization requirements traceability
-
-| Requirement area | Current implementation evidence | Status / remaining work |
-|---|---|---|
-| Immutable task-plan binding | Canonical plan JSON and SHA-256 digest persisted with the task | Implemented and tested |
-| Durable step state | SQLite step journal, append-only hash-linked events, dependency readiness and restart quarantine | Implemented and tested |
-| Central task/step authorization | ExecutionGate is the supported plan-bound start path | Implemented in-process; not an OS boundary |
-| High-risk approval | Random, hashed, single-use, expiring task/step tokens bound to plan and declared arguments digest | Implemented; authenticated human identity and trusted approval UI remain open |
-| Low-risk capability grants | Persistent permission broker checks scoped grants | Implemented; separate-database transaction gap remains |
-| Approval replay/race protection | Atomic token consumption with step start; concurrent-consumer and rollback tests | Implemented and tested |
-| Linux local IPC | Unprivileged read-only AF_UNIX status daemon with peer credentials and bounded protocol | Implemented on Linux virtual baseline; no executor dispatch |
-| Linux process restrictions | rlimits, no_new_privs and libseccomp default-allow denylist | Implemented as defense in depth; namespaces/cgroups/LSM/strict allowlist remain open |
-| Cross-architecture virtual boot | Buildroot x86_64 and AArch64 QEMU image workflows | Both passed on baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; the newer execution-gate revision also passed fresh x86_64 and AArch64 image builds on `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. |
-
-### Current verification references
-
-- Execution-gate code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2`: repository-validation workflow [#43596879520](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43596879520), 167 unit tests completed with `OK`.
-- x86_64 QEMU baseline: [#43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact 14057431431.
-- AArch64 QEMU baseline: [#43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054.
-
-The newer execution-gate commit has not yet been image-tested. No Android image, physical phone port, production tool executor, native per-task sandbox, signed release or OTA recovery qualification is claimed.
-
-
-### Fresh image verification for the execution-gate revision — 2026-11-14
-
-- x86_64 Buildroot/QEMU: [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750.
-- AArch64 Buildroot/QEMU: [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046.
-
-Both workflows passed image output verification, QEMU boot, MOMO readiness, read-only IPC status and artifact upload on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. Both guests explicitly reported `tool_execution: disabled`. This closes the virtual image integration requirement for this revision only; it does not establish physical-device or Android support, authenticated human approval, native worker isolation or production execution.
+**Evidence boundary:** this proves the specific x86_64 QEMU image revision boots and reaches its readiness check. It does not prove physical hardware compatibility, interactive validation of every CLI command, Android/AOSP support, a phone port, native OS sandboxing or production readiness. The artifact is a development image, not an installable phone release.
