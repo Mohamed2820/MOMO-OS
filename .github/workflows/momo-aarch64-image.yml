@@ -15,6 +15,15 @@ on:
       - "docs/BOOTABLE_IMAGE.md"
       - ".github/workflows/momo-aarch64-image.yml"
 
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "board/momo/**"
+      - "intelligence/**"
+      - "tests/**"
+      - "docs/BOOTABLE_IMAGE.md"
+      - ".github/workflows/momo-aarch64-image.yml"
+
 permissions:
   contents: read
 
