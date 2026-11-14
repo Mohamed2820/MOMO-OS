@@ -249,3 +249,10 @@ This supersedes the earlier PR #48 CI run references above for the current candi
 After the image workflows recorded above started, PR #48 received an additional runtime increment on later commits. A bounded strict-JSON argument binding primitive now rejects duplicate object keys, invalid UTF-8/Unicode, non-standard numeric constants, excessive payload size/depth/node count and out-of-range integers; it emits deterministic canonical JSON and SHA-256. The module is mirrored into the Buildroot rootfs overlay, with focused unit tests and an overlay-parity assertion.
 
 This is a serialization primitive, not an authorization boundary. It is not yet connected to an authenticated executor or the ExecutionGate, and the current gate still accepts a caller-supplied digest. The x86_64/AArch64 runs listed above started before this addition and do not contain it. The new tests have not yet been executed by a fresh CI run; do not promote this increment to CI-tested until that evidence exists.
+
+
+## Argument-bound authorization increment — 2026-11-14
+
+The public step authorization path no longer accepts a caller-supplied digest. `ApprovalStore.issue_for_arguments()` and `ExecutionGate.start_step()` accept the exact bounded JSON payload and derive canonical SHA-256 internally. The low-level digest transition is private to the gate module. `start_step_with_arguments()` returns the exact parsed values as a recursively immutable structure, alongside canonical JSON and digest, for a future typed executor to consume without reparsing mutable input. Rootfs copies are kept byte-for-byte in parity.
+
+Focused tests cover approval/start digest agreement, changed-payload rejection, duplicate-key rejection, malformed-input rejection, canonical key ordering and deep immutability. These tests are source-added but have not yet run in CI. The approver label is still caller-asserted; there is no authenticated user/session identity, operation-specific schema registry, typed side-effect executor, or OS-enforced isolation. Tool execution stays disabled.
