@@ -258,7 +258,7 @@ def _request_patch(context: str, brief: str, api_url: str, model: str, api_key: 
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=240 if keyless else 90) as response:
+        with urllib.request.urlopen(request, timeout=600 if local else (240 if keyless else 90)) as response:
             result = json.loads(response.read(2_000_000).decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise WorkerError(f"Model provider request failed: {type(exc).__name__}") from exc
