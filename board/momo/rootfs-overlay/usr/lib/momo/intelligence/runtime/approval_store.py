@@ -19,6 +19,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from intelligence.runtime.momo_runtime import Risk
+from intelligence.runtime.argument_binding import parse_and_bind
 
 TASK_ACTION = "task.execute"
 MAX_TTL_SECONDS = 15 * 60
@@ -149,6 +150,24 @@ class ApprovalStore:
             )
             connection.commit()
         return token
+
+    def issue_for_arguments(
+        self,
+        task_id: str,
+        plan,
+        approver: str,
+        ttl_seconds: int,
+        step_id: str,
+        args_payload: str | bytes,
+    ) -> str:
+        """Issue a step approval using a digest computed from exact strict-JSON input."""
+        if not isinstance(step_id, str) or not step_id:
+            raise ValueError("A step identifier is required")
+        _arguments, _canonical_json, args_sha256 = parse_and_bind(args_payload)
+        return self.issue(
+            task_id, plan, approver, ttl_seconds,
+            step_id=step_id, args_sha256=args_sha256,
+        )
 
     @staticmethod
     def consume(connection: sqlite3.Connection, token: object, binding: str, now: datetime) -> None:
