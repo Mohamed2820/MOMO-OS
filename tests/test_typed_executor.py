@@ -135,6 +135,18 @@ class TypedExecutorTests(unittest.TestCase):
             "failed",
         )
 
+    def test_registry_refuses_explicit_side_effecting_operation(self):
+        with self.assertRaises(ValueError):
+            self.registry.register(OperationSpec(
+                operation_id="system.settings.write",
+                domain="system",
+                required_capability="system.settings.write",
+                risk=Risk.R1,
+                argument_types={},
+                handler=lambda _args: {},
+                side_effects=True,
+            ))
+
     def test_registry_refuses_side_effecting_risk_levels(self):
         with self.assertRaises(ValueError):
             self.registry.register(OperationSpec(
