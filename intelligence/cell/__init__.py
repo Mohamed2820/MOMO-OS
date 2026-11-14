@@ -103,11 +103,12 @@ def _required_docs_cell(root: Path, _relative: str, _payload: bytes) -> Iterable
     )
 
 
-def default_registry() -> CellRegistry:
+def default_registry(include_repository_contracts: bool = True) -> CellRegistry:
     registry = CellRegistry()
     registry.register("builder", _python_cell)
     registry.register("contract", _json_cell)
-    registry.register("guardian", _required_docs_cell)
+    if include_repository_contracts:
+        registry.register("guardian", _required_docs_cell)
     return registry
 
 
@@ -118,8 +119,13 @@ class MomoCell:
     MAX_FILES = 5000
     MAX_FILE_BYTES = 2 * 1024 * 1024
 
-    def __init__(self, registry: CellRegistry | None = None) -> None:
-        self.registry = registry or default_registry()
+    def __init__(
+        self,
+        registry: CellRegistry | None = None,
+        *,
+        include_repository_contracts: bool = True,
+    ) -> None:
+        self.registry = registry or default_registry(include_repository_contracts)
 
     def scan(self, root: str | Path) -> ScanReport:
         started = time.monotonic()
