@@ -103,6 +103,22 @@ class ArgumentBoundExecutionTests(unittest.TestCase):
             "ready",
         )
 
+    def test_returned_arguments_are_deeply_immutable(self):
+        payload = b'{"nested":{"items":[1,2]}}'
+        token = self.approvals.issue_for_arguments(
+            self.task.task_id, self.plan, "local-owner", 300,
+            "device-check", payload,
+        )
+        started = self.gate.start_step_with_arguments(
+            self.task.task_id, self.plan, "device-check", payload,
+            approval_token=token,
+        )
+        with self.assertRaises(TypeError):
+            started.arguments["nested"] = {}
+        with self.assertRaises(TypeError):
+            started.arguments["nested"]["items"] = ()
+        self.assertEqual(started.arguments["nested"]["items"], (1, 2))
+
     def test_key_order_does_not_change_approval_binding(self):
         first = b'{"a":1,"b":2}'
         second = b'{"b":2,"a":1}'
