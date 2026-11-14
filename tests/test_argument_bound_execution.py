@@ -83,6 +83,25 @@ class ArgumentBoundExecutionTests(unittest.TestCase):
             "ready",
         )
 
+    def test_public_approval_api_rejects_precomputed_step_digest(self):
+        with self.assertRaises(ValueError):
+            self.approvals.issue(
+                self.task.task_id, self.plan, "local-owner", 300,
+                step_id="device-check", args_sha256="0" * 64,
+            )
+
+    def test_public_step_start_rejects_precomputed_digest(self):
+        with self.assertRaises(AuthorizationDenied):
+            self.gate.start_step(
+                self.task.task_id, self.plan, "device-check", "0" * 64,
+            )
+        self.assertEqual(
+            self.coordinator.get_step_execution(
+                self.task.task_id, "device-check"
+            ).status.value,
+            "ready",
+        )
+
     def test_duplicate_keys_are_rejected_before_approval_is_issued(self):
         with self.assertRaises(ValueError):
             self.approvals.issue_for_arguments(
