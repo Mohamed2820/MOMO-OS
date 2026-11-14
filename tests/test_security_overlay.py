@@ -25,7 +25,7 @@ class SecurityOverlayParityTests(unittest.TestCase):
         source = (ROOT / "board/momo/rootfs-overlay/usr/lib/momo/momo_ipcd.py").read_text(encoding="utf-8")
         self.assertIn("MOMO_NAMESPACE_INODES", source)
         self.assertIn("expected_inode", source)
-        self.assertNotIn('/proc/1/ns/{name}', source)
+        self.assertNotIn('/proc/1/ns/', source)
 
     def test_ipc_init_assigns_cgroup_resource_limits(self):
         source = INIT.read_text(encoding="utf-8")
