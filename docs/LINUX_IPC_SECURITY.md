@@ -50,7 +50,7 @@ The root-started `momo-ipc-sandbox` wrapper joins a dedicated cgroup (128 MiB me
 
 ### Verified and pending
 
-- Repository CI for integration PR #48 passed 203 unit tests, including Landlock filesystem allow/deny, kernel config validation, namespace/cgroup launcher checks, typed executor and source/rootfs parity (run #43603613845).
+- Repository CI for integration PR #48 passed 203 unit tests, including Landlock filesystem allow/deny, kernel config validation, namespace/cgroup launcher checks, sandbox status reporting, seccomp socket-denial, typed executor and source/rootfs parity (run #43604027608).
 - The earlier QEMU acceptance applies to an older image revision and does not validate this daemon.
 - Fresh x86_64 and AArch64 Buildroot/QEMU boot checks are required before this increment receives image-integrated/emulator-tested status.
 - The daemon is not a general-purpose executor. Future mutating operations require a separate authorization design, durable idempotency, outcome reconciliation and stronger per-operation principals. Its current socket syscall restrictions apply only after the existing AF_UNIX listener is bound.
