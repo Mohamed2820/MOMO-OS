@@ -220,123 +220,39 @@ No fixed delivery date is promised until build capacity, device access, maintain
 
 ### Explicitly not complete
 
-The journal is integrated into TaskCoordinator: accepted plan steps are registered in the same SQLite transaction as the parent task, immutable plan and task events. The journal and coordinator are mirrored into the Buildroot rootfs overlay, with source/overlay parity tests. The target image has not yet been rebuilt with the coordinator integration and startup recovery hook or validated in QEMU. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered.
+The journal is not yet integrated into TaskCoordinator, the Buildroot overlay or the target image. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered. The current work is a tested persistence foundation only.
 
 ### Next execution sequence
 
 1. Keep the x86_64 Buildroot/QEMU acceptance gate independent and do not merge its image PR until the image, boot log and runtime evidence are verified.
-2. Validate the boot-time recovery hook in the rebuilt QEMU image, including first boot and repeated recovery invocation; before concurrent workers exist, preserve the guarantee that old workers are stopped before recovery.
-3. Add durable dependency-completion records and scheduler deadlines, backoff, concurrency limits and resource budgets.
-4. Design the executor boundary with fresh permission authorization, OS identity, idempotency propagation, cancellation and independent result verification; do not dispatch tools yet.
-5. Implement native OS isolation and IPC identity, then add adversarial tests before enabling any privileged tool.
-
-### Completed sub-milestone: durable dependency readiness
-
-- Removed caller-controlled completion claims from TaskCoordinator's readiness API.
-- Derived completed dependencies only from persisted `succeeded` step records.
-- Restricted returned work to steps in durable `ready` state.
-- Blocked downstream work after failed, cancelled, running or `needs_review` dependencies.
-- Verified exact plan-to-journal step identity and risk consistency.
-- Repository validation passed with 105 unit tests.
-
-This closes the persisted dependency-readiness foundation only. It does not deliver worker scheduling, concurrency control, deadlines, backoff, fairness, quotas, executor dispatch or result verification.
-
-### Completed sub-milestone: tamper-evident step event history
-
-- Added a per-task-step SHA-256 event hash chain.
-- Verify event integrity before returning event history.
-- Block ordinary event updates and deletions through SQLite triggers.
-- Backfill older pre-hash event rows during schema migration.
-- Test normal verification, mutation rejection, trigger-bypass tampering and legacy migration.
-- Repository validation passed with 111 unit tests, including fail-closed state-read and scheduler tests.
-
-This is not a signed audit log and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring and protected storage remain open.
+2. Integrate step registration and lifecycle transitions with immutable persisted plans and the parent task journal.
+3. Add an executor interface with idempotency propagation, bounded deadlines and cooperative cancellation; do not execute before fresh permission authorization.
+4. Add restart reconciliation and negative tests for duplicate dispatch, ambiguous external outcomes and cancellation races.
+5. Implement native OS isolation and IPC identity before enabling any privileged tool.
 
 
-## Execution Progress — Versioned Linux IPC Framing (2026-11-13)
+## Execution Progress Record — QEMU Bring-up Acceptance (2026-11-13)
 
-Added a version-1 bounded request frame codec: 4-byte network-order length prefix, 64 KiB maximum, strict UTF-8/JSON parsing, duplicate-key rejection, finite-number enforcement, exact top-level schema, request-ID and operation-name validation, and socket stream helpers. Added unit tests and Buildroot source/overlay parity checks.
+### Completed
+- Buildroot 2026.08.1 kernel and root filesystem build succeeded.
+- Image output verification succeeded.
+- QEMU serial boot reached the required `MOMO OS READY` marker.
+- Boot log confirmed persistent permission broker health and task runtime self-test.
+- Build provenance was recorded and the image/evidence artifact was uploaded and downloaded for inspection.
+- The bootable image pull request was merged into `main` after the acceptance workflow passed.
 
-The parser is transport hygiene only. Peer authentication, UID-to-role mapping, per-operation authorization, deadlines, replay controls, resource quotas, daemon integration and native process sandboxing remain outstanding. No privileged IPC service or tool executor is exposed. PR review and CI are required before this milestone is accepted.
+**Evidence:** [workflow run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact name `momo-os-x86_64-74398b8d8ab9e379e94a864d35bb9a6db3623d83`.
 
-## Milestone — First Unprivileged IPC Service (PR #38 candidate, 2026-11-13)
-
-Implemented a narrow daemon/client path on top of the peer-credential primitive and bounded protocol. Buildroot provisions `momo-ipc`; init starts `momo-ipcd` under that account; the daemon checks kernel peer credentials before parsing; it dispatches only `status.read`; the socket path is protected against unsafe replacement; connection timeouts and backlog are bounded; and `momoctl ipc-status` queries the service. The service has no execution adapter.
-
-Required acceptance: green repository CI, successful Buildroot image build, QEMU boot reaching MOMO OS READY, and an in-guest authenticated status request. Next hardening gates are replay protection, strict operation-specific schemas, service role/capability policy, seccomp/namespaces/LSM/cgroups, and adversarial denial tests. Do not enable tool execution before those gates.
-
-
-## IPC Hardening Increment — Bounded Replay Detection (PR #39 candidate)
-
-Added a lock-protected bounded 1,024-entry request-ID cache, duplicate rejection before dispatch, UUID request IDs in the CLI, and strict client response-shape validation. The cache is volatile and resets on daemon restart. Do not use it as the idempotency authority for mutating tools; durable task/step journal keys and reconciliation remain required.
-
-
-## IPC Process Hardening — Resource Limits and No-New-Privileges (PR #40 candidate)
-
-Added startup restrictions for core dumps, file size, open descriptors and address space, plus Linux `PR_SET_NO_NEW_PRIVS`. A subprocess test verifies limits and kernel state. A cumulative CPU-time hard limit is intentionally omitted to avoid killing a healthy long-lived service. This is not a complete sandbox: syscall allowlisting via seccomp, namespace isolation, cgroup limits and LSM policy remain outstanding.
-
-
-## IPC Syscall Restriction — libseccomp denylist (PR #41 candidate)
-
-Added a required libseccomp runtime dependency and a default-allow syscall denylist installed after socket setup. Dangerous process creation/exec, ptrace, mount/namespace, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory syscalls are denied. CI tests that process creation fails with EPERM. Filter installation is fail-closed. This remains defense in depth, not a strict syscall allowlist; namespace, cgroup and LSM isolation are still required.
-
-
-## Platform Expansion — AArch64 QEMU target (PR #42 candidate)
-
-Added a separate AArch64 Buildroot/QEMU workflow with pinned Buildroot verification, overlay and user-table configuration, libseccomp, cached toolchain/package outputs, image checks, QEMU serial boot and IPC status evidence. Merge/acceptance is gated on workflow success. Physical ARM devices require their own boot chain, kernel, device tree, firmware, drivers and validation.
-
-
-## Historical Image Evidence and Current Gate (2026-11-13)
-
-The initial x86_64 Buildroot baseline passed build, output verification and QEMU boot on commit `74398b8d8ab9e379e94a864d35bb9a6db3623d83`, reaching `MOMO OS READY` ([run #43437714431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43437714431), artifact `14046724553`). The later revision integrating Step Journal/TaskCoordinator is a distinct image and remains pending in [run #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). The earlier artifact is not acceptance evidence for the later commit.
-
-
-## Current Integrated Baseline — 2026-11-13
-
-PR #42 has been merged into the bootable development branch. It integrates the status-only authenticated AF_UNIX daemon, bounded IPC protocol, process-lifetime replay cache, process limits, `PR_SET_NO_NEW_PRIVS`, libseccomp default-allow denylist and an AArch64 QEMU build/boot workflow. The daemon runs under the dedicated `momo-ipc` account and accepts only root-owned local status requests. No tool executor is present or enabled.
-
-Integrated commit: `a7a4caf381553d9a697b68a093eff9520d8b0bda`.
-
-Verified acceptance runs:
-- x86_64 image: [run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) — build, output verification, QEMU boot, `MOMO OS READY`, IPC status response and artifact upload all succeeded. Artifact ID 14057431431.
-- AArch64 image: [run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951) — build, output verification, QEMU boot, `MOMO OS READY`, IPC status response and artifact upload all succeeded. Artifact ID 14055169054.
-
-These results apply to integrated commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`, not automatically to later commits. The execution-gate revision requires its own fresh x86_64 and AArch64 image runs. Repository-validation is not a substitute for either image test.
-
-Remaining gates: resolve image/boot failures; adversarial IPC/seccomp tests; explicit operation/capability authorization; namespace and cgroup isolation plus LSM policy; durable side-effect idempotency and recovery; only then a non-privileged executor adapter. Android remains a separate AOSP/Binder-AIDL/SELinux/AppOps track, followed by per-device bootloader/kernel/DTB/firmware/driver validation.
-
-
-## Execution Authorization Gate — 2026-11-14
-
-### Implemented on the active feature branch
-- Added `ApprovalStore` with cryptographically random, single-use, expiring tokens. The database stores token hashes only.
-- Bound approvals to task, step, action/domain, resource, risk, canonical plan digest and a supplied arguments digest.
-- Added the central `ExecutionGate` for plan-bound task and step start.
-- Blocked direct TaskStore and step-journal start paths for plan-bound work.
-- Kept high-risk approval consumption and step-start persistence in one SQLite write transaction; rollback restores the token if the start fails.
-- Added negative and concurrency tests for bypasses, mismatched plans/arguments, expiry, replay, races and injected transaction failures.
-- Repository validation passed 167 unit tests on code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` in PR #45.
-
-### Explicit limitations
-The gate is an in-process authorization layer, not an OS boundary or executor. Approver labels are not yet authenticated identities; step-argument digests are caller-supplied; R0–R2 grant consumption occurs in a separate database and can be spent before a failed step start. No external tool dispatch is enabled. See [Execution Authorization Gate](EXECUTION_AUTHORIZATION_GATE.md).
+### Still open
+- Interactive target-side `momoctl doctor`, task CLI, device inventory and permission CLI acceptance matrix.
+- A fresh image build from the post-merge `main` revision.
+- Runtime journal/TaskCoordinator integration and image-level tests for that newer code.
+- Physical device boot, recovery and hardware feature validation.
+- Android/AOSP platform baseline and device port.
 
 ### Updated next execution sequence
-1. Rebuild the execution-gate revision for x86_64 and AArch64, boot both under QEMU, and inspect logs/artifacts.
-2. Add authenticated approver identity and broker-only approval issuance.
-3. Make low-risk grant reservation and step-start persistence atomic or provide a tested reservation protocol.
-4. Implement a separate Linux executor identity with per-task namespaces, cgroups, LSM and strict operation-specific seccomp.
-5. Define typed executor operations, trusted argument canonicalization, idempotency propagation, deadlines, cancellation and independent result verification.
-6. Keep tool execution disabled until adversarial tests and native OS enforcement pass.
-7. Continue core services, Android platform integration, device feasibility, user experience, AI runtime and release engineering in the master phase order.
-
-
-## Fresh Execution-Gate Image Acceptance — 2026-11-14
-
-The Buildroot image cache recovery was merged in PR #49. The integrated execution-gate revision now has fresh x86_64 and AArch64 QEMU evidence on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`:
-
-- x86_64: [run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750. Build, output verification, QEMU readiness, read-only IPC response and artifact upload passed.
-- AArch64: [run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046. Build, output verification, QEMU readiness, read-only IPC response and artifact upload passed.
-
-Both guests reported `MOMO OS READY`, the correct architecture and `tool_execution: disabled`. The execution-gate code commit passed repository validation with 167 unit tests. This closes the current virtual image integration gate for the gate revision; it does not close physical device, Android, executor or release gates.
-
-The next critical path is authenticated approval identity → trusted argument canonicalization → atomic grant reservation/dispatch intent → per-task OS sandbox → typed executor protocol → independent outcome reconciliation. No side-effecting tool execution is permitted before these gates pass.
+1. Build and boot the current post-merge `main` revision so the retained image evidence corresponds to the canonical branch.
+2. Finish the TaskCoordinator + step-journal integration and its security hardening in a reviewable PR; run repository validation and image tests before merging.
+3. Add authenticated executor identity, native Linux service isolation, narrow IPC and a tool executor only after permission and plan checks.
+4. Complete service contracts, migration/recovery tests and OS-enforced sandboxing before enabling side effects.
+5. Continue Android/Linux platform selection and exact-device feasibility only with source, bootloader and recovery evidence.
