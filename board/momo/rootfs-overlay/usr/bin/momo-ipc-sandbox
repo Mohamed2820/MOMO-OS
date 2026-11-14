@@ -7,6 +7,7 @@ preconfigured cgroup, then drops to the dedicated momo-ipc UID/GID before exec.
 from __future__ import annotations
 
 import ctypes
+import json
 import os
 import pwd
 import sys
@@ -41,6 +42,17 @@ def main() -> None:
     libc.unshare.restype = ctypes.c_int
     flags = CLONE_NEWNS | CLONE_NEWIPC | CLONE_NEWUTS | CLONE_NEWNET
     _check(libc.unshare(flags), "unshare MOMO IPC namespaces")
+
+    # Record the kernel namespace identities immediately after successful unshare.
+    # The daemon later compares its own identities with these launch-time values;
+    # this avoids relying on /proc/1, which may be hidden or restricted by Landlock.
+    namespace_inodes = {
+        name: os.stat(f"/proc/self/ns/{name}").st_ino
+        for name in ("mnt", "ipc", "uts", "net")
+    }
+    os.environ["MOMO_NAMESPACE_INODES"] = json.dumps(
+        namespace_inodes, sort_keys=True, separators=(",", ":")
+    )
 
     libc.mount.argtypes = [
         ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
