@@ -27,6 +27,8 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
             "persistent_permission_broker.py",
             "task_coordinator.py",
             "orchestrator.py",
+            "approval_store.py",
+            "execution_gate.py",
         ):
             with self.subTest(module=name):
                 self.assertEqual(

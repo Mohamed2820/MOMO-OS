@@ -8,6 +8,11 @@ from intelligence.runtime.momo_runtime import Approval, CapabilityGrant, Risk, T
 from intelligence.runtime.orchestrator import AgentRegistry, AgentSpec, Plan, PlanStep
 from intelligence.runtime.task_coordinator import TaskCoordinator
 from intelligence.execution.step_journal import StepExecutionStatus
+from intelligence.runtime.approval_store import ApprovalStore
+from intelligence.runtime.execution_gate import ExecutionGate
+import hashlib
+
+ARGS_DIGEST = hashlib.sha256(b"step arguments v1").hexdigest()
 
 
 class TaskCoordinatorTests(unittest.TestCase):
@@ -34,6 +39,18 @@ class TaskCoordinatorTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def _grant(self, task, subject, action, risk):
+        self.coordinator.permissions.add_grant(CapabilityGrant(
+            subject=subject, action=action, resource=task.task_id, risk=risk,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5), max_uses=1,
+        ))
+
+    def _start_low_risk(self, task, plan, step_id):
+        """Gate-mediated start for R0-R2 work: task execution, then grant-backed step."""
+        gate = ExecutionGate(self.coordinator)
+        gate.start_task_execution(task.task_id, plan)
+        return gate.start_step(task.task_id, plan, step_id, ARGS_DIGEST)
 
     def test_create_task_validates_and_persists_lifecycle(self):
         task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
@@ -67,7 +84,8 @@ class TaskCoordinatorTests(unittest.TestCase):
 
     def test_restart_recovery_quarantines_coordinator_step(self):
         task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
-        self.coordinator.execution.start_step(task.task_id, "inspect")
+        self._grant(task, "researcher", "research", Risk.R1)
+        self._start_low_risk(task, self.plan, "inspect")
         restarted = TaskCoordinator(self.registry, self.task_db, self.permission_db)
         recovered = restarted.recover_interrupted_steps()
         self.assertEqual(len(recovered), 1)
@@ -125,7 +143,8 @@ class TaskCoordinatorTests(unittest.TestCase):
         first_ready = self.coordinator.get_ready_steps(task.task_id, plan)
         self.assertEqual([step.step_id for step in first_ready], ["inspect"])
 
-        self.coordinator.execution.start_step(task.task_id, "inspect")
+        self._grant(task, "researcher", "research", Risk.R1)
+        self._start_low_risk(task, plan, "inspect")
         self.coordinator.execution.finish_step(task.task_id, "inspect", True)
         second_ready = self.coordinator.get_ready_steps(task.task_id, plan)
         self.assertEqual([step.step_id for step in second_ready], ["summarize"])
@@ -149,7 +168,8 @@ class TaskCoordinatorTests(unittest.TestCase):
                      frozenset({"web.read"}), Risk.R1, depends_on=("inspect",)),
         ))
         task = self.coordinator.create_task(plan.goal, Risk.R1, plan)
-        self.coordinator.execution.start_step(task.task_id, "inspect")
+        self._grant(task, "researcher", "research", Risk.R1)
+        self._start_low_risk(task, plan, "inspect")
         self.coordinator.execution.finish_step(
             task.task_id, "inspect", False, error="read failed"
         )
@@ -175,7 +195,14 @@ class TaskCoordinatorTests(unittest.TestCase):
                      frozenset({"web.read"}), Risk.R1, depends_on=("device-check",)),
         ))
         task = self.coordinator.create_task(plan.goal, Risk.R3, plan)
-        self.coordinator.execution.start_step(task.task_id, "device-check")
+        approvals = ApprovalStore(self.coordinator)
+        gate = ExecutionGate(self.coordinator)
+        task_token = approvals.issue(task.task_id, plan, "owner", 300)
+        gate.start_task_execution(task.task_id, plan, approval_token=task_token)
+        step_token = approvals.issue(
+            task.task_id, plan, "owner", 300, step_id="device-check", args_sha256=ARGS_DIGEST,
+        )
+        gate.start_step(task.task_id, plan, "device-check", ARGS_DIGEST, approval_token=step_token)
         self.coordinator.execution.finish_step(
             task.task_id, "device-check", False, error="device operation outcome unknown"
         )
@@ -202,6 +229,10 @@ class TaskCoordinatorTests(unittest.TestCase):
         self.assertFalse(second.allowed)
 
     def test_high_risk_step_requires_matching_explicit_approval(self):
+        # Previously asserted that a caller-built Approval(approved=True) allowed
+        # an R3 step. That is the forgery path closed by this change: plain
+        # Approval objects and R3/R4 steps are refused here; approvals are
+        # issued tokens consumed only by ExecutionGate (see test_execution_gate).
         plan = Plan("Inspect device", (
             PlanStep("inspect", "Inspect device", "operator", "device",
                      frozenset({"device.inspect"}), Risk.R3),
@@ -214,10 +245,11 @@ class TaskCoordinatorTests(unittest.TestCase):
         denied = self.coordinator.authorize_step(task.task_id, plan, "inspect")
         self.assertFalse(denied.allowed)
         approval = Approval("operator", "device", task.task_id, True)
-        allowed = self.coordinator.authorize_step(
+        forged = self.coordinator.authorize_step(
             task.task_id, plan, "inspect", approval=approval
         )
-        self.assertTrue(allowed.allowed)
+        self.assertFalse(forged.allowed)
+        self.assertIn("not accepted", forged.reason)
 
     def test_plan_from_another_task_is_rejected(self):
         task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
