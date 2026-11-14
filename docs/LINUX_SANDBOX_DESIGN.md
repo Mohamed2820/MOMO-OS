@@ -1,6 +1,6 @@
 # MOMO OS — Linux Service Isolation and Sandbox Design
 
-**Status:** Security design baseline. The current Buildroot IPC daemon uses a dedicated UID, resource limits, `no_new_privs` and a required libseccomp default-allow denylist. A shared kernel config fragment now requests namespaces, cgroups v2 controllers, seccomp filtering and Landlock for both QEMU architectures; the image workflows verify the resulting kernel `.config`. Service-level namespace/cgroup/Landlock enforcement is not yet implemented. No side-effecting tool executor is enabled.
+**Status:** Security design baseline. The current Buildroot IPC daemon uses a dedicated UID, resource limits, `no_new_privs`, a required libseccomp default-allow denylist and Landlock filesystem confinement. A shared kernel config fragment now requests namespaces, cgroups v2 controllers, seccomp filtering and Landlock for both QEMU architectures; the image workflows verify the resulting kernel `.config`. Service-level namespace/cgroup/Landlock enforcement is not yet implemented. No side-effecting tool executor is enabled.
 
 ## 1. Objectives
 
