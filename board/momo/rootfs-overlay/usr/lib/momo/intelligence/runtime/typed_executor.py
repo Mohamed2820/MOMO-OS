@@ -34,6 +34,7 @@ class OperationSpec:
     risk: Risk
     argument_types: Mapping[str, type]
     handler: Callable[[Mapping[str, Any]], dict[str, Any]]
+    side_effects: bool = False
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,8 @@ class OperationRegistry:
             raise ValueError("Operation capability is required")
         if spec.risk not in {Risk.R0, Risk.R1}:
             raise ValueError("The initial typed executor permits only R0/R1 operations")
+        if spec.side_effects is not False:
+            raise ValueError("The initial typed executor refuses side-effecting operations")
         if not callable(spec.handler):
             raise TypeError("Operation handler must be callable")
         if not isinstance(spec.argument_types, Mapping):
@@ -87,7 +90,7 @@ class OperationRegistry:
             raise ValueError(f"Operation is already registered: {spec.operation_id}")
         self._operations[spec.operation_id] = OperationSpec(
             spec.operation_id, spec.domain, spec.required_capability, spec.risk,
-            MappingProxyType(schema), spec.handler,
+            MappingProxyType(schema), spec.handler, False,
         )
 
     def get(self, operation_id: str) -> OperationSpec:
