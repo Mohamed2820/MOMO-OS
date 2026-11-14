@@ -130,6 +130,9 @@ def main(argv=None):
         elif args.command == "show":
             print(json.dumps(serialize(store.get_task(args.task_id)), ensure_ascii=False, indent=2))
         elif args.command == "transition":
+            if args.status == TaskStatus.EXECUTING.value:
+                print("[MOMO] ERROR: execution may start only through the execution gate", file=sys.stderr)
+                return 1
             task = store.transition(
                 args.task_id, TaskStatus(args.status), args.reason
             )
