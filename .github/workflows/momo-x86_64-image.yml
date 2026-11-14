@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "bootable/**"
+      - "main"
     paths:
       - "board/momo/**"
       - "intelligence/security/**"
