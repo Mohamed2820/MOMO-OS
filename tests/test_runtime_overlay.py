@@ -161,7 +161,7 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
         from intelligence.cell import MomoCell
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "service.py").write_text("value = 1\\n", encoding="utf-8")
+            (root / "service.py").write_text("value = 1\n", encoding="utf-8")
             report = MomoCell(include_repository_contracts=False).scan(root)
             self.assertEqual(report.findings, ())
             self.assertEqual(report.proposals, ())
