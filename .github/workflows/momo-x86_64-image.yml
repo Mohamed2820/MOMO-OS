@@ -89,6 +89,20 @@ jobs:
         run: |
           make -C "$BUILDROOT_DIR" -j"$(nproc)"
 
+      - name: Recover missing kernel image after cache restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="$BUILDROOT_DIR/output/images/bzImage"
+          if [[ ! -s "$image" ]]; then
+            echo "::warning::Kernel image is absent after restoring Buildroot package cache; forcing a Linux package rebuild."
+            find "$BUILDROOT_DIR/output/images" -maxdepth 1 -type f -printf '%f %s bytes\\n' | sort || true
+            make -C "$BUILDROOT_DIR" linux-rebuild
+            make -C "$BUILDROOT_DIR" -j"$(nproc)"
+          fi
+          test -s "$image"
+          find "$BUILDROOT_DIR/output/images" -maxdepth 1 -type f -printf '%f %s bytes\\n' | sort
+
       - name: Verify image outputs
         shell: bash
         run: |
