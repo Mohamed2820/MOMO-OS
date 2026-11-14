@@ -21,8 +21,8 @@ A successful authorization is not proof of execution. A process exit code or mod
 |---|---|---|
 | TaskCoordinator | Validates agent roles, capabilities, risk ceilings and dependencies; persists canonical plan and digest | Does not dispatch operations |
 | StepExecutionJournal | Persists step state, attempts, idempotency key, cancellation and append-only event hash chain | Does not execute or reconcile external effects |
-| ApprovalStore | Issues random, expiring, single-use tokens; stores token hashes and exact binding digest | Approver identity is currently an asserted string, not independently authenticated identity |
-| ExecutionGate | Controls plan-bound task/step start and consumes approvals | In-process guard only; database owner can bypass it |
+| ApprovalStore | Issues random, expiring, single-use tokens; task approvals use plan binding and step approvals now require strict JSON argument payloads whose digest is computed inside the store | Approver identity is still an asserted string, not independently authenticated identity |
+| ExecutionGate | Public step-start API accepts raw JSON arguments; the gate parses and canonicalizes them internally, binds the computed digest to approval, and returns the exact deeply immutable parsed arguments with the durable start | In-process guard only; database owner can bypass it; no typed adapter dispatch is enabled |
 | Linux IPC | Bounded AF_UNIX framing, SO_PEERCRED, status-only daemon | No operation dispatcher or privileged executor |
 | Rootfs integration | Mirrors runtime modules and starts the read-only IPC daemon | Fresh QEMU validation of the integrated revision remains required |
 
@@ -59,12 +59,12 @@ Before a step can start, the trusted gate must verify all of the following again
 - Operation ID and adapter ID/version.
 - Capability scope and target resource.
 - Risk level and policy decision.
-- Canonical argument digest computed by the trusted broker from schema-validated arguments.
+- Canonical argument digest computed from bounded strict JSON by the gate; operation-specific schema validation is still required before an adapter can be enabled.
 - Approval token, if required, including expiry, one-time use and exact binding.
 - Dependency completion from the durable step journal, not caller-supplied completion claims.
 - Deadline, cancellation state, rate and resource budgets.
 
-**Important gap:** the current public gate API receives an `args_sha256` value from its caller. A future executor must not trust a digest supplied by an untrusted model or agent. It must validate and canonicalize the actual arguments, compute the digest itself, and bind the approval to that value.
+**Argument-binding increment:** `ApprovalStore.issue_for_arguments()` and `ExecutionGate.start_step()` now accept the exact bounded JSON payload rather than a caller-provided digest. Both independently parse and canonicalize the payload using `intelligence/runtime/argument_binding.py`; the gate computes the digest itself. `start_step_with_arguments()` also returns the deeply immutable parsed argument object alongside its canonical JSON and digest, so a future executor can consume exactly the authorized values without reparsing mutable caller input. The low-level digest-based transition is private to the module. This does not authenticate the approver or principal, validate operation-specific schemas, or provide OS isolation; those remain separate gates.
 
 ## 5. Transaction and persistence rules
 
@@ -160,7 +160,7 @@ No root shell or generic privileged Binder method is an acceptable substitute fo
 ## 11. Exit gates before enabling a tool executor
 
 1. Authenticated principal identity is enforced at the receiving service.
-2. The broker computes the argument digest from validated canonical input.
+2. The broker validates operation-specific schemas and computes the argument digest from canonical input.
 3. Approval identity is bound to a real authenticated user/session, not a free-form approver label.
 4. Task, step, grant and approval transitions have tested transactional semantics.
 5. A native OS boundary blocks unauthorized database and adapter access.
