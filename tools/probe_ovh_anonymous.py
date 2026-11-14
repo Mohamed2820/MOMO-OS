@@ -88,6 +88,8 @@ def main() -> int:
                     "choice_keys": sorted(choice) if isinstance(choice, dict) else [],
                     "message_keys": sorted(message) if isinstance(message, dict) else [],
                     "finish_reason": choice.get("finish_reason") if isinstance(choice, dict) else None,
+                    "message_type": type(message).__name__,
+                    "choice_preview": json.dumps(choice, ensure_ascii=False)[:700],
                 }
             )
         )
