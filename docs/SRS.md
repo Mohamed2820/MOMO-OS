@@ -598,38 +598,16 @@ AArch64 QEMU virtual-target workflow is integrated. Fresh x86_64 and AArch64 ima
 Physical hardware, Android/AOSP, device-specific drivers, namespaces/cgroups/LSM policy, strict syscall allowlisting, capability authorization and any tool executor remain unaccepted requirements.
 
 
----
-
 ## Implementation Evidence Addendum — 2026-11-14
 
-This addendum updates implementation evidence without changing the normative product requirements above.
+The integration candidate in PR #48 adds:
+- Plan-bound task and step execution enforcement with single-use, expiring, operation-bound approval tokens.
+- TaskCoordinator integration with the durable step execution journal and conservative restart recovery.
+- Linux AF_UNIX request framing and SO_PEERCRED peer identity helpers.
+- A dedicated unprivileged read-only IPC status daemon with process limits, `no_new_privs` and a required libseccomp denylist.
+- Rootfs init/CLI integration and x86_64/AArch64 QEMU workflow definitions.
+- New engineering contracts for execution runtime, core service APIs, Linux sandboxing and Android platform integration.
 
-### Execution authorization requirements traceability
+Repository validation passed on the initial PR #48 head with 167 unit tests, device-profile schema validation, shell checks and documentation/JSON validation (run [#43597582878](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597582878)). Later changes to documentation and CI workflow definitions require a fresh validation run.
 
-| Requirement area | Current implementation evidence | Status / remaining work |
-|---|---|---|
-| Immutable task-plan binding | Canonical plan JSON and SHA-256 digest persisted with the task | Implemented and tested |
-| Durable step state | SQLite step journal, append-only hash-linked events, dependency readiness and restart quarantine | Implemented and tested |
-| Central task/step authorization | ExecutionGate is the supported plan-bound start path | Implemented in-process; not an OS boundary |
-| High-risk approval | Random, hashed, single-use, expiring task/step tokens bound to plan and declared arguments digest | Implemented; authenticated human identity and trusted approval UI remain open |
-| Low-risk capability grants | Persistent permission broker checks scoped grants | Implemented; separate-database transaction gap remains |
-| Approval replay/race protection | Atomic token consumption with step start; concurrent-consumer and rollback tests | Implemented and tested |
-| Linux local IPC | Unprivileged read-only AF_UNIX status daemon with peer credentials and bounded protocol | Implemented on Linux virtual baseline; no executor dispatch |
-| Linux process restrictions | rlimits, no_new_privs and libseccomp default-allow denylist | Implemented as defense in depth; namespaces/cgroups/LSM/strict allowlist remain open |
-| Cross-architecture virtual boot | Buildroot x86_64 and AArch64 QEMU image workflows | Both passed on baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; the newer execution-gate revision also passed fresh x86_64 and AArch64 image builds on `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. |
-
-### Current verification references
-
-- Execution-gate code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2`: repository-validation workflow [#43596879520](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43596879520), 167 unit tests completed with `OK`.
-- x86_64 QEMU baseline: [#43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact 14057431431.
-- AArch64 QEMU baseline: [#43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054.
-
-The newer execution-gate revision passed fresh x86_64 and AArch64 QEMU image workflows as documented below. No Android image, physical phone port, production tool executor, native per-task sandbox, signed release or OTA recovery qualification is claimed.
-
-
-### Fresh image verification for the execution-gate revision — 2026-11-14
-
-- x86_64 Buildroot/QEMU: [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750.
-- AArch64 Buildroot/QEMU: [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046.
-
-Both workflows passed image output verification, QEMU boot, MOMO readiness, read-only IPC status and artifact upload on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. Both guests explicitly reported `tool_execution: disabled`. This closes the virtual image integration requirement for this revision only; it does not establish physical-device or Android support, authenticated human approval, native worker isolation or production execution.
+**Evidence boundary:** the updated x86_64 and AArch64 images still require fresh successful Buildroot/QEMU acceptance. The status daemon is read-only; no general tool executor is enabled. The execution gate is an in-process control, not a native OS security boundary. Approver identity authentication and trusted argument canonicalization remain open requirements. No Android build or physical device is validated.

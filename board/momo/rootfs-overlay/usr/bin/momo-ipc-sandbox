@@ -1,0 +1,94 @@
+#!/usr/bin/python3
+"""Root-started launcher that confines the MOMO IPC status daemon.
+
+The launcher enters private mount/IPC/UTS/network namespaces, joins the
+preconfigured cgroup, then drops to the dedicated momo-ipc UID/GID before exec.
+"""
+from __future__ import annotations
+
+import ctypes
+import json
+import os
+import pwd
+import sys
+
+CLONE_NEWNS = 0x00020000
+CLONE_NEWIPC = 0x08000000
+CLONE_NEWUTS = 0x04000000
+CLONE_NEWNET = 0x40000000
+MS_REC = 16384
+MS_PRIVATE = 1 << 18
+PR_SET_NO_NEW_PRIVS = 38
+
+
+def _check(result: int, operation: str) -> None:
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), operation)
+
+
+def main() -> None:
+    cgroup = os.environ.get("MOMO_IPC_CGROUP")
+    if not cgroup:
+        raise RuntimeError("MOMO_IPC_CGROUP must be set by the root init script")
+
+    # Join the cgroup while still privileged; the exec'd daemon inherits it.
+    cgroup_procs = os.path.join(cgroup, "cgroup.procs")
+    with open(cgroup_procs, "w", encoding="ascii") as stream:
+        stream.write(f"{os.getpid()}\n")
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.unshare.argtypes = [ctypes.c_int]
+    libc.unshare.restype = ctypes.c_int
+    flags = CLONE_NEWNS | CLONE_NEWIPC | CLONE_NEWUTS | CLONE_NEWNET
+    _check(libc.unshare(flags), "unshare MOMO IPC namespaces")
+
+    # Record the kernel namespace identities immediately after successful unshare.
+    # The daemon later compares its own identities with these launch-time values;
+    # this avoids relying on /proc/1, which may be hidden or restricted by Landlock.
+    namespace_inodes = {
+        name: os.stat(f"/proc/self/ns/{name}").st_ino
+        for name in ("mnt", "ipc", "uts", "net")
+    }
+    os.environ["MOMO_NAMESPACE_INODES"] = json.dumps(
+        namespace_inodes, sort_keys=True, separators=(",", ":")
+    )
+
+    libc.mount.argtypes = [
+        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+        ctypes.c_ulong, ctypes.c_void_p,
+    ]
+    libc.mount.restype = ctypes.c_int
+    _check(
+        libc.mount(None, b"/", None, MS_REC | MS_PRIVATE, None),
+        "make mount propagation private",
+    )
+
+    account = pwd.getpwnam("momo-ipc")
+    os.setgroups([])
+    os.setgid(account.pw_gid)
+    os.setuid(account.pw_uid)
+
+    libc.prctl.argtypes = [
+        ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong,
+        ctypes.c_ulong, ctypes.c_ulong,
+    ]
+    libc.prctl.restype = ctypes.c_int
+    _check(
+        libc.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0),
+        "set no_new_privs",
+    )
+
+    os.environ.pop("MOMO_IPC_CGROUP", None)
+    os.execv(
+        "/usr/bin/python3",
+        ["/usr/bin/python3", "/usr/lib/momo/momo_ipcd.py"],
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as error:
+        print(f"[MOMO IPC sandbox] startup refused: {error}", file=sys.stderr)
+        raise SystemExit(1)

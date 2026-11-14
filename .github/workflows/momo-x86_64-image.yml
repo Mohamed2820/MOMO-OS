@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
       - "bootable/**"
+      - "main"
+      - "integration/**"
     paths:
       - "board/momo/**"
       - "intelligence/security/**"
@@ -13,11 +14,26 @@ on:
       - "tests/test_ipc_protocol.py"
       - "tests/test_security_overlay.py"
       - "intelligence/runtime/**"
+      - "intelligence/cell/**"
+      - "tests/test_momo_cell.py"
+      - "docs/MOMO_CELL.md"
+      - ".github/workflows/momo-cell.yml"
       - "tests/test_task_store.py"
       - "tests/test_device_inventory.py"
       - "tests/test_persistent_permission_broker.py"
       - "tests/test_runtime_overlay.py"
       - "tests/test_task_coordinator.py"
+      - "docs/BOOTABLE_IMAGE.md"
+      - ".github/workflows/momo-x86_64-image.yml"
+
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "board/momo/**"
+      - "intelligence/**"
+      - "tests/**"
+      - "docs/MOMO_CELL.md"
+      - ".github/workflows/momo-cell.yml"
       - "docs/BOOTABLE_IMAGE.md"
       - ".github/workflows/momo-x86_64-image.yml"
 
@@ -57,19 +73,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          chmod +x board/momo/rootfs-overlay/etc/init.d/S97momo-cell
           chmod +x board/momo/rootfs-overlay/etc/init.d/S98momo-ipc
           chmod +x board/momo/rootfs-overlay/etc/init.d/S99momo
           chmod +x board/momo/rootfs-overlay/usr/bin/momoctl
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-cell
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-task
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-device
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-permissions
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-ipcctl
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-ipc-sandbox
           make -C "$BUILDROOT_DIR" qemu_x86_64_defconfig
           # QEMU is already installed on the GitHub runner; do not build a second host QEMU from source.
           sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
-          sed -i '/^BR2_ROOTFS_OVERLAY=/d; /^BR2_ROOTFS_USERS_TABLES=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d' "$BUILDROOT_DIR/.config"
+          sed -i '/^BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES=/d; /^BR2_ROOTFS_OVERLAY=/d; /^BR2_ROOTFS_USERS_TABLES=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d' "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_OVERLAY="%s/board/momo/rootfs-overlay"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_USERS_TABLES="%s/board/momo/users.table"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="%s/board/momo/kernel-security.fragment"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
           printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\nBR2_PACKAGE_LIBSECCOMP=y\n' >> "$BUILDROOT_DIR/.config"
           make -C "$BUILDROOT_DIR" olddefconfig
 
@@ -90,19 +110,13 @@ jobs:
         run: |
           make -C "$BUILDROOT_DIR" -j"$(nproc)"
 
-      - name: Recover missing kernel image after cache restore
+      - name: Verify kernel security primitives
         shell: bash
         run: |
           set -euo pipefail
-          image="$BUILDROOT_DIR/output/images/bzImage"
-          if [[ ! -s "$image" ]]; then
-            echo "::warning::Kernel image is absent after restoring Buildroot package cache; forcing a Linux package rebuild."
-            find "$BUILDROOT_DIR/output/images" -maxdepth 1 -type f -printf '%f %s bytes\\n' | sort || true
-            make -C "$BUILDROOT_DIR" linux-rebuild
-            make -C "$BUILDROOT_DIR" -j"$(nproc)"
-          fi
-          test -s "$image"
-          find "$BUILDROOT_DIR/output/images" -maxdepth 1 -type f -printf '%f %s bytes\\n' | sort
+          kernel_config="$(find "$BUILDROOT_DIR/output/build" -maxdepth 2 -type f -path '*/linux-*/.config' ! -path '*/linux-headers*' -print -quit)"
+          test -n "$kernel_config"
+          python3 tools/validate_kernel_security_config.py "$kernel_config"
 
       - name: Verify image outputs
         shell: bash
@@ -135,6 +149,14 @@ jobs:
           grep -F "MOMO OS READY" "$GITHUB_WORKSPACE/qemu-boot.log"
           grep -F '"service": "momo-ipcd"' "$GITHUB_WORKSPACE/qemu-boot.log"
           grep -F '"tool_execution": "disabled"' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"mnt": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"ipc": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"uts": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"net": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"cgroup": "0::/momo-ipc"' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"landlock": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"seccomp": true' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"network_socket_creation": "blocked"' "$GITHUB_WORKSPACE/qemu-boot.log"
 
       - name: Record build provenance
         if: always()

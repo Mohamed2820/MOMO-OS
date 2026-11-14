@@ -29,15 +29,17 @@ from intelligence.runtime.task_store import TaskStore
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "board/momo/rootfs-overlay/usr/bin/momo-task"
 
-ARGS_1 = hashlib.sha256(b"arguments v1").hexdigest()
-ARGS_2 = hashlib.sha256(b"arguments v2 (changed)").hexdigest()
+ARGS_1 = b'{"operation":"inspect","version":1}'
+ARGS_2 = b'{"operation":"inspect","version":2}'
 
 
 def _binding_for(task, plan, args):
     from intelligence.runtime.approval_store import binding_digest
     from intelligence.runtime.task_coordinator import _plan_digest
+    from intelligence.runtime.argument_binding import parse_and_bind
+    args_sha256 = parse_and_bind(args)[2]
     return binding_digest(task.task_id, "device-check", "device", task.task_id,
-                          "R3", _plan_digest(plan)[0], args)
+                          "R3", _plan_digest(plan)[0], args_sha256)
 
 
 def _digest(text):
@@ -88,9 +90,9 @@ class ExecutionGateTests(unittest.TestCase):
         return task
 
     def _step_token(self, task, args=ARGS_1, ttl=300):
-        return self.approvals.issue(
+        return self.approvals.issue_for_arguments(
             task.task_id, self.high, "owner", ttl,
-            step_id="device-check", args_sha256=args,
+            step_id="device-check", args_payload=args,
         )
 
     def _row_count(self, table):
@@ -218,8 +220,10 @@ class ExecutionGateTests(unittest.TestCase):
         task = self.coordinator.create_task(self.high.goal, Risk.R3, self.high)
         task_token = approvals.issue(task.task_id, self.high, "owner", 300)
         gate.start_task_execution(task.task_id, self.high, approval_token=task_token)
-        token = approvals.issue(task.task_id, self.high, "owner", 1,
-                                step_id="device-check", args_sha256=ARGS_1)
+        token = approvals.issue_for_arguments(
+            task.task_id, self.high, "owner", 1,
+            step_id="device-check", args_payload=ARGS_1,
+        )
         clock["now"] = clock["now"] + timedelta(seconds=2)
         with self.assertRaises(AuthorizationDenied) as caught:
             gate.start_step(task.task_id, self.high, "device-check", ARGS_1,
@@ -259,8 +263,10 @@ class ExecutionGateTests(unittest.TestCase):
         task = self.coordinator.create_task(plan.goal, Risk.R3, plan)
         task_token = self.approvals.issue(task.task_id, plan, "owner", 300)
         self.gate.start_task_execution(task.task_id, plan, approval_token=task_token)
-        token = self.approvals.issue(task.task_id, plan, "owner", 300,
-                                     step_id="device-check", args_sha256=ARGS_1)
+        token = self.approvals.issue_for_arguments(
+            task.task_id, plan, "owner", 300,
+            step_id="device-check", args_payload=ARGS_1,
+        )
         with self.assertRaises(AuthorizationDenied):
             self.gate.start_step(task.task_id, plan, "device-audit", ARGS_1,
                                  approval_token=token)

@@ -51,6 +51,132 @@ def apply_process_restrictions() -> None:
     if prctl(38, 1, 0, 0, 0) != 0:
         error = ctypes.get_errno()
         raise OSError(error, os.strerror(error))
+# Landlock syscall numbers are shared by the supported x86_64/AArch64 Linux ABIs.
+_LANDLOCK_CREATE_RULESET = 444
+_LANDLOCK_ADD_RULE = 445
+_LANDLOCK_RESTRICT_SELF = 446
+_LANDLOCK_CREATE_RULESET_VERSION = 1
+_LANDLOCK_RULE_PATH_BENEATH = 1
+
+_LANDLOCK_EXECUTE = 1 << 0
+_LANDLOCK_WRITE_FILE = 1 << 1
+_LANDLOCK_READ_FILE = 1 << 2
+_LANDLOCK_READ_DIR = 1 << 3
+_LANDLOCK_REMOVE_DIR = 1 << 4
+_LANDLOCK_REMOVE_FILE = 1 << 5
+_LANDLOCK_MAKE_CHAR = 1 << 6
+_LANDLOCK_MAKE_DIR = 1 << 7
+_LANDLOCK_MAKE_REG = 1 << 8
+_LANDLOCK_MAKE_SOCK = 1 << 9
+_LANDLOCK_MAKE_FIFO = 1 << 10
+_LANDLOCK_MAKE_BLOCK = 1 << 11
+_LANDLOCK_MAKE_SYM = 1 << 12
+_LANDLOCK_REFER = 1 << 13
+_LANDLOCK_TRUNCATE = 1 << 14
+_LANDLOCK_IOCTL_DEV = 1 << 15
+_LANDLOCK_ACTIVE = False
+_SECCOMP_ACTIVE = False
+
+
+def apply_landlock_restrictions(
+    read_paths: tuple[Path, ...] = (Path("/usr"), Path("/etc"), Path("/proc")),
+    removable_paths: tuple[Path, ...] = (Path("/run/momo"),),
+) -> None:
+    """Restrict filesystem access to read-only runtime paths and socket cleanup.
+
+    This is a filesystem boundary for the status daemon, not a general-purpose
+    executor sandbox. The socket is bound before this function is called.
+    """
+    global _LANDLOCK_ACTIVE
+    if not hasattr(os, "O_PATH"):
+        raise RuntimeError("O_PATH is required for Landlock path rules")
+    libc = ctypes.CDLL(None, use_errno=True)
+    syscall = libc.syscall
+    syscall.restype = ctypes.c_long
+
+    version = syscall(
+        _LANDLOCK_CREATE_RULESET, ctypes.c_void_p(0),
+        ctypes.c_size_t(0), ctypes.c_uint(_LANDLOCK_CREATE_RULESET_VERSION),
+    )
+    if version < 1:
+        error = ctypes.get_errno()
+        raise OSError(error or errno.ENOSYS, "Landlock is unavailable")
+
+    handled = (
+        _LANDLOCK_EXECUTE | _LANDLOCK_WRITE_FILE | _LANDLOCK_READ_FILE
+        | _LANDLOCK_READ_DIR | _LANDLOCK_REMOVE_DIR | _LANDLOCK_REMOVE_FILE
+        | _LANDLOCK_MAKE_CHAR | _LANDLOCK_MAKE_DIR | _LANDLOCK_MAKE_REG
+        | _LANDLOCK_MAKE_SOCK | _LANDLOCK_MAKE_FIFO | _LANDLOCK_MAKE_BLOCK
+        | _LANDLOCK_MAKE_SYM
+    )
+    if version >= 2:
+        handled |= _LANDLOCK_REFER
+    if version >= 3:
+        handled |= _LANDLOCK_TRUNCATE
+    if version >= 5:
+        handled |= _LANDLOCK_IOCTL_DEV
+
+    class RulesetAttr(ctypes.Structure):
+        _fields_ = [("handled_access_fs", ctypes.c_uint64)]
+
+    class PathBeneathAttr(ctypes.Structure):
+        _fields_ = [
+            ("allowed_access", ctypes.c_uint64),
+            ("parent_fd", ctypes.c_int32),
+            ("reserved", ctypes.c_uint32),
+        ]
+
+    ruleset_attr = RulesetAttr(handled)
+    ruleset_fd = syscall(
+        _LANDLOCK_CREATE_RULESET,
+        ctypes.byref(ruleset_attr),
+        ctypes.c_size_t(ctypes.sizeof(ruleset_attr)),
+        ctypes.c_uint(0),
+    )
+    if ruleset_fd < 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), "landlock_create_ruleset")
+
+    def add_path_rule(path: Path, allowed_access: int) -> None:
+        path_fd = os.open(str(path), os.O_PATH | os.O_CLOEXEC)
+        try:
+            rule = PathBeneathAttr(allowed_access, path_fd, 0)
+            result = syscall(
+                _LANDLOCK_ADD_RULE,
+                ctypes.c_int(ruleset_fd),
+                ctypes.c_uint(_LANDLOCK_RULE_PATH_BENEATH),
+                ctypes.byref(rule),
+                ctypes.c_uint(0),
+            )
+            if result < 0:
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error), f"landlock_add_rule: {path}")
+        finally:
+            os.close(path_fd)
+
+    try:
+        read_access = _LANDLOCK_EXECUTE | _LANDLOCK_READ_FILE | _LANDLOCK_READ_DIR
+        for path in read_paths:
+            add_path_rule(Path(path), read_access)
+        cleanup_access = _LANDLOCK_READ_FILE | _LANDLOCK_READ_DIR | _LANDLOCK_REMOVE_FILE
+        for path in removable_paths:
+            add_path_rule(Path(path), cleanup_access)
+
+        # Landlock requires no_new_privs before restricting an unprivileged process.
+        if libc.prctl(38, 1, 0, 0, 0) != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error), "PR_SET_NO_NEW_PRIVS")
+        result = syscall(
+            _LANDLOCK_RESTRICT_SELF, ctypes.c_int(ruleset_fd), ctypes.c_uint(0),
+        )
+        if result < 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error), "landlock_restrict_self")
+        _LANDLOCK_ACTIVE = True
+    finally:
+        os.close(ruleset_fd)
+
+
 REPLAY_CACHE_CAPACITY = 1024
 
 
@@ -89,6 +215,25 @@ def _response_frame(payload: dict[str, Any]) -> bytes:
     return struct.pack("!I", len(body)) + body
 
 
+def _namespace_isolated(name: str) -> bool:
+    """Verify this daemon still has the namespace created by its root launcher."""
+    try:
+        expected = json.loads(os.environ.get("MOMO_NAMESPACE_INODES", "{}"))
+        expected_inode = expected.get(name)
+        if type(expected_inode) is not int:
+            return False
+        return os.stat(f"/proc/self/ns/{name}").st_ino == expected_inode
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _cgroup_membership() -> str:
+    try:
+        return Path("/proc/self/cgroup").read_text(encoding="ascii").strip()
+    except OSError:
+        return "unavailable"
+
+
 def _status_payload() -> dict[str, Any]:
     uname = os.uname()
     return {
@@ -99,6 +244,16 @@ def _status_payload() -> dict[str, Any]:
         "protocol_version": 1,
         "capabilities": ["status.read"],
         "tool_execution": "disabled",
+        "sandbox": {
+            "namespaces": {
+                name: _namespace_isolated(name)
+                for name in ("mnt", "ipc", "uts", "net")
+            },
+            "cgroup": _cgroup_membership(),
+            "landlock": _LANDLOCK_ACTIVE,
+            "seccomp": _SECCOMP_ACTIVE,
+            "network_socket_creation": "blocked",
+        },
     }
 
 
@@ -145,6 +300,7 @@ def apply_seccomp_filter() -> None:
     The default action is ALLOW; dangerous process/namespace and execution
     syscalls are denied. This is defense in depth, not a complete allowlist.
     """
+    global _SECCOMP_ACTIVE
     try:
         seccomp = ctypes.CDLL("libseccomp.so.2", use_errno=True)
     except OSError as exc:
@@ -170,7 +326,8 @@ def apply_seccomp_filter() -> None:
         "unshare", "setns", "reboot", "kexec_load", "bpf", "keyctl",
         "perf_event_open", "open_by_handle_at", "io_uring_setup",
         "io_uring_enter", "io_uring_register", "userfaultfd",
-        "process_vm_readv", "process_vm_writev",
+        "process_vm_readv", "process_vm_writev", "socket", "socketpair",
+        "connect", "bind", "listen",
     )
     try:
         for name in denied:
@@ -183,6 +340,7 @@ def apply_seccomp_filter() -> None:
         result = seccomp.seccomp_load(context)
         if result != 0:
             raise OSError(-result, "seccomp_load failed")
+        _SECCOMP_ACTIVE = True
     finally:
         seccomp.seccomp_release(context)
 
@@ -197,6 +355,7 @@ def serve(path: Path = SOCKET_PATH) -> None:
         server.listen(MAX_CLIENTS_PER_LOOP)
         server.settimeout(1.0)
         apply_seccomp_filter()
+        apply_landlock_restrictions()
         while True:
             try:
                 connection, _ = server.accept()
