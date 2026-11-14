@@ -1,10 +1,107 @@
 """Safety tests for the MOMO autonomous patch worker."""
 import unittest
 
-from intelligence.autonomy.runner import _allowed, _validate_patch, WorkerError
+from intelligence.autonomy.runner import (
+    OVH_ANONYMOUS_API_URL,
+    OVH_ANONYMOUS_MODEL,
+    _allowed,
+    _extract_completion_document,
+    _provider_configuration,
+    _validate_patch,
+    WorkerError,
+)
 
 
 class AutonomyPolicyTests(unittest.TestCase):
+    def test_keyless_mode_defaults_to_restricted_ovh_provider(self):
+        url, model, key, provider = _provider_configuration({})
+        self.assertEqual(url, OVH_ANONYMOUS_API_URL)
+        self.assertEqual(model, OVH_ANONYMOUS_MODEL)
+        self.assertIsNone(key)
+        self.assertEqual(provider, "anonymous-ovh")
+
+    def test_keyless_mode_accepts_ovh_base_url_only(self):
+        url, model, key, provider = _provider_configuration({
+            "MOMO_AGENT_API_URL": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        })
+        self.assertEqual(url, OVH_ANONYMOUS_API_URL)
+        self.assertEqual(provider, "anonymous-ovh")
+
+    def test_keyless_mode_refuses_untrusted_or_arbitrary_providers(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({
+                "MOMO_AGENT_API_URL": "https://example.com/v1/chat/completions",
+            })
+
+    def test_authenticated_mode_requires_model_and_preserves_provider_config(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({"MOMO_AGENT_API_KEY": "test-secret"})
+        url, model, key, provider = _provider_configuration({
+            "MOMO_AGENT_API_KEY": "test-secret",
+            "MOMO_AGENT_MODEL": "provider/model",
+            "MOMO_AGENT_API_URL": "https://gateway.example/v1/chat/completions",
+        })
+        self.assertEqual(url, "https://gateway.example/v1/chat/completions")
+        self.assertEqual(model, "provider/model")
+        self.assertEqual(key, "test-secret")
+        self.assertEqual(provider, "authenticated")
+
+    def test_local_provider_defaults_to_loopback_and_needs_no_key(self):
+        url, model, key, provider = _provider_configuration({"MOMO_AGENT_PROVIDER": "local"})
+        self.assertEqual(url, "http://127.0.0.1:8080/v1/chat/completions")
+        self.assertEqual(model, "momo-local-coder")
+        self.assertIsNone(key)
+        self.assertEqual(provider, "local")
+
+    def test_local_provider_accepts_explicit_loopback_only(self):
+        url, _, _, provider = _provider_configuration({
+            "MOMO_AGENT_PROVIDER": "local",
+            "MOMO_AGENT_API_URL": "http://localhost:8080/v1/chat/completions",
+        })
+        self.assertEqual(url, "http://localhost:8080/v1/chat/completions")
+        self.assertEqual(provider, "local")
+
+    def test_local_provider_rejects_public_hosts(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({
+                "MOMO_AGENT_PROVIDER": "local",
+                "MOMO_AGENT_API_URL": "http://example.com/v1/chat/completions",
+            })
+
+    def test_local_provider_rejects_credentials(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({
+                "MOMO_AGENT_PROVIDER": "local",
+                "MOMO_AGENT_API_KEY": "must-not-be-used",
+            })
+
+    def test_extracts_plain_json_completion(self):
+        document = _extract_completion_document({
+            "choices": [{"message": {"role": "assistant", "content": '{"status":"blocked","task":"none","summary":"No safe task","patch":""}'}}],
+        })
+        self.assertEqual(document["status"], "blocked")
+
+    def test_extracts_fenced_json_completion(self):
+        document = _extract_completion_document({
+            "choices": [{"message": {"role": "assistant", "content": ' ```json\\n{"status":"blocked","patch":""}\\n``` '}}],
+        })
+        self.assertEqual(document["status"], "blocked")
+
+    def test_extracts_text_segments_from_compatible_content_array(self):
+        document = _extract_completion_document({
+            "choices": [{"message": {"role": "assistant", "content": [
+                {"type": "text", "text": '{"status":"blocked",'},
+                {"type": "output_text", "text": '"patch":""}'},
+            ]}}],
+        })
+        self.assertEqual(document["status"], "blocked")
+
+    def test_rejects_reasoning_only_or_truncated_completion(self):
+        with self.assertRaises(WorkerError):
+            _extract_completion_document({
+                "choices": [{"finish_reason": "length", "message": {"role": "assistant", "reasoning": "not a final answer"}}],
+            })
+
     def test_allows_source_and_test_files(self):
         self.assertTrue(_allowed("intelligence/runtime/example.py"))
         self.assertTrue(_allowed("tests/test_example.py"))
@@ -42,6 +139,30 @@ class AutonomyPolicyTests(unittest.TestCase):
         )
         with self.assertRaises(WorkerError):
             _validate_patch(patch)
+
+    def test_accepts_standard_git_diff_headers(self):
+        patch = (
+            "diff --git a/intelligence/runtime/example.py b/intelligence/runtime/example.py\n"
+            "--- a/intelligence/runtime/example.py\n"
+            "+++ b/intelligence/runtime/example.py\n"
+            "@@ -1 +1 @@\n-old\n+new\n"
+        )
+        _validate_patch(patch)
+
+    def test_rejects_symlink_mode_patch(self):
+        patch = (
+            "diff --git a/intelligence/runtime/link b/intelligence/runtime/link\n"
+            "new file mode 120000\n"
+            "--- /dev/null\n"
+            "+++ b/intelligence/runtime/link\n"
+            "@@ -0,0 +1 @@\n+../../outside\n"
+        )
+        with self.assertRaises(WorkerError):
+            _validate_patch(patch)
+
+    def test_rejects_non_git_apply_patch_format(self):
+        with self.assertRaises(WorkerError):
+            _validate_patch("*** Begin Patch\n*** Update File: intelligence/runtime/example.py\n")
 
     def test_rejects_oversized_or_empty_patch(self):
         with self.assertRaises(WorkerError):

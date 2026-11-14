@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://momo-os.example/schemas/extension-manifest.schema.json",
+  "title": "MOMO Extension Manifest",
+  "description": "Declarative, least-privilege contract for a MOMO extension. This schema does not itself grant capabilities or authorize execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "extension_id",
+    "version",
+    "runtime",
+    "entrypoint",
+    "artifact_sha256",
+    "capabilities",
+    "permissions",
+    "data_classification",
+    "network",
+    "workspace"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "extension_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 96,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "runtime": { "enum": ["builtin", "wasm32-wasi", "remote-agent"] },
+    "entrypoint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+        "maxLength": 96
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["capability", "scope", "risk", "approval_mode"],
+        "properties": {
+          "capability": { "type": "string", "minLength": 1, "maxLength": 96 },
+          "scope": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "risk": { "enum": ["R0", "R1", "R2", "R3", "R4"] },
+          "approval_mode": { "enum": ["per_call", "standing_scoped", "never_allowed"] },
+          "reason": { "type": "string", "maxLength": 500 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "risk": { "enum": ["R3", "R4"] } }, "required": ["risk"] },
+            "then": { "properties": { "approval_mode": { "const": "per_call" } } }
+          }
+        ]
+      }
+    },
+    "data_classification": {
+      "enum": ["public", "personal", "sensitive", "restricted"]
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "hosts"],
+      "properties": {
+        "mode": { "enum": ["none", "allowlist"] },
+        "hosts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)*[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$",
+            "maxLength": 253
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "none" } }, "required": ["mode"] },
+          "then": { "properties": { "hosts": { "maxItems": 0 } } }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "allowlist" } }, "required": ["mode"] },
+          "then": { "properties": { "hosts": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "read_only"],
+      "properties": {
+        "mode": { "enum": ["none", "ephemeral", "dedicated"] },
+        "read_only": { "type": "boolean" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "runtime": { "enum": ["wasm32-wasi", "remote-agent"] } }, "required": ["runtime"] },
+      "then": {
+        "properties": {
+          "workspace": { "properties": { "mode": { "const": "ephemeral" } }, "required": ["mode"] }
+        }
+      }
+    }
+  ]
+}

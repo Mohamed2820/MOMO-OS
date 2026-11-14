@@ -1,0 +1,60 @@
+name: MOMO keyless provider smoke test (unified-diff validation check)
+
+on:
+  push:
+    branches: ["feature/momo-engineering-integrations"]
+    paths:
+      - ".github/workflows/momo-keyless-provider-smoke.yml"
+      - "tools/probe_ovh_anonymous.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ovh-anonymous:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out provider probe
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe OVH anonymous completion (no secrets)
+        run: python tools/probe_ovh_anonymous.py
+
+  anonymous-engineering-cycle:
+    needs: ovh-anonymous
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out MOMO
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Respect OVH anonymous per-minute rate limit
+        run: sleep 65
+      - name: Run one bounded autonomous cycle without API credentials
+        env:
+          MOMO_AGENT_API_URL: https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions
+        run: python3 -m intelligence.autonomy.runner
+      - name: Validate generated candidate
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -m unittest discover -s tests -v
+      - name: Save candidate diff
+        if: always()
+        run: git diff -- intelligence platform_adapters tests docs board/momo/rootfs-overlay/usr/lib/momo board/momo/rootfs-overlay/usr/bin > "$RUNNER_TEMP/momo-anonymous-candidate.patch"
+      - name: Upload candidate diff for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: momo-anonymous-engineering-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/momo-anonymous-candidate.patch
+          if-no-files-found: warn
+          retention-days: 7

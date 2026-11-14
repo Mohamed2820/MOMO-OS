@@ -1,0 +1,82 @@
+name: MOMO local coding model experiment
+
+on:
+  push:
+    branches: ["feature/momo-engineering-integrations"]
+    paths:
+      - ".github/workflows/momo-local-model-experiment.yml"
+      - "intelligence/autonomy/runner.py"
+      - "tests/test_momo_autonomy.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-model-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out MOMO
+        uses: actions/checkout@v4
+
+      - name: Pull official llama.cpp server image
+        run: docker pull ghcr.io/ggml-org/llama.cpp:server
+
+      - name: Download Apache-2.0 7B local coding model
+        run: |
+          mkdir -p "$RUNNER_TEMP/momo-model"
+          curl --fail --location --retry 3 \
+            "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q3_k_m.gguf" \
+            --output "$RUNNER_TEMP/momo-model/qwen2.5-coder-7b-instruct-q3_k_m.gguf"
+          test "$(stat -c%s "$RUNNER_TEMP/momo-model/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")" -gt 3500000000
+
+      - name: Start local-only model server
+        run: |
+          docker run --detach --name momo-local-model \
+            --volume "$RUNNER_TEMP/momo-model:/models:ro" \
+            --publish 127.0.0.1:8080:8080 \
+            ghcr.io/ggml-org/llama.cpp:server \
+            --model /models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf \
+            --ctx-size 8192 --threads 4 --host 0.0.0.0 --port 8080 \
+            --alias momo-local-coder --n-predict 2048
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:8080/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs momo-local-model
+          exit 1
+
+      - name: Verify local provider policy and parser
+        run: python3 -m unittest discover -s tests -p 'test_momo_autonomy.py' -v
+
+      - name: Run one bounded local-model engineering cycle
+        env:
+          MOMO_AGENT_PROVIDER: local
+          MOMO_AGENT_API_URL: http://127.0.0.1:8080/v1/chat/completions
+          MOMO_AGENT_MODEL: momo-local-coder
+        run: python3 -m intelligence.autonomy.runner
+
+      - name: Validate candidate with independent repository tests
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -m unittest discover -s tests -v
+
+      - name: Save local-model evidence
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/momo-local-evidence"
+          git diff -- intelligence platform_adapters tests docs board/momo/rootfs-overlay/usr/lib/momo board/momo/rootfs-overlay/usr/bin > "$RUNNER_TEMP/momo-local-evidence/candidate.patch"
+          docker logs momo-local-model > "$RUNNER_TEMP/momo-local-evidence/server.log" 2>&1 || true
+
+      - name: Upload local-model evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: momo-local-model-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/momo-local-evidence/
+          if-no-files-found: warn
+          retention-days: 7
