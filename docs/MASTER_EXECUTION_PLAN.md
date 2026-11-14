@@ -323,10 +323,9 @@ Integration PR #48 passed repository validation on its current initial head: 167
 - Fresh x86_64 QEMU build and boot for the execution gate + IPC daemon revision.
 - Fresh AArch64 QEMU build and boot for the same revision.
 - Production Linux namespaces/cgroups/LSM policy and strict per-service seccomp allowlists.
-- Authenticated approval identity; the current approval issuer still accepts a caller-provided approver label.
-- Authenticated human/session identity; the approver label is still caller-asserted.
-- Operation-specific argument schemas, a typed executor, and outcome reconciliation; the gate now derives canonical argument digests from strict JSON, but does not dispatch tools.
-- A real typed tool executor and outcome reconciler; tool execution remains disabled.
+- Authenticated human/session identity; the approval issuer still accepts a caller-asserted approver label.
+- Operation-specific argument schemas, a typed executor, and outcome reconciliation; canonical argument digests are now derived internally from strict JSON, but no tools are dispatched.
+- Production Linux namespaces/cgroups/LSM enforcement and strict per-service sandbox policies.
 - Android AOSP baseline, Binder/AIDL services, SELinux/AppOps integration and physical device port.
 
 ### Next critical path
@@ -337,3 +336,10 @@ Integration PR #48 passed repository validation on its current initial head: 167
 5. Add native Linux service isolation and split authority-bearing databases behind service APIs.
 6. Implement one non-destructive typed reference adapter, then test timeout, cancellation, idempotency and ambiguous outcomes.
 7. Only then progress to Android platform selection and device feasibility.
+
+
+## Section 1 continuation — canonical argument authorization
+
+The public step-approval API now requires the raw bounded JSON argument payload and computes the canonical digest internally. The public gate step-start API also requires raw JSON, independently computes the digest, and exposes a deeply immutable parsed argument structure for a future executor. Caller-supplied digests are rejected at the public approval/start APIs. Source modules are mirrored byte-for-byte into the Buildroot rootfs. Focused parser, gate, approval and immutability tests are present, but a fresh CI run on the latest PR #48 head is still required.
+
+The earlier AArch64 QEMU run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) completed build, image verification, QEMU readiness, provenance and artifact upload on older commit `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`. The x86_64 run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) remains in kernel/rootfs compilation on that same older commit. Neither is acceptance evidence for the latest PR head.
