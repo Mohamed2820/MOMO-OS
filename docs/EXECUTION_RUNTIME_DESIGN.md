@@ -1,6 +1,6 @@
 # MOMO OS — Execution Runtime Engineering Design
 
-**Status:** Design baseline for the next execution-runtime increment. The plan-bound task coordinator, durable step journal, approval gate and read-only Linux IPC status daemon exist in source. A general-purpose tool executor is intentionally not enabled.
+**Status:** The plan-bound task coordinator, durable step journal, approval gate, strict argument-binding path and a narrow R0/R1 read-only typed executor exist in source. The executor currently exposes only `system.status.read`; side-effecting operations and general-purpose execution remain disabled.
 
 ## 1. Scope and safety boundary
 
@@ -22,7 +22,8 @@ A successful authorization is not proof of execution. A process exit code or mod
 | TaskCoordinator | Validates agent roles, capabilities, risk ceilings and dependencies; persists canonical plan and digest | Does not dispatch operations |
 | StepExecutionJournal | Persists step state, attempts, idempotency key, cancellation and append-only event hash chain | Does not execute or reconcile external effects |
 | ApprovalStore | Issues random, expiring, single-use tokens; task approvals use plan binding and step approvals now require strict JSON argument payloads whose digest is computed inside the store | Approver identity is still an asserted string, not independently authenticated identity |
-| ExecutionGate | Public `start_step()` accepts raw JSON and derives the digest internally; `start_step_with_arguments()` returns deeply immutable parsed values with the durable start | In-process guard only; database owner can bypass it; no typed adapter dispatch is enabled |
+| ExecutionGate | Public `start_step()` accepts raw JSON and derives the digest internally; `start_step_with_arguments()` returns deeply immutable parsed values with the durable start | In-process guard only; database owner can bypass it |
+| TypedExecutor | `OperationRegistry` allowlists typed R0/R1 read-only adapters; `system.status.read` validates an empty argument object, checks plan domain/capability/risk, starts through the gate, records a result digest and finishes the journal step | Source and tests added; fresh CI evidence pending. No side-effecting adapter, deadline/cancellation controller or OS isolation |
 | Linux IPC | Bounded AF_UNIX framing, SO_PEERCRED, status-only daemon | No operation dispatcher or privileged executor |
 | Rootfs integration | Mirrors runtime modules and starts the read-only IPC daemon | Fresh QEMU validation of the integrated revision remains required |
 
@@ -76,9 +77,13 @@ Before a step can start, the trusted gate must verify all of the following again
 - Database migrations must be versioned, repeatable, backed up and tested against the previous schema.
 - Missing plan or authorization schema must never silently downgrade a plan-bound task to an unprotected legacy path.
 
-## 6. Future executor interface
+## 6. Typed executor and future extension
 
-The first executor must be deliberately narrow. Its interface should accept a typed operation request, not a shell string:
+The first reference executor now exists in `intelligence/runtime/typed_executor.py`. `OperationRegistry` accepts only registered typed operation specifications at R0/R1. The initial built-in operation is `system.status.read`, with an exact empty-object schema and a minimal non-sensitive kernel/architecture response. The executor checks that the operation domain, required capability and risk match the immutable planned step, validates the exact JSON arguments, starts through `ExecutionGate`, calls only the registered handler, hashes the result and records the step outcome in the durable journal. It never accepts a command string or operation handler from request data.
+
+The implementation and tests are source-added but require a fresh CI run. It is an in-process read-only reference adapter, not a production security boundary. It has no hard deadline enforcement, cancellation controller, idempotent side-effect support, authenticated principal propagation or OS sandbox. Do not register side-effecting operations in this initial executor.
+
+Future executor interfaces must remain typed and accept a structured request, not a shell string:
 
 - `request_id`: unique request identifier.
 - `task_id` and `step_id`: canonical parent and step identity.
@@ -164,7 +169,7 @@ No root shell or generic privileged Binder method is an acceptable substitute fo
 3. Approval identity is bound to a real authenticated user/session, not a free-form approver label.
 4. Task, step, grant and approval transitions have tested transactional semantics.
 5. A native OS boundary blocks unauthorized database and adapter access.
-6. A first non-destructive reference adapter passes positive and negative integration tests.
+6. The first read-only reference adapter passes positive and negative integration tests on the latest CI and QEMU candidate.
 7. Crash, timeout, cancellation and ambiguous-outcome reconciliation tests pass.
 8. QEMU image tests prove the service starts with the intended UID and policy.
 9. Security review finds no unresolved critical/high bypass in the enabled operation scope.
