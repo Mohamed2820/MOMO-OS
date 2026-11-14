@@ -1,6 +1,6 @@
 # MOMO CELL — Autonomous Maintenance Core
 
-**Status:** Core v1 implemented as a bounded, read-only repository health supervisor. Automatic source mutation and autonomous merge are deliberately not enabled.
+**Status:** Core v1 is installed in the MOMO root filesystem and runs a bounded, read-only system health scan during boot; the repository health cycle also runs in CI. Automatic source mutation and autonomous merge are deliberately not enabled.
 
 ## Purpose
 
