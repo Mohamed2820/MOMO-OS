@@ -77,7 +77,10 @@ def parse_arguments(payload: str | bytes, *, max_bytes: int = MAX_ARGUMENT_BYTES
             raise ArgumentBindingError("Arguments must be valid UTF-8") from error
     elif isinstance(payload, str):
         source = payload
-        raw = payload.encode("utf-8")
+        try:
+            raw = payload.encode("utf-8", errors="strict")
+        except UnicodeEncodeError as error:
+            raise ArgumentBindingError("Arguments must be valid Unicode text") from error
     else:
         raise ArgumentBindingError("Arguments must be supplied as UTF-8 JSON text")
     if len(raw) > max_bytes:
@@ -113,7 +116,10 @@ def canonical_arguments(value: dict[str, Any]) -> tuple[str, str]:
         )
     except (TypeError, ValueError) as error:
         raise ArgumentBindingError("Arguments cannot be canonicalized") from error
-    raw = encoded.encode("utf-8")
+    try:
+        raw = encoded.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as error:
+        raise ArgumentBindingError("Arguments contain invalid Unicode text") from error
     if len(raw) > MAX_ARGUMENT_BYTES:
         raise ArgumentBindingError("Canonical arguments exceed the byte limit")
     return encoded, hashlib.sha256(raw).hexdigest()
