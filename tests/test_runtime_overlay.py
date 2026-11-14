@@ -6,6 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from intelligence.execution.step_journal import StepExecutionJournal, StepExecutionStatus
+from intelligence.runtime.momo_runtime import Risk
+from intelligence.runtime.task_store import TaskStore
+
 
 ROOT = Path(__file__).resolve().parents[1]
 OVERLAY = ROOT / "board/momo/rootfs-overlay"
@@ -23,11 +27,23 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
             "persistent_permission_broker.py",
             "task_coordinator.py",
             "orchestrator.py",
+            "approval_store.py",
+            "execution_gate.py",
         ):
             with self.subTest(module=name):
                 self.assertEqual(
                     (RUNTIME_SOURCE / name).read_text(encoding="utf-8"),
                     (RUNTIME_TARGET / name).read_text(encoding="utf-8"),
+                )
+
+    def test_execution_modules_match_the_source_of_truth(self):
+        source = ROOT / "intelligence/execution"
+        target = OVERLAY / "usr/lib/momo/intelligence/execution"
+        for name in ("__init__.py", "step_journal.py"):
+            with self.subTest(module=name):
+                self.assertEqual(
+                    (source / name).read_text(encoding="utf-8"),
+                    (target / name).read_text(encoding="utf-8"),
                 )
 
     def test_python_overlay_commands_compile(self):
@@ -59,6 +75,44 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
             capability["status"] == "unknown"
             for capability in payload["capabilities"].values()
         ))
+
+    def test_task_recovery_command_quarantines_interrupted_steps(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "tasks.sqlite3"
+            store = TaskStore(database)
+            task = store.create_task("Recover interrupted step", Risk.R1)
+            journal = StepExecutionJournal(database)
+            journal.register_step(
+                task.task_id, "inspect", Risk.R1, "test:recover:inspect"
+            )
+            journal.start_step(task.task_id, "inspect")
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(ROOT)
+            env["MOMO_TASK_DB"] = str(database)
+            recovered = subprocess.run(
+                [sys.executable, str(BIN / "momo-task"), "recover"],
+                env=env, capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(recovered.returncode, 0, recovered.stderr)
+            payload = json.loads(recovered.stdout)
+            self.assertEqual(payload["recovered_count"], 1)
+            self.assertEqual(payload["steps"][0]["status"], "needs_review")
+            self.assertEqual(
+                journal.get_step(task.task_id, "inspect").status,
+                StepExecutionStatus.NEEDS_REVIEW,
+            )
+
+            repeated = subprocess.run(
+                [sys.executable, str(BIN / "momo-task"), "recover"],
+                env=env, capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(repeated.returncode, 0, repeated.stderr)
+            self.assertEqual(json.loads(repeated.stdout)["recovered_count"], 0)
+
+    def test_boot_check_invokes_recovery_before_readiness(self):
+        source = (BIN / "momoctl").read_text(encoding="utf-8")
+        self.assertIn("/usr/bin/momo-task recover", source)
 
     def test_permission_cli_initializes_and_reads_isolated_database(self):
         with tempfile.TemporaryDirectory() as directory:

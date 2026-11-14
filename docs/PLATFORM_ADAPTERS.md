@@ -44,3 +44,8 @@ Each adapter must declare:
 ## Compatibility behavior
 
 Adapters report supported, unsupported, temporarily_unavailable, or permission_denied distinctly. The MOMO Experience layer must not present unavailable hardware features as functional. Optional capabilities can be hidden or degraded; core boot and security requirements cannot.
+
+
+## AArch64 Linux virtual target — workflow added, validation pending
+
+The project now defines a separate Buildroot target using `qemu_aarch64_virt_defconfig` and QEMU's `virt` machine. The same portable Python runtime and rootfs overlay are intended to build for AArch64. CI must prove kernel/rootfs build and guest readiness before this target is marked supported. Hardware device trees, firmware, boot chains, vendor kernels and drivers remain device-specific adapter work.

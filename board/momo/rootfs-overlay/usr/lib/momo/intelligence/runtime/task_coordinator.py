@@ -14,6 +14,9 @@ from .momo_runtime import (
 from .orchestrator import AgentRegistry, Plan, PlanStep, PlanValidator, ready_steps
 from .persistent_permission_broker import PersistentPermissionBroker
 from .task_store import TaskStore
+from intelligence.execution.step_journal import (
+    StepExecution, StepExecutionEvent, StepExecutionJournal, StepExecutionStatus,
+)
 
 
 _RISK_LEVEL = {Risk.R0: 0, Risk.R1: 1, Risk.R2: 2, Risk.R3: 3, Risk.R4: 4}
@@ -89,6 +92,7 @@ class TaskCoordinator:
         self.validator = PlanValidator(registry)
         self.tasks = TaskStore(task_database)
         self.permissions = PersistentPermissionBroker(permission_database)
+        self.execution = StepExecutionJournal(self.tasks.database)
         with sqlite3.connect(str(self.tasks.database), timeout=10) as connection:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("PRAGMA busy_timeout = 10000")
@@ -133,6 +137,13 @@ class TaskCoordinator:
             connection.execute(
                 "INSERT INTO task_plans(task_id, plan_sha256, plan_json) VALUES (?, ?, ?)",
                 (task.task_id, digest, encoded),
+            )
+
+            self.execution.register_plan_steps(
+                connection,
+                task.task_id,
+                digest,
+                tuple((step.step_id, step.risk) for step in plan.steps),
             )
 
             task.transition(
@@ -195,15 +206,34 @@ class TaskCoordinator:
         return plan
 
     def get_ready_steps(
-        self, task_id: str, plan: Plan, completed_step_ids: set[str] | None = None
+        self, task_id: str, plan: Plan
     ) -> tuple[PlanStep, ...]:
+        """Derive readiness only from durable, verified step execution records."""
         task = self.tasks.get_task(task_id)
         if task.status not in {
             TaskStatus.PLANNED, TaskStatus.AWAITING_APPROVAL, TaskStatus.EXECUTING
         }:
             raise ValueError(f"Task is not schedulable in state: {task.status.value}")
         self._validate_task_plan(task, plan)
-        return ready_steps(plan, completed_step_ids or set())
+
+        records = self.execution.list_steps(task_id)
+        by_id = {record.step_id: record for record in records}
+        expected = {step.step_id: step for step in plan.steps}
+        if set(by_id) != set(expected):
+            raise ValueError("Persisted execution ledger does not match the immutable plan")
+        for step_id, step in expected.items():
+            if by_id[step_id].risk != step.risk:
+                raise ValueError(f"Persisted risk does not match plan step: {step_id}")
+
+        completed = {
+            step_id for step_id, record in by_id.items()
+            if record.status is StepExecutionStatus.SUCCEEDED
+        }
+        dependency_ready = ready_steps(plan, completed)
+        return tuple(
+            step for step in dependency_ready
+            if by_id[step.step_id].status is StepExecutionStatus.READY
+        )
 
     def authorize_step(
         self,
@@ -213,7 +243,12 @@ class TaskCoordinator:
         approval: Approval | None = None,
         now: datetime | None = None,
     ) -> AuthorizationDecision:
-        """Consume one narrowly scoped grant; successful authorization is not execution."""
+        """Check a LOW-risk (R0-R2) grant for one step. Never starts anything.
+
+        Plain Approval objects are refused: an approval is valid only as a
+        server-issued token consumed by ExecutionGate. R3/R4 steps are refused
+        here for the same reason.
+        """
         task = self.tasks.get_task(task_id)
         if task.status not in {
             TaskStatus.PLANNED, TaskStatus.AWAITING_APPROVAL, TaskStatus.EXECUTING
@@ -223,6 +258,16 @@ class TaskCoordinator:
         step = next((item for item in plan.steps if item.step_id == step_id), None)
         if step is None:
             return AuthorizationDecision(False, "Step is not part of the validated plan")
+        if approval is not None:
+            return AuthorizationDecision(
+                False,
+                "Plain approval objects are not accepted; approvals must be issued "
+                "tokens consumed through ExecutionGate",
+            )
+        if step.risk in {Risk.R3, Risk.R4}:
+            return AuthorizationDecision(
+                False, "R3/R4 steps require ExecutionGate with an issued approval token"
+            )
 
         request = ToolRequest(
             subject=step.agent_role,
@@ -230,7 +275,7 @@ class TaskCoordinator:
             resource=task_id,
             risk=step.risk,
         )
-        return self.permissions.authorize(request, approval=approval, now=now)
+        return self.permissions.authorize(request, approval=None, now=now)
 
     def _validate_task_plan(self, task: Task, plan: Plan) -> None:
         self.validator.validate(plan)
@@ -243,3 +288,20 @@ class TaskCoordinator:
         stored_digest, _ = _plan_digest(stored)
         if not hmac.compare_digest(supplied_digest, stored_digest):
             raise ValueError("Supplied plan does not match the immutable task plan")
+
+    def get_step_execution(self, task_id: str, step_id: str) -> StepExecution:
+        """Return the durable execution record for one accepted plan step."""
+        task = self.tasks.get_task(task_id)
+        self.get_persisted_plan(task_id)
+        return self.execution.get_step(task.task_id, step_id)
+
+    def get_step_execution_events(
+        self, task_id: str, step_id: str
+    ) -> tuple[StepExecutionEvent, ...]:
+        """Return append-only execution history for one accepted plan step."""
+        self.get_step_execution(task_id, step_id)
+        return self.execution.list_events(task_id, step_id)
+
+    def recover_interrupted_steps(self) -> tuple[StepExecution, ...]:
+        """Quarantine in-flight step records after a confirmed service restart."""
+        return self.execution.recover_interrupted()

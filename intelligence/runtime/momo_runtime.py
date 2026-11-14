@@ -12,6 +12,12 @@ from typing import Iterable
 from uuid import uuid4
 
 
+# Capability sentinel: only ExecutionGate may pass this to the low-level state
+# primitives that start execution. It is a guard against accidental and
+# agent-driven bypass inside this process; it is NOT an OS security boundary.
+GATE_AUTHORITY = object()
+
+
 class Risk(str, Enum):
     R0 = "R0"  # public/read-only
     R1 = "R1"  # scoped private read

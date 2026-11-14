@@ -1,30 +1,72 @@
 # Task Coordinator
 
-**Status:** Initial policy/scheduling layer; not a tool executor or complete runtime scheduler.
+**Status:** Integrated policy, durable-plan, dependency-readiness and in-process execution-authorization coordinator. It is not a tool executor or a complete runtime scheduler.
 
 ## Implemented
+
 - Validates plans against registered agent roles, domains, capabilities, risk ceilings, dependency graph and delegation budget.
-- Atomically persists task creation, the accepted canonical plan and initial lifecycle events in one SQLite transaction.
+- Atomically persists task creation, the accepted canonical plan, every plan-step execution record and initial lifecycle events in one SQLite transaction.
 - Reloads the accepted plan after restart and verifies its SHA-256 digest before use.
-- Persists task lifecycle events through the SQLite task journal.
-- Stores canonical plan JSON and SHA-256 digest, binding the plan to its task and rejecting later plan substitution.
-- Returns deterministic dependency-ready steps.
+- Persists per-step execution state, attempts, cancellation requests, result digests and unique plan-bound idempotency keys.
+- Persists append-only per-step lifecycle events with a SHA-256 hash chain, SQLite update/delete guards and legacy-row migration.
+- Verifies event-chain integrity before appending events, reading step state and deriving dependency readiness; corrupted history fails closed.
+- Derives dependency completion only from durable succeeded records. Caller-supplied completion claims are not accepted.
+- Returns a step as ready only when its dependencies are durably successful and its own journal state is ready.
+- Quarantines interrupted running steps as needs_review during recovery; no interrupted operation is automatically replayed.
+- The current init-managed Linux boot path invokes momo-task recover before the readiness check; repeated recovery is idempotent.
+- Stores bounded retry-policy metadata. Explicit retries are restricted to R0/R1 read-only steps.
 - Requests per-step authorization through the persistent permission broker using exact subject/action/task-resource/risk scope.
 - Requires matching explicit per-action approval for R3/R4 operations according to broker policy.
-- Included in the Buildroot root filesystem overlay and covered by repository tests.
+- Uses the central ExecutionGate for plan-bound task/step start; approval tokens are single-use, expiring and bound to the task/step/action/risk/plan/arguments digest.
+- Prevents direct public TaskStore and journal paths from starting plan-bound execution; the Buildroot overlay mirrors the gate and token store.
+- Is mirrored into the Buildroot root filesystem overlay and covered by repository source/overlay parity tests.
 
 ## Security boundary
-The coordinator never dispatches a tool, calls a model, creates a grant, approves an action, or treats a model-produced plan as authority. A successful authorization decision means only that a matching grant was consumed; the platform adapter must still enforce native OS permissions and sandboxing. Model-generated plans are untrusted input and must pass validation.
+
+The coordinator never dispatches a tool, calls a model, creates a grant, approves an action, or treats a model-produced plan as authority. A successful authorization decision means only that a matching grant was consumed; it is not proof that a native OS boundary enforced the operation. Model-generated plans are untrusted input and must pass validation.
+
+The event hash chain is tamper-evident against accidental or partial record modification. It is not a digital signature and does not resist a privileged attacker who can rewrite the database and recompute hashes. External anchoring, protected key custody and OS-enforced storage permissions remain required for stronger assurance.
 
 ## Not yet implemented
-- Tool execution adapters and sandboxed process/container execution.
-- Atomic task + plan persistence across database failure boundaries.
-- Complete lifecycle transitions for running, waiting, retrying, cancelling, failed and completed tasks.
-- Durable dependency completion records and crash recovery/reconciliation.
-- Idempotency keys for side-effecting tools.
-- Deadlines, bounded retries, backoff, concurrency quotas and resource budgets.
-- Cancellation propagation to running adapters.
-- Independent result verification and outcome evidence.
-- IPC authentication and platform-native permission enforcement.
+
+- A worker scheduler and actual execution adapter; no process or tool is dispatched.
+- Fresh authorization bound atomically to dispatch and authenticated executor identity. A status-only authenticated IPC service now exists, with bounded process-lifetime replay detection, but it is not connected to task dispatch and does not authorize execution.
+- Linux namespaces, seccomp/LSM policy and sandbox profiles; Android SELinux/AppOps/Binder enforcement.
+- Downstream propagation and enforcement of idempotency keys by external services.
+- Deadline enforcement, backoff scheduling, concurrency/fairness limits and resource budgets.
+- Cancellation propagation to a running process and proof that cancellation caused no side effect.
+- Independent result verification and reconciliation of needs_review outcomes.
+- Supervisor semantics that prove recovery runs exactly once after each confirmed service restart.
+- Signed or externally anchored audit evidence, protected key custody and retention/deletion controls.
 
 These are separate milestones. The coordinator must not be described as an autonomous execution engine until they are implemented and tested.
+
+## Validation status
+
+The integrated coordinator, journal, Buildroot overlay and fail-closed dependency logic passed repository validation with 111 unit tests at PR #26. The merged revision is being rebuilt and must pass the latest QEMU image and readiness gate before image-level integration is claimed.
+
+## Next milestone
+
+After the current QEMU image passes, define and test a non-executing executor protocol: immutable plan binding, fresh authorization, OS principal identity, durable idempotency propagation, deadlines, cancellation acknowledgement and independent outcome evidence. The current authenticated IPC daemon is status-only. Do not enable privileged tool dispatch until operation-specific authorization and native OS isolation are in place.
+
+
+## Image Acceptance Evidence — 2026-11-13
+
+The first x86_64 baseline booted successfully under QEMU, but it predates the current Step Journal/TaskCoordinator integration. The integrated revision requires fresh target-image validation in [workflow #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). The earlier QEMU result is not evidence for the integrated revision.
+
+
+## Execution authorization integration — 2026-11-14
+
+PR #45 adds `intelligence/runtime/execution_gate.py` and `approval_store.py`. The gate revalidates the persisted plan, checks task and step state, verifies durable dependencies, and starts a step only after a scoped R0–R2 grant or an R3–R4 approval token. High-risk token consumption and the step-start journal write share one SQLite transaction; failed starts roll the token consumption back. Concurrent-consumer, replay, expiry, mismatch, bypass and rollback tests are included.
+
+The PR #45 code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` passed repository validation with 167 unit tests. Fresh x86_64/AArch64 image builds for this exact revision remain required.
+
+### Remaining security and reliability work
+- Approver is currently a non-empty caller-supplied label, not an authenticated human principal. Trusted identity/session integration and broker-only issuance are required.
+- The step arguments digest is caller-supplied. A trusted executor must canonicalize the actual typed operation arguments and compute the digest itself.
+- R0–R2 grants live in a separate permission database and can be consumed before a failed task-step transaction. This is fail-closed but not atomic across databases.
+- The in-process gate is not a security boundary against hostile code with the same OS identity or database access.
+- There is still no worker scheduler, tool dispatcher, executor, deadline enforcement, resource quota manager, cancellation supervisor or independent outcome reconciler.
+- Native Linux namespace/cgroup/LSM/strict-seccomp enforcement and Android Binder/SELinux/AppOps enforcement remain mandatory.
+
+The gate must not be described as autonomous execution. See [Execution Authorization Gate](EXECUTION_AUTHORIZATION_GATE.md) and [Linux Executor Isolation Specification](LINUX_EXECUTION_SANDBOX.md).

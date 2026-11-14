@@ -43,7 +43,7 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 
 ## First bootable target
 
-- [x86_64 QEMU bring-up image](docs/BOOTABLE_IMAGE.md) — Buildroot-based experimental Linux image with MOMO startup and diagnostics. It is not a phone ROM; QEMU boot evidence is required before calling the target bootable.
+- [Buildroot/QEMU virtual targets](docs/BOOTABLE_IMAGE.md) — x86_64 and AArch64 experimental Linux images have both passed QEMU boot and MOMO readiness checks. These are virtual bring-up targets, not phone ROMs.
 
 ## Technical specifications
 
@@ -61,6 +61,9 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 - [Complete product description](docs/PROJECT_OVERVIEW.md)
 - [Master execution plan](docs/MASTER_EXECUTION_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Current engineering status](docs/ENGINEERING_STATUS.md)
+- [Execution authorization gate](docs/EXECUTION_AUTHORIZATION_GATE.md)
+- [Linux executor isolation specification](docs/LINUX_EXECUTION_SANDBOX.md)
 
 ## Device feasibility gate
 
@@ -77,3 +80,8 @@ Device ports are selected by evidence, maintainability and recovery safety—not
 ## Licensing
 
 MOMO-owned code will receive an explicit license before redistribution. Third-party components retain their own licenses and notices. See [Licensing Policy](docs/LICENSING.md).
+
+
+## Platform support evidence
+
+See [Platform Support Matrix](docs/PLATFORM_SUPPORT_MATRIX.md) for verified targets, pending virtual bring-up work, and unsupported device classes. MOMO OS does not claim universal hardware compatibility without per-target boot and driver evidence.

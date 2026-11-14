@@ -60,10 +60,29 @@ qemu-system-x86_64 -M pc -m 1024 \
 2. The kernel and root filesystem artifacts exist and are non-empty.
 3. QEMU reaches the MOMO init script.
 4. The serial log contains `MOMO OS READY`.
-5. The `momoctl` health checks pass during boot, including device inventory and permission database initialization.
+5. The `momoctl` health checks pass during boot, including device inventory, permission database initialization, and an authenticated read-only IPC status request through the unprivileged daemon.
 6. Python 3 can import SQLite, create a temporary MOMO task, persist five valid transitions, and restore the completed task.
 7. The device inventory command reports the running architecture and leaves unverified hardware capabilities as `unknown`.
 8. The persistent permission broker initializes its database and exposes its audit/revocation commands.
 
 A successful QEMU boot validates only this x86_64 virtual target. It does not
 establish support for ARM phones or the Samsung Galaxy A17.
+
+
+## Runtime security integration validation — 2026-11-14
+
+The current development branch adds the durable plan-bound step journal, the execution approval gate, and a local read-only IPC status daemon. The daemon runs under the dedicated `momo-ipc` account, authenticates local peers using Linux `SO_PEERCRED`, enforces bounded protocol frames, applies process limits and `no_new_privs`, and requires a libseccomp syscall denylist before serving the status-only operation.
+
+The x86_64 and AArch64 workflows now include the daemon and require the boot log to show both `MOMO OS READY` and the IPC service marker with tool execution explicitly disabled.
+
+**Evidence boundary:** these additions are not covered by the earlier QEMU acceptance run. A fresh successful run of each workflow is required before claiming that the updated image boots on either virtual target. Neither virtual target proves physical phone compatibility.
+
+## Latest integrated image evidence — 2026-11-14
+
+The execution-gate integration is included in commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. Fresh builds passed:
+- x86_64: [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750.
+- AArch64: [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046.
+
+Both guests reached `MOMO OS READY` and returned the `momo-ipcd` read-only status response with `tool_execution: disabled`. Buildroot cache recovery now forces a Linux package rebuild if the expected kernel image is absent from `output/images`.
+
+These are QEMU virtual targets. They do not establish Android ROM support or compatibility with any physical phone.

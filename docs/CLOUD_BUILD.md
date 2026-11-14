@@ -1,6 +1,6 @@
 # Cloud Build and Source Pipeline
 
-Status: design only. No cloud build machine has been provisioned and no Android image has been built.
+Status: GitHub Actions currently builds and QEMU-tests the Buildroot x86_64 and AArch64 virtual targets. No dedicated AOSP cloud build machine has been provisioned and no Android image has been built.
 
 ## Why cloud
 AOSP's published build requirements call for a 64-bit x86 workstation, approximately 400 GB free disk, and at least 64 GB RAM. A phone is not an appropriate full Android build host.
@@ -33,3 +33,14 @@ Every artifact must link to commit SHA, manifest SHA, toolchain, build environme
 - [AOSP build and source workflow](https://source.android.com/docs/setup/start)
 
 These requirements are periodically updated; re-check them before provisioning a build worker.
+
+
+## Current Buildroot automation evidence — 2026-11-14
+
+The repository has two Buildroot/QEMU workflows:
+- x86_64: [run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201).
+- AArch64: [run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262).
+
+Both passed on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`, including image verification, guest boot, readiness, read-only IPC status and artifact publication. The workflows recover from a missing exported kernel image after cache restore by forcing a Linux package rebuild.
+
+This does not provide the disk/RAM capacity or source-manifest workflow needed for a full AOSP build. Android build infrastructure remains unprovisioned.

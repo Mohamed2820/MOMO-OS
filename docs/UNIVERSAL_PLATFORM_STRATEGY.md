@@ -73,3 +73,13 @@ Do not select a single phone as the product's architectural boundary. A device m
 - At least two distinct device families are used before claiming the architecture is multi-device.
 - Android and mainline Linux tracks are tested independently.
 - The release matrix states unsupported capabilities and known limitations.
+
+
+## AArch64 virtual target bring-up — 2026-11-13 (PR #42 candidate)
+
+A separate Buildroot/QEMU workflow is added for `qemu_aarch64_virt_defconfig`. It reuses the MOMO rootfs overlay, dedicated IPC account, unprivileged status daemon and libseccomp policy, then boots the ARM64 `Image` under `qemu-system-aarch64`. The workflow requires both `MOMO OS READY` and the authenticated status response marker. This is a virtual AArch64 target, not evidence of compatibility with any specific phone, tablet, SBC or laptop.
+
+
+## Engineering execution order (current project decision)
+
+Although Android compatibility remains a major mobile-product track, the first engineering bring-up is deliberately Linux-first: (1) x86_64 Buildroot/QEMU baseline, (2) AArch64 Linux/QEMU virt baseline, then (3) a separate AOSP/Android implementation using Binder/AIDL, SELinux and AppOps. This order validates MOMO's portable runtime and security contracts on general-purpose Linux before taking on Android vendor/HAL complexity. The platform support matrix records evidence separately; no physical device support is implied by either virtual target.

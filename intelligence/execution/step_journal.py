@@ -6,13 +6,15 @@ found running after a restart is moved to NEEDS_REVIEW, never replayed.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-from intelligence.runtime.momo_runtime import Risk
+from intelligence.runtime.momo_runtime import GATE_AUTHORITY, Risk
 
 
 class StepExecutionStatus(str, Enum):
@@ -96,6 +98,8 @@ class StepExecutionJournal:
                     previous TEXT,
                     current TEXT NOT NULL,
                     reason TEXT NOT NULL CHECK(length(trim(reason)) > 0),
+                    previous_hash TEXT NOT NULL,
+                    event_hash TEXT NOT NULL,
                     FOREIGN KEY(task_id, step_id)
                         REFERENCES task_step_executions(task_id, step_id)
                         ON DELETE CASCADE
@@ -105,6 +109,69 @@ class StepExecutionJournal:
                     ON task_step_events(task_id, step_id, event_id);
                 CREATE INDEX IF NOT EXISTS idx_step_execution_status
                     ON task_step_executions(status, updated_at);
+                """
+            )
+
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(task_step_events)")
+            }
+            if "previous_hash" not in columns:
+                connection.execute(
+                    "ALTER TABLE task_step_events ADD COLUMN previous_hash TEXT NOT NULL DEFAULT ''"
+                )
+            if "event_hash" not in columns:
+                connection.execute(
+                    "ALTER TABLE task_step_events ADD COLUMN event_hash TEXT NOT NULL DEFAULT ''"
+                )
+
+            previous_by_step: dict[tuple[str, str], str] = {}
+            rows = connection.execute(
+                """
+                SELECT event_id, task_id, step_id, at, previous, current, reason,
+                       previous_hash, event_hash
+                FROM task_step_events
+                ORDER BY task_id, step_id, event_id
+                """
+            ).fetchall()
+            for row in rows:
+                key = (row["task_id"], row["step_id"])
+                expected_previous = previous_by_step.get(key, "0" * 64)
+                expected_hash = self._calculate_event_hash(
+                    row["task_id"], row["step_id"], row["at"], row["previous"],
+                    row["current"], row["reason"], expected_previous,
+                )
+                if not row["event_hash"] or not row["previous_hash"]:
+                    connection.execute(
+                        """
+                        UPDATE task_step_events
+                        SET previous_hash = ?, event_hash = ? WHERE event_id = ?
+                        """,
+                        (expected_previous, expected_hash, row["event_id"]),
+                    )
+                elif (
+                    not hmac.compare_digest(row["previous_hash"], expected_previous)
+                    or not hmac.compare_digest(row["event_hash"], expected_hash)
+                ):
+                    raise RuntimeError("Existing step event journal failed hash-chain verification")
+                previous_by_step[key] = expected_hash
+
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS task_step_events_no_update
+                BEFORE UPDATE ON task_step_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'step event journal is append-only');
+                END
+                """
+            )
+            connection.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS task_step_events_no_delete
+                BEFORE DELETE ON task_step_events
+                BEGIN
+                    SELECT RAISE(ABORT, 'step event journal is append-only');
+                END
                 """
             )
 
@@ -137,6 +204,58 @@ class StepExecutionJournal:
         )
 
     @staticmethod
+    def _calculate_event_hash(
+        task_id: str,
+        step_id: str,
+        at: str,
+        previous: str | None,
+        current: str,
+        reason: str,
+        previous_hash: str,
+    ) -> str:
+        payload = json.dumps(
+            {
+                "task_id": task_id,
+                "step_id": step_id,
+                "at": at,
+                "previous": previous,
+                "current": current,
+                "reason": reason,
+                "previous_hash": previous_hash,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _last_verified_event_hash(
+        connection: sqlite3.Connection, task_id: str, step_id: str
+    ) -> str:
+        rows = connection.execute(
+            """
+            SELECT at, previous, current, reason, previous_hash, event_hash
+            FROM task_step_events
+            WHERE task_id = ? AND step_id = ?
+            ORDER BY event_id
+            """,
+            (task_id, step_id),
+        ).fetchall()
+        expected_previous = "0" * 64
+        for row in rows:
+            expected_hash = StepExecutionJournal._calculate_event_hash(
+                task_id, step_id, row[0], row[1], row[2], row[3], expected_previous
+            )
+            if (
+                not hmac.compare_digest(row[4], expected_previous)
+                or not hmac.compare_digest(row[5], expected_hash)
+            ):
+                raise ValueError("Step execution event hash-chain verification failed")
+            expected_previous = expected_hash
+        return expected_previous
+
+    @staticmethod
     def _event(
         connection: sqlite3.Connection,
         task_id: str,
@@ -146,13 +265,78 @@ class StepExecutionJournal:
         reason: str,
         at: str,
     ) -> None:
+        normalized_reason = reason.strip()
+        previous_hash = StepExecutionJournal._last_verified_event_hash(
+            connection, task_id, step_id
+        )
+        event_hash = StepExecutionJournal._calculate_event_hash(
+            task_id, step_id, at, previous, current, normalized_reason, previous_hash
+        )
         connection.execute(
             """
-            INSERT INTO task_step_events(task_id, step_id, at, previous, current, reason)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO task_step_events(
+                task_id, step_id, at, previous, current, reason,
+                previous_hash, event_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (task_id, step_id, at, previous, current, reason.strip()),
+            (
+                task_id, step_id, at, previous, current, normalized_reason,
+                previous_hash, event_hash,
+            ),
         )
+
+    def verify_event_chain(self, task_id: str, step_id: str) -> bool:
+        """Verify the append-only event hash chain for one task step."""
+        with self._connect() as connection:
+            self._last_verified_event_hash(connection, task_id, step_id)
+        return True
+
+    def register_plan_steps(
+        self,
+        connection: sqlite3.Connection,
+        task_id: str,
+        plan_sha256: str,
+        steps: tuple[tuple[str, Risk], ...],
+    ) -> tuple[str, ...]:
+        """Insert all plan-step records inside the caller's task transaction."""
+        if not isinstance(connection, sqlite3.Connection):
+            raise TypeError("A SQLite connection is required")
+        if (not isinstance(plan_sha256, str) or len(plan_sha256) != 64
+                or any(char not in "0123456789abcdef" for char in plan_sha256)):
+            raise ValueError("Plan digest must be a lowercase SHA-256 hex string")
+        entries = tuple(steps)
+        if not entries:
+            raise ValueError("At least one plan step is required")
+        step_ids = [step_id for step_id, _ in entries]
+        if len(set(step_ids)) != len(step_ids):
+            raise ValueError("Plan step IDs must be unique")
+        for step_id, risk in entries:
+            if not isinstance(step_id, str) or not step_id.strip():
+                raise ValueError("Step ID must not be empty")
+            if not isinstance(risk, Risk):
+                raise ValueError("Step risk must be a Risk value")
+
+        now = self._now()
+        keys = []
+        for step_id, risk in entries:
+            key = hashlib.sha256(
+                f"{task_id}:{plan_sha256}:{step_id}".encode("utf-8")
+            ).hexdigest()
+            connection.execute(
+                """
+                INSERT INTO task_step_executions(
+                    task_id, step_id, risk, status, attempt, retry_limit,
+                    idempotency_key, created_at, updated_at
+                ) VALUES (?, ?, ?, 'ready', 0, 0, ?, ?, ?)
+                """,
+                (task_id, step_id, risk.value, key, now, now),
+            )
+            self._event(
+                connection, task_id, step_id, None, "ready",
+                "Step registered with immutable accepted plan", now,
+            )
+            keys.append(key)
+        return tuple(keys)
 
     def register_step(
         self,
@@ -172,7 +356,7 @@ class StepExecutionJournal:
             raise ValueError("A stable idempotency key is required")
         if len(idempotency_key) > 256:
             raise ValueError("Idempotency key exceeds 256 characters")
-        if not isinstance(retry_limit, int) or not 0 <= retry_limit <= self.MAX_RETRIES:
+        if type(retry_limit) is not int or not 0 <= retry_limit <= self.MAX_RETRIES:
             raise ValueError("Retry limit must be between 0 and 5")
         if risk not in {Risk.R0, Risk.R1} and retry_limit:
             raise ValueError("Automatic retries are restricted to R0/R1 read-only work")
@@ -180,6 +364,8 @@ class StepExecutionJournal:
         now = self._now()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if self._plan_bound(connection, task_id):
+                raise ValueError("Plan-bound tasks accept steps only from the accepted plan")
             connection.execute(
                 """
                 INSERT INTO task_step_executions(
@@ -194,6 +380,7 @@ class StepExecutionJournal:
         return self.get_step(task_id, step_id)
 
     def get_step(self, task_id: str, step_id: str) -> StepExecution:
+        self.verify_event_chain(task_id, step_id)
         with self._connect() as connection:
             row = connection.execute(
                 "SELECT * FROM task_step_executions WHERE task_id = ? AND step_id = ?",
@@ -203,7 +390,24 @@ class StepExecutionJournal:
             raise StepExecutionNotFoundError((task_id, step_id))
         return self._record(row)
 
+    def list_steps(self, task_id: str) -> tuple[StepExecution, ...]:
+        """Return verified durable step records in stable step-ID order."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM task_step_executions
+                WHERE task_id = ? ORDER BY step_id
+                """,
+                (task_id,),
+            ).fetchall()
+            for row in rows:
+                self._last_verified_event_hash(
+                    connection, row["task_id"], row["step_id"]
+                )
+        return tuple(self._record(row) for row in rows)
+
     def list_events(self, task_id: str, step_id: str) -> tuple[StepExecutionEvent, ...]:
+        self.verify_event_chain(task_id, step_id)
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -215,43 +419,66 @@ class StepExecutionJournal:
             ).fetchall()
         return tuple(StepExecutionEvent(**dict(row)) for row in rows)
 
-    def start_step(self, task_id: str, step_id: str, retry: bool = False) -> StepExecution:
+    @staticmethod
+    def _plan_bound(connection: sqlite3.Connection, task_id: str) -> bool:
+        exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_plans'"
+        ).fetchone()
+        if exists is None:
+            return False
+        return connection.execute(
+            "SELECT 1 FROM task_plans WHERE task_id = ?", (task_id,)
+        ).fetchone() is not None
+
+    def start_step(
+        self, task_id: str, step_id: str, retry: bool = False, _authority=None
+    ) -> StepExecution:
+        """Low-level start primitive. Plan-bound tasks require ExecutionGate."""
         now = self._now()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM task_step_executions WHERE task_id = ? AND step_id = ?",
-                (task_id, step_id),
-            ).fetchone()
-            if row is None:
-                raise StepExecutionNotFoundError((task_id, step_id))
-            status = StepExecutionStatus(row["status"])
-            if status == StepExecutionStatus.READY:
-                if retry:
-                    raise ValueError("A ready step is not a retry")
-            elif status == StepExecutionStatus.FAILED:
-                if not retry:
-                    raise ValueError("Retry must be explicitly requested")
-                if Risk(row["risk"]) not in {Risk.R0, Risk.R1}:
-                    raise ValueError("Side-effecting steps cannot be automatically retried")
-                if row["attempt"] > row["retry_limit"]:
-                    raise ValueError("Retry budget exhausted")
-            else:
-                raise ValueError(f"Step cannot start from state: {status.value}")
-
-            connection.execute(
-                """
-                UPDATE task_step_executions
-                SET status = 'running', attempt = attempt + 1,
-                    cancel_requested = 0, last_error = NULL, updated_at = ?
-                WHERE task_id = ? AND step_id = ?
-                """,
-                (now, task_id, step_id),
-            )
-            self._event(connection, task_id, step_id, status.value, "running",
-                        "Step attempt started", now)
+            if _authority is not GATE_AUTHORITY and self._plan_bound(connection, task_id):
+                raise ValueError("Plan-bound steps can start only through ExecutionGate")
+            self._start_locked(connection, task_id, step_id, retry, now)
             connection.commit()
         return self.get_step(task_id, step_id)
+
+    def _start_locked(
+        self, connection: sqlite3.Connection, task_id: str, step_id: str,
+        retry: bool, at: str,
+    ) -> None:
+        """Apply a start inside the caller's open write transaction."""
+        row = connection.execute(
+            "SELECT * FROM task_step_executions WHERE task_id = ? AND step_id = ?",
+            (task_id, step_id),
+        ).fetchone()
+        if row is None:
+            raise StepExecutionNotFoundError((task_id, step_id))
+        status = StepExecutionStatus(row["status"])
+        if status == StepExecutionStatus.READY:
+            if retry:
+                raise ValueError("A ready step is not a retry")
+        elif status == StepExecutionStatus.FAILED:
+            if not retry:
+                raise ValueError("Retry must be explicitly requested")
+            if Risk(row["risk"]) not in {Risk.R0, Risk.R1}:
+                raise ValueError("Side-effecting steps cannot be automatically retried")
+            if row["attempt"] > row["retry_limit"]:
+                raise ValueError("Retry budget exhausted")
+        else:
+            raise ValueError(f"Step cannot start from state: {status.value}")
+
+        connection.execute(
+            """
+            UPDATE task_step_executions
+            SET status = 'running', attempt = attempt + 1,
+                cancel_requested = 0, last_error = NULL, updated_at = ?
+            WHERE task_id = ? AND step_id = ?
+            """,
+            (at, task_id, step_id),
+        )
+        self._event(connection, task_id, step_id, status.value, "running",
+                    "Step attempt started", at)
 
     def finish_step(
         self,
@@ -261,7 +488,7 @@ class StepExecutionJournal:
         result_sha256: str | None = None,
         error: str | None = None,
     ) -> StepExecution:
-        if not isinstance(success, bool):
+        if type(success) is not bool:
             raise ValueError("Success must be boolean")
         if result_sha256 is not None:
             if (not isinstance(result_sha256, str) or len(result_sha256) != 64
