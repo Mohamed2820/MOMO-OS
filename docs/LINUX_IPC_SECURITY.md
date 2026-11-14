@@ -1,6 +1,6 @@
 # MOMO OS — Linux IPC Security Foundations
 
-**Status:** Linux AF_UNIX peer identity and bounded versioned message framing implemented and unit tested. Neither primitive is yet connected to a privileged daemon or executor.
+**Status:** Linux AF_UNIX peer identity and bounded versioned framing are integrated into an unprivileged, read-only status daemon. The daemon has process-lifetime replay detection, resource limits, no_new_privs and a libseccomp default-allow denylist. It is not a tool executor or complete sandbox.
 
 ## Peer identity
 
@@ -40,3 +40,22 @@ Before binding its socket, the IPC daemon applies hard process limits: zero core
 The daemon now requires libseccomp and installs a syscall denylist after creating and listening on its AF_UNIX socket. The default action remains ALLOW; process creation/exec, ptrace, mount/namespace changes, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory syscalls are denied with EPERM. The image explicitly includes Buildroot libseccomp, and CI installs libseccomp development headers to test the filter in a subprocess.
 
 This is not a strict syscall allowlist and is not equivalent to a complete sandbox. Filesystem read/write syscalls and many other kernel interfaces remain available. Namespace isolation, cgroup limits and an LSM policy are still required. If libseccomp cannot load or the filter cannot be installed, the daemon refuses to start.
+
+
+## Integrated daemon status — 2026-11-14
+
+The active bootable development branch includes `momo-ipcd`, started as the dedicated `momo-ipc` user. It authenticates the peer with `SO_PEERCRED` before parsing, accepts only the configured root UID, validates bounded versioned frames, rejects duplicate request IDs within the daemon process, applies file-descriptor/address-space/core/file-size limits, sets `PR_SET_NO_NEW_PRIVS`, and installs a required libseccomp default-allow denylist. The only exposed operation is read-only `status.read`; responses explicitly report `tool_execution: disabled`.
+
+Both x86_64 and AArch64 QEMU workflows passed on integrated baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`:
+- [x86_64 run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact 14057431431.
+- [AArch64 run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054.
+
+### Remaining IPC/security gaps
+- The replay cache is in memory and resets on restart; it is not durable mutation idempotency.
+- The syscall filter is a default-allow denylist, not a strict allowlist.
+- No namespace isolation, cgroup v2 resource policy, LSM worker profile or per-task filesystem isolation is integrated.
+- The root-only peer policy is a single-user development policy, not a multi-user authorization model.
+- No operation-specific capability dispatcher or tool executor exists.
+- Android requires an independent Binder/AIDL + SELinux + AppOps implementation.
+
+See [Linux Executor Isolation Specification](LINUX_EXECUTION_SANDBOX.md). Do not enable tool dispatch until its enablement gate is met.

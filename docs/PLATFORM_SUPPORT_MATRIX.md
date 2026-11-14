@@ -26,3 +26,14 @@
 ## Important interpretation
 
 A successful x86_64 QEMU image does not imply AArch64 support. A successful AArch64 QEMU virt image does not imply support for an arbitrary ARM phone. Android is a distinct platform track and requires Binder/AIDL, SELinux, AppOps, HAL and vendor integration. No universal boot binary is promised.
+
+
+## Updated virtual-target evidence — 2026-11-14
+
+The integrated baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda` subsequently passed both image workflows:
+- **Linux x86_64 QEMU:** [workflow #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact ID 14057431431. Build, output verification, QEMU boot, readiness marker and authenticated read-only IPC response passed.
+- **Linux AArch64 QEMU virt:** [workflow #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact ID 14055169054. Build, output verification, QEMU boot, readiness marker and authenticated read-only IPC response passed.
+
+The execution-gate code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` is newer and has passed repository CI (167 unit tests), but it has not yet passed fresh x86_64 or AArch64 image workflows. It must not inherit the prior image success.
+
+No physical device or Android target is certified. AArch64 QEMU virt is not proof of compatibility with any particular ARM phone.

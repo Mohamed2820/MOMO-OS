@@ -1,6 +1,6 @@
 # MOMO OS — Durable Step Execution Journal
 
-**Status:** Integrated with TaskCoordinator and mirrored into the Buildroot root filesystem overlay. Repository CI passed with 111 unit tests. The latest merged revision is awaiting its QEMU image rebuild; no tool executor is connected.
+**Status:** Integrated with TaskCoordinator, the in-process ExecutionGate and the Buildroot root filesystem overlay. The journal remains a persistence/authorization component; no tool executor is connected. The older integrated baseline passed x86_64 and AArch64 QEMU; the newer PR #45 gate revision still needs fresh image builds.
 
 ## Purpose
 
@@ -68,6 +68,7 @@ The integrated PR #26 validation completed successfully with 111 unit tests.
 - The journal and coordinator are mirrored into the Buildroot root filesystem overlay, with CI source/overlay parity checks.
 - momo-task recover exposes an explicit interrupted-step quarantine command.
 - momoctl boot-check invokes recovery before reporting MOMO OS READY; repeated recovery calls are idempotent.
+- ExecutionGate is the supported path for plan-bound task/step start; direct journal start is refused for plan-bound work.
 - The base x86_64 image has booted successfully in QEMU. The latest merged revision containing coordinator integration is being rebuilt; its QEMU result is still pending.
 
 ## Durable dependency readiness
@@ -94,3 +95,12 @@ A narrow authenticated AF_UNIX status-only service now exists in the IPC workstr
 ## Image Acceptance Evidence — 2026-11-13
 
 The earlier x86_64 baseline passed QEMU, but that image predates the integrated Step Execution Journal revision. The journal-integrated commit `1cb65956c7e1ab0b2d0c1bb6f0f4f8850a1ede25` is being validated separately in [workflow #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). Do not infer target-image inclusion or boot success from the older artifact.
+
+
+## Execution-gate integration evidence — 2026-11-14
+
+The active PR #45 adds single-use approval tokens and a central gate around the journal start transition. For R3/R4, the approval token is consumed in the same SQLite write transaction as the step-start record; injected-failure tests verify rollback, and concurrent-consumer tests verify that only one consumer wins. R0–R2 grants are checked through the persistent permission broker, but their separate database means grant consumption is not atomic with the task database.
+
+The code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` passed 167 repository unit tests. This is repository-level evidence only. The x86_64 and AArch64 QEMU workflows passed earlier for baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; the newer gate revision must be rebuilt and boot-tested independently.
+
+No executor is connected. The journal cannot prove external side effects, compute trusted operation arguments, authenticate a human approver, or enforce an OS sandbox. A running step after restart remains `needs_review`; never replay it automatically.

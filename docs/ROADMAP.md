@@ -205,3 +205,30 @@ PR #42 is merged into `bootable/x86_64-buildroot-mvp-v2`, integrating the read-o
 Fresh x86_64 and AArch64 image workflows are running against integrated commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`: [x86_64](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) and [AArch64](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951). At last inspection, both were in the kernel/rootfs build stage; QEMU acceptance and artifacts remain pending. Historical x86_64 baseline evidence must not be used to claim this integrated revision passed.
 
 Next gates: fresh image/QEMU evidence on both architectures; adversarial security tests; explicit capability authorization; namespace/cgroup/LSM isolation; durable execution/idempotency design; then separate AOSP/Binder-AIDL/SELinux/AppOps implementation and per-device hardware enablement. No universal physical-device compatibility is claimed.
+
+
+## Engineering Progress Update — 2026-11-14
+
+### Virtual platform acceptance completed
+The integrated Buildroot baseline `a7a4caf381553d9a697b68a093eff9520d8b0bda` passed both virtual-target workflows:
+- x86_64 QEMU: [run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact 14057431431.
+- AArch64 QEMU virt: [run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054.
+
+Both logs show the matching architecture, `MOMO OS READY`, a successful read-only `momo-ipcd` status response and `tool_execution: disabled`. These are virtual targets, not phone support.
+
+### Execution authorization increment
+PR #45 adds the in-process `ExecutionGate` and one-time approval tokens, protects plan-bound task/step starts, and adds bypass, expiry, replay, concurrency and rollback tests. Its code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` passed repository validation with 167 tests. This newer revision has not yet passed fresh QEMU image workflows.
+
+### Current stage and blockers
+Stage 2 has a tested authorization/state-transition gate, but it is not a tool executor. Human approver identity is not authenticated, the operation arguments digest is caller-supplied, low-risk grants are in a separate database, and native OS enforcement is not integrated. The status daemon remains read-only. No executor is enabled.
+
+Stage 3 remains open: Linux namespaces, cgroups, LSM and strict operation-specific seccomp; Android Binder/AIDL, SELinux and AppOps; authenticated identity; and adversarial isolation tests are still required.
+
+### Next sequence
+1. Rebuild and QEMU-test the current gate revision on x86_64 and AArch64.
+2. Implement trusted approval identity and atomic capability reservation.
+3. Implement and test the Linux worker sandbox before enabling typed tool dispatch.
+4. Continue the core service contracts and implementations.
+5. Build the Android baseline and choose exact phone SKUs only after bootloader and recovery evidence.
+6. Implement the MOMO shell, AI runtime and essential applications.
+7. Complete signing, SBOM, OTA, rollback, hardware qualification and multi-device maintenance.
