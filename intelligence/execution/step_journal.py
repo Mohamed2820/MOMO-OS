@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-from intelligence.runtime.momo_runtime import Risk
+from intelligence.runtime.momo_runtime import GATE_AUTHORITY, Risk
 
 
 class StepExecutionStatus(str, Enum):
@@ -364,6 +364,8 @@ class StepExecutionJournal:
         now = self._now()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if self._plan_bound(connection, task_id):
+                raise ValueError("Plan-bound tasks accept steps only from the accepted plan")
             connection.execute(
                 """
                 INSERT INTO task_step_executions(
@@ -417,43 +419,66 @@ class StepExecutionJournal:
             ).fetchall()
         return tuple(StepExecutionEvent(**dict(row)) for row in rows)
 
-    def start_step(self, task_id: str, step_id: str, retry: bool = False) -> StepExecution:
+    @staticmethod
+    def _plan_bound(connection: sqlite3.Connection, task_id: str) -> bool:
+        exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_plans'"
+        ).fetchone()
+        if exists is None:
+            return False
+        return connection.execute(
+            "SELECT 1 FROM task_plans WHERE task_id = ?", (task_id,)
+        ).fetchone() is not None
+
+    def start_step(
+        self, task_id: str, step_id: str, retry: bool = False, _authority=None
+    ) -> StepExecution:
+        """Low-level start primitive. Plan-bound tasks require ExecutionGate."""
         now = self._now()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM task_step_executions WHERE task_id = ? AND step_id = ?",
-                (task_id, step_id),
-            ).fetchone()
-            if row is None:
-                raise StepExecutionNotFoundError((task_id, step_id))
-            status = StepExecutionStatus(row["status"])
-            if status == StepExecutionStatus.READY:
-                if retry:
-                    raise ValueError("A ready step is not a retry")
-            elif status == StepExecutionStatus.FAILED:
-                if not retry:
-                    raise ValueError("Retry must be explicitly requested")
-                if Risk(row["risk"]) not in {Risk.R0, Risk.R1}:
-                    raise ValueError("Side-effecting steps cannot be automatically retried")
-                if row["attempt"] > row["retry_limit"]:
-                    raise ValueError("Retry budget exhausted")
-            else:
-                raise ValueError(f"Step cannot start from state: {status.value}")
-
-            connection.execute(
-                """
-                UPDATE task_step_executions
-                SET status = 'running', attempt = attempt + 1,
-                    cancel_requested = 0, last_error = NULL, updated_at = ?
-                WHERE task_id = ? AND step_id = ?
-                """,
-                (now, task_id, step_id),
-            )
-            self._event(connection, task_id, step_id, status.value, "running",
-                        "Step attempt started", now)
+            if _authority is not GATE_AUTHORITY and self._plan_bound(connection, task_id):
+                raise ValueError("Plan-bound steps can start only through ExecutionGate")
+            self._start_locked(connection, task_id, step_id, retry, now)
             connection.commit()
         return self.get_step(task_id, step_id)
+
+    def _start_locked(
+        self, connection: sqlite3.Connection, task_id: str, step_id: str,
+        retry: bool, at: str,
+    ) -> None:
+        """Apply a start inside the caller's open write transaction."""
+        row = connection.execute(
+            "SELECT * FROM task_step_executions WHERE task_id = ? AND step_id = ?",
+            (task_id, step_id),
+        ).fetchone()
+        if row is None:
+            raise StepExecutionNotFoundError((task_id, step_id))
+        status = StepExecutionStatus(row["status"])
+        if status == StepExecutionStatus.READY:
+            if retry:
+                raise ValueError("A ready step is not a retry")
+        elif status == StepExecutionStatus.FAILED:
+            if not retry:
+                raise ValueError("Retry must be explicitly requested")
+            if Risk(row["risk"]) not in {Risk.R0, Risk.R1}:
+                raise ValueError("Side-effecting steps cannot be automatically retried")
+            if row["attempt"] > row["retry_limit"]:
+                raise ValueError("Retry budget exhausted")
+        else:
+            raise ValueError(f"Step cannot start from state: {status.value}")
+
+        connection.execute(
+            """
+            UPDATE task_step_executions
+            SET status = 'running', attempt = attempt + 1,
+                cancel_requested = 0, last_error = NULL, updated_at = ?
+            WHERE task_id = ? AND step_id = ?
+            """,
+            (at, task_id, step_id),
+        )
+        self._event(connection, task_id, step_id, status.value, "running",
+                    "Step attempt started", at)
 
     def finish_step(
         self,
