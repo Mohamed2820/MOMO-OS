@@ -355,3 +355,10 @@ Focused tests now cover success, unknown-operation denial, schema mismatch, plan
 ## Kernel isolation prerequisites — 2026-11-14
 
 Added `board/momo/kernel-security.fragment` to request namespaces, cgroups and resource controllers, seccomp filtering and Landlock. Both x86_64 and AArch64 Buildroot workflows now apply this fragment and verify the generated kernel configuration with `tools/validate_kernel_security_config.py`. Unit tests cover the validator. This is a prerequisite, not a completed sandbox: per-service namespace entry, cgroup assignment, Landlock rules, network/filesystem policy and adversarial tests remain open until the images pass.
+
+
+## Landlock filesystem boundary for IPC status service — 2026-11-14
+
+The unprivileged read-only IPC daemon now applies Landlock after binding its socket and loading seccomp. It can read/execute from `/usr`, read from `/etc`, and inspect/remove its own socket under `/run/momo`; other handled filesystem access is denied. The setup is fail-closed. A subprocess test checks allowed reads, denied reads outside the allowlist and denied writes.
+
+This is a real filesystem restriction for the status daemon, not a complete MOMO sandbox. Per-service namespaces, cgroups, network isolation, a strict syscall allowlist, authenticated principal mapping and security enforcement for future task/executor services remain open. The Landlock code and test require fresh CI and QEMU boot evidence before promotion.
