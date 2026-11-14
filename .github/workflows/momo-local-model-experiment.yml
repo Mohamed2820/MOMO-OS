@@ -20,17 +20,8 @@ jobs:
       - name: Check out MOMO
         uses: actions/checkout@v4
 
-      - name: Install llama.cpp build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev
-
-      - name: Build local CPU inference server
-        run: |
-          git clone --depth 1 https://github.com/ggml-org/llama.cpp.git "$RUNNER_TEMP/llama.cpp"
-          cmake -S "$RUNNER_TEMP/llama.cpp" -B "$RUNNER_TEMP/llama.cpp/build" \
-            -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON
-          cmake --build "$RUNNER_TEMP/llama.cpp/build" --config Release -j2 --target llama-server
+      - name: Pull official llama.cpp server image
+        run: docker pull ghcr.io/ggml-org/llama.cpp:server
 
       - name: Download Apache-2.0 local coding model
         run: |
@@ -42,18 +33,20 @@ jobs:
 
       - name: Start local-only model server
         run: |
-          "$RUNNER_TEMP/llama.cpp/build/bin/llama-server" \
-            --model "$RUNNER_TEMP/momo-model/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf" \
-            --ctx-size 8192 --threads 2 --host 127.0.0.1 --port 8080 \
-            --alias momo-local-coder > "$RUNNER_TEMP/momo-llama-server.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/momo-llama-server.pid"
+          docker run --detach --name momo-local-model \
+            --volume "$RUNNER_TEMP/momo-model:/models:ro" \
+            --publish 127.0.0.1:8080:8080 \
+            ghcr.io/ggml-org/llama.cpp:server \
+            --model /models/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf \
+            --ctx-size 8192 --threads 2 --host 0.0.0.0 --port 8080 \
+            --alias momo-local-coder --n-predict 3072
           for attempt in $(seq 1 90); do
             if curl --silent --fail http://127.0.0.1:8080/health >/dev/null; then
               exit 0
             fi
             sleep 2
           done
-          cat "$RUNNER_TEMP/momo-llama-server.log"
+          docker logs momo-local-model
           exit 1
 
       - name: Verify local provider policy and parser
