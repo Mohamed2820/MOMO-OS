@@ -6,6 +6,7 @@ on:
     branches:
       - "bootable/**"
       - "main"
+      - "integration/**"
     paths:
       - "board/momo/**"
       - "intelligence/**"
