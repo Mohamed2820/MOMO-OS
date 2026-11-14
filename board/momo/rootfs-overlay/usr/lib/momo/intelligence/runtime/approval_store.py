@@ -102,8 +102,8 @@ class ApprovalStore:
         """Return a one-time token for exactly one task, step or plan.
 
         Task-level approval (step_id=None) binds the accepted plan digest.
-        Step-level approval binds the step, its action/resource/risk and the
-        caller-declared arguments digest.
+        Step-level approval is issued only through issue_for_arguments(), which
+        derives the digest from the exact bounded JSON payload.
         """
         from intelligence.runtime.task_coordinator import _plan_digest
 
