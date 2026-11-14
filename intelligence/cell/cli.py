@@ -9,8 +9,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description='Run a bounded, read-only MOMO CELL scan.')
     parser.add_argument('--root', default='.', help='Repository root to inspect.')
     parser.add_argument('--output', default='momo-cell-report.json', help='JSON report destination.')
+    parser.add_argument('--mode', choices=('repository', 'system'), default='repository', help='Select repository or installed-system checks.')
     args = parser.parse_args()
-    report = MomoCell().scan(Path(args.root))
+    report = MomoCell(include_repository_contracts=args.mode == 'repository').scan(Path(args.root))
     write_report(report, args.output)
     print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
     return 1 if any(item.severity == 'error' for item in report.findings) else 0
