@@ -109,6 +109,32 @@ class TypedExecutorTests(unittest.TestCase):
                 "network.status.read", b"{}",
             )
 
+    def test_handler_failure_is_recorded_as_failed_read_only_step(self):
+        failing = OperationRegistry()
+        def fail(_arguments):
+            raise OSError("status provider unavailable")
+        failing.register(OperationSpec(
+            operation_id="system.status.fail",
+            domain="system",
+            required_capability="system.status.read",
+            risk=Risk.R1,
+            argument_types={},
+            handler=fail,
+        ))
+        executor = TypedExecutor(self.coordinator, self.gate, failing)
+        from intelligence.runtime.typed_executor import OperationExecutionError
+        with self.assertRaises(OperationExecutionError):
+            executor.execute(
+                self.task.task_id, self.plan, "read-status",
+                "system.status.fail", b"{}",
+            )
+        self.assertEqual(
+            self.coordinator.get_step_execution(
+                self.task.task_id, "read-status"
+            ).status.value,
+            "failed",
+        )
+
     def test_registry_refuses_side_effecting_risk_levels(self):
         with self.assertRaises(ValueError):
             self.registry.register(OperationSpec(
