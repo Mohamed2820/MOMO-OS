@@ -328,3 +328,15 @@ The gate is an in-process authorization layer, not an OS boundary or executor. A
 5. Define typed executor operations, trusted argument canonicalization, idempotency propagation, deadlines, cancellation and independent result verification.
 6. Keep tool execution disabled until adversarial tests and native OS enforcement pass.
 7. Continue core services, Android platform integration, device feasibility, user experience, AI runtime and release engineering in the master phase order.
+
+
+## Fresh Execution-Gate Image Acceptance — 2026-11-14
+
+The Buildroot image cache recovery was merged in PR #49. The integrated execution-gate revision now has fresh x86_64 and AArch64 QEMU evidence on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`:
+
+- x86_64: [run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750. Build, output verification, QEMU readiness, read-only IPC response and artifact upload passed.
+- AArch64: [run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046. Build, output verification, QEMU readiness, read-only IPC response and artifact upload passed.
+
+Both guests reported `MOMO OS READY`, the correct architecture and `tool_execution: disabled`. The execution-gate code commit passed repository validation with 167 unit tests. This closes the current virtual image integration gate for the gate revision; it does not close physical device, Android, executor or release gates.
+
+The next critical path is authenticated approval identity → trusted argument canonicalization → atomic grant reservation/dispatch intent → per-task OS sandbox → typed executor protocol → independent outcome reconciliation. No side-effecting tool execution is permitted before these gates pass.
