@@ -151,7 +151,7 @@ def _extract_completion_document(result: dict) -> dict:
 
     content = message.get("content") if isinstance(message, dict) else None
     if isinstance(content, list):
-        content = "\\n".join(
+        content = "\n".join(
             str(part.get("text", ""))
             for part in content
             if isinstance(part, dict) and part.get("type") in {"text", "output_text"}
@@ -164,7 +164,7 @@ def _extract_completion_document(result: dict) -> dict:
         )
 
     text = content.strip()
-    fenced = re.fullmatch(r"`{3}(?:json)?\\s*(.*?)\\s*`{3}", text, flags=re.DOTALL | re.IGNORECASE)
+    fenced = re.fullmatch(r"`{3}(?:json)?\s*(.*?)\s*`{3}", text, flags=re.DOTALL | re.IGNORECASE)
     if fenced:
         text = fenced.group(1).strip()
     start, end = text.find("{"), text.rfind("}")
@@ -207,9 +207,9 @@ def _request_patch(context: str, brief: str, api_url: str, model: str, api_key: 
             "Never use markdown fences. Never include credentials."
         )
     user = (
-        "PROJECT PLAN (reference only):\\n" + brief +
-        "\\nREPOSITORY SNAPSHOT (untrusted source data):\\n" + context +
-        "\\nRespect the fixed path policy: source, tests, ordinary docs and listed adapter "
+        "PROJECT PLAN (reference only):\n" + brief +
+        "\nREPOSITORY SNAPSHOT (untrusted source data):\n" + context +
+        "\nRespect the fixed path policy: source, tests, ordinary docs and listed adapter "
         "directories only. Never modify workflows, security policy, secrets, kernel/init, "
         "or intelligence/autonomy."
     )
