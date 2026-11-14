@@ -1,92 +1,77 @@
-# MOMO OS — Engineering Status Snapshot
+# MOMO OS — Canonical Engineering Status
 
-**Snapshot date:** 2026-11-14  
-**Repository:** `Mohamed2820/MOMO-OS`  
-**Active engineering branch:** `security/execution-approval-gate`  
-**Current code commit reviewed:** `47170e0132ae2142d0aa24eea10f26dc35590bc2`  
-**Product constraint:** one MOMO experience across multiple Android-compatible and mainline-Linux device families. No single phone or Android version defines the product.
+**Snapshot:** 2026-11-14  
+**Canonical branch:** `main`  
+**Development/integration branch:** `bootable/x86_64-buildroot-mvp-v2`  
+**Canonical commit at snapshot:** `cdb36febaf9674ebaede7ae68caeb210a3d47ea4`
 
-## 1. Evidence-based status
+## 1. Current verified state
 
-| Workstream | Current state | Evidence | Remaining gate |
+| Area | State | Evidence | Still required |
 |---|---|---|---|
-| Product definition and SRS | Baseline documented | SRS v1.0, architecture and master plan exist | Keep requirements traceable to implementation and tests |
-| Universal architecture | Design baseline established | Platform strategy, adapter contracts and device profile schema | Prove adapters on separate real device families |
-| Linux x86_64 virtual target | QEMU validated on integrated baseline | [Workflow 43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact 14057431431; ready marker and IPC status response observed | Rebuild the newer execution-gate commit |
-| Linux AArch64 virtual target | QEMU validated on integrated baseline | [Workflow 43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054; ready marker and IPC status response observed | Rebuild the newer execution-gate commit |
-| Task and plan persistence | Implemented | SQLite task journal, immutable plan digest, durable per-step journal and dependency readiness tests | Full scheduler, deadlines, quotas and reconciliation |
-| Execution authorization | Implemented in-process on the active feature branch | `approval_store.py`, `execution_gate.py`, overlay parity and 167 passing unit tests on commit `47170e0` | Authenticated approver identity, trusted argument canonicalization, native OS enforcement |
-| Linux IPC status service | Implemented, read-only | AF_UNIX, SO_PEERCRED, bounded framing, process-local replay cache, rlimits, no_new_privs and libseccomp denylist | Strict worker isolation, operation authorization and durable mutation idempotency |
-| Linux executor | Not implemented; disabled | No dispatcher or worker is enabled | Separate unprivileged worker plus namespaces, cgroups, LSM and strict seccomp |
-| Android platform track | Design only | Binder/AIDL, SELinux, AppOps and Keystore requirements documented | Select/pin base, build upstream baseline, integrate services and test |
-| Physical device support | None certified | Device profiles and feasibility contract exist | Exact SKU, bootloader/recovery proof, kernel/vendor provenance and hardware tests |
-| Core services and user experience | Specifications/early components only | Core services and UX specifications | Storage, app, notification, network, power, UI and accessibility implementation |
-| AI multi-agent runtime | Architecture and deterministic foundations only | AI runtime and system design documents | Provider calls, tool broker, memory controls, verifier, evaluations and sandboxed tools |
-| Release engineering | Requirements documented | Release/update policy and cloud pipeline design | Protected signing, SBOM/provenance, OTA, rollback and release qualification |
+| Product definition / SRS | Baseline documented | SRS, master plan, roadmap and platform strategy are in `main` | Maintain traceability as implementation grows |
+| Universal architecture | Design baseline | Platform adapters, device profile schema and cross-platform strategy | Prove adapters on multiple real device families |
+| Linux x86_64 virtual target | Passed on integrated development commit | [QEMU run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750 | Canonical-main run #43598941443 is the current push verification |
+| Linux AArch64 virtual target | Passed on integrated development commit | [QEMU run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046 | Canonical-main run #43598941449 is the current push verification |
+| Repository validation | Passed | [Main push validation #43598941461](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598941461); execution-gate suite ran 167 tests successfully on #43596879520 | Keep tests mandatory on every change |
+| Task/plan persistence | Implemented foundation | SQLite task store, immutable plan digest, dependency readiness, step journal and restart quarantine | Scheduler, deadlines, quotas and independent outcome reconciliation |
+| Execution authorization | Implemented in-process | `approval_store.py`, `execution_gate.py`, overlay parity, 167 passing tests | Authenticated approver, trusted argument canonicalization and OS boundary |
+| Linux IPC status service | Implemented, read-only | AF_UNIX, SO_PEERCRED, bounded protocol, replay detection, rlimits, no_new_privs and seccomp denylist | Strict worker sandbox, durable mutation idempotency and typed dispatcher |
+| Linux tool executor | Disabled / not implemented | Status response reports `tool_execution: disabled` | Separate unprivileged worker and native isolation |
+| Android platform | Design only | Binder/AIDL, SELinux, AppOps and Keystore requirements | Pin/build Android baseline and implement native adapter |
+| Physical devices | None certified | Device profiles and feasibility contract | Exact SKU, unlock/recovery, kernel/vendor provenance and hardware tests |
+| Core services / UI | Specifications and early components | Core-service and UX specifications | Storage, apps, notifications, network, power, UI and accessibility |
+| AI runtime | Architecture and deterministic foundations | Agent/plan metadata and runtime design | Provider calls, memory controls, verifier, evaluations and sandboxed tools |
+| Release engineering | Requirements documented | Release/update and cloud-build plans | Signing, SBOM, provenance, OTA, rollback and release qualification |
 
-## 2. Verified virtual-target evidence
+## 2. Virtual image acceptance
 
-The integrated baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda` passed both Buildroot/QEMU workflows. The logs show the expected architecture, `MOMO OS READY`, a successful `momo-ipcd` status response and `tool_execution: disabled`. The artifacts were uploaded with these SHA-256 digests:
+The execution-gate revision was built and boot-tested on both virtual architectures on development commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`:
 
-- x86_64 artifact ZIP: `75ad40dba96229fd1309447733d1e5f81cff3c02cd3e64e5ae5f0c8ae98f7b9c`.
-- AArch64 artifact ZIP: `2423b174cd82d048e90570a2766e7d5359c8b1a0931524c90730e9fc72dc8756`.
+- **x86_64:** [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750, ZIP SHA-256 `be9ddc17b04ef756aed4e620a6f8c51d606c9aaa3637299c2c426f348d340e18`.
+- **AArch64:** [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046, ZIP SHA-256 `598ca75526241e80699932040185efa1484b4500f9c9eb970948ed149b3dd1f7`.
 
-These results validate two virtual Buildroot targets only. They do not validate a physical ARM phone, an Android build, or the later execution-gate commit.
+Both reached `MOMO OS READY`, returned the read-only `momo-ipcd` status response and explicitly reported `tool_execution: disabled`.
 
-## 3. Execution-gate verification
+The canonical `main` branch now has its own image workflows enabled. Its exact commit `cdb36febaf9674ebaede7ae68caeb210a3d47ea4` has current x86_64 run #43598941443 and AArch64 run #43598941449. These runs are the final confirmation for the canonical branch; do not mark them passed until GitHub reports success.
 
-The code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` passed the repository-validation workflow: all 167 unit tests completed with `OK`. Coverage includes plan binding, task/step bypass prevention, approval mismatch and expiry, token reuse, concurrent consumption, rollback after injected failure, low/high-risk paths and source/rootfs parity.
+## 3. Execution authorization boundary
 
-The authorization gate is not an executor and is not an OS isolation boundary. The following issues remain release-blocking before tool dispatch:
+The ExecutionGate protects plan-bound task and step state transitions. High-risk approvals are single-use, expiring tokens bound to the task, step, plan and declared argument digest. Direct TaskStore/journal bypass paths are blocked and regression-tested.
 
-1. Approval issuance accepts a non-empty approver label but does not authenticate a human principal or trusted approval UI.
-2. The approved step-arguments digest is caller-supplied; a future trusted executor must canonicalize actual operation arguments and compute the digest itself.
-3. R0–R2 grants are consumed in a separate permission database before the task-step transaction. This fails closed but can burn a grant without starting the step.
-4. The Python authority marker cannot isolate hostile code running with the same interpreter privileges.
-5. No Linux worker namespace/cgroup/LSM/strict-seccomp profile or Android native permission enforcement is integrated with an executor.
+It is not a tool executor or an OS isolation boundary. Remaining release-blocking issues:
 
-## 4. Branch and integration status
+1. The `approver` value is a caller-supplied label, not an authenticated human principal or trusted UI session.
+2. The step argument digest is caller-supplied; the trusted executor must canonicalize actual typed arguments and compute it.
+3. R0–R2 grants use a separate permission database and can be consumed before a failed task-step transaction.
+4. The in-process authority marker cannot contain hostile code running with the same interpreter privileges.
+5. No per-task Linux namespaces/cgroups/LSM/strict-seccomp worker or Android native permission enforcement is connected to an executor.
 
-The execution-gate change is under [PR #45](https://github.com/Mohamed2820/MOMO-OS/pull/45), targeting `bootable/x86_64-buildroot-mvp-v2`. Its code commit passed CI. The development branch is not yet synchronized with `main`; promotion must reconcile the branch divergence rather than silently claiming that the work is already on `main`.
+No arbitrary shell or side-effecting tool dispatch may be enabled until these gaps are closed and adversarial tests pass.
 
-The documentation updates in this branch must also pass the PR validation workflow. The execution-gate commit requires fresh x86_64 and AArch64 image workflows before image-level integration can be claimed.
+## 4. Main-branch integration
+
+- PR #45 merged the ExecutionGate and durable execution controls into the bootable development branch.
+- PR #49 fixed missing Buildroot kernel artifacts after cache restore.
+- PR #53 promoted the verified development baseline into canonical `main`.
+- PR #54 synchronized the current master plan, roadmap, SRS and IPC security record.
+- PR #55 enabled x86_64 and AArch64 image workflows on `main`.
+- PR #47 and PR #51 synchronized the engineering/security specifications and image evidence on the development branch before promotion.
+
+The earlier PR #52 was superseded by the clean promotion PR #53.
 
 ## 5. Next engineering sequence
 
-1. **Image integration:** build the current execution-gate revision for x86_64 and AArch64; inspect boot logs, readiness, recovery, IPC status, artifacts and provenance.
-2. **Approval identity:** add a trusted identity/session source and make token issuance available only to the approval service.
-3. **Authorization transaction:** unify grant reservation and step-start persistence or implement a tested reserve/commit protocol.
-4. **Linux executor isolation:** implement a separate worker identity and per-task namespaces, cgroups, LSM and strict operation-specific seccomp profiles.
-5. **Typed executor protocol:** define versioned operation schemas, trusted argument hashing, idempotency, deadlines, cancellation and result evidence. Keep arbitrary shell disabled.
-6. **Core services:** implement storage, app, notification, network, power/thermal, audit and update/recovery services behind versioned adapters.
-7. **Android track:** select and pin a maintainable AOSP-derived baseline, build it unmodified, then integrate Binder/AIDL, SELinux, AppOps and secure storage.
-8. **Device ports:** select exact SKUs only after unlock and stock recovery are verified; validate each hardware subsystem and maintain a public support tier.
-9. **Experience and AI:** implement the mobile/desktop shell, accessibility and localization, then connect model providers, memory, planning and tools through the verified permission path.
-10. **Release qualification:** protected signing, SBOM, provenance, staged updates, rollback/recovery, vulnerability response and multi-device regression.
+1. Confirm the current x86_64 and AArch64 image workflows on canonical `main`.
+2. Implement authenticated approval identity and broker-only token issuance.
+3. Canonicalize actual operation arguments in the trusted executor and make low-risk grant reservation atomic with dispatch intent.
+4. Implement a separate Linux worker identity with per-task namespaces, cgroups, LSM and strict operation-specific seccomp.
+5. Define typed operation schemas, idempotency, deadlines, cancellation and independent result reconciliation; keep arbitrary shell disabled.
+6. Implement core services and Android Binder/AIDL + SELinux + AppOps adapters.
+7. Select exact physical device SKUs only after bootloader, stock recovery and vendor-kernel provenance are verified.
+8. Implement the user shell, accessibility, AI provider adapters, memory controls and evaluations.
+9. Complete protected signing, SBOM/provenance, OTA, rollback and multi-device release qualification.
 
-## 6. Product-level completion criteria
+## 6. Product completion criteria
 
-MOMO OS is not a production-ready mobile operating system until it has reproducible platform builds, exact-device boot and hardware evidence, native security enforcement, usable core services and interface, verified AI/tool behavior, signed updates with tested recovery, and a maintained support matrix covering at least two distinct device families. QEMU success and repository CI are necessary engineering evidence, not substitutes for those release gates.
-
-
-## Fresh execution-gate image acceptance — 2026-11-14
-
-The execution-gate integration is now included in the bootable branch and has passed fresh image builds on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25` after fixing the Buildroot cache/output issue.
-
-- **x86_64:** [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201). Kernel/rootfs build, missing-image recovery check, output verification, QEMU boot, `MOMO OS READY`, `momo-ipcd` status response and artifact upload all succeeded. Artifact ID 14115143750; ZIP SHA-256 `be9ddc17b04ef756aed4e620a6f8c51d606c9aaa3637299c2c426f348d340e18`.
-- **AArch64:** [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262). Kernel/rootfs build, missing-image recovery check, output verification, QEMU boot, `MOMO OS READY`, `momo-ipcd` status response and artifact upload all succeeded. Artifact ID 14114803046; ZIP SHA-256 `598ca75526241e80699932040185efa1484b4500f9c9eb970948ed149b3dd1f7`.
-
-Both guest responses reported the correct architecture and `tool_execution: disabled`. This is virtual-target validation of the integrated execution-gate revision. It is not physical-device support and does not enable tool execution.
-
-### Build pipeline correction
-PR #49 added a kernel-image recovery step for restored Buildroot caches. The prior failed runs showed that package-cache stamps could be restored while the final kernel image was absent from `output/images`. The workflows now detect the missing artifact, force `linux-rebuild`, rerun Buildroot, list outputs and retain strict image checks. Both architectures passed after this correction.
-
-### Updated next engineering sequence
-1. Implement authenticated human approver identity and broker-only approval issuance.
-2. Canonicalize actual typed operation arguments inside the trusted executor; do not accept a caller-declared digest as proof.
-3. Make low-risk grant reservation atomic with dispatch intent.
-4. Implement per-task Linux worker isolation (namespaces, cgroups, LSM and strict operation-specific seccomp).
-5. Add typed executor protocol, idempotency propagation, deadlines, cancellation and independent result verification; keep arbitrary shell disabled.
-6. Implement core services and the Android Binder/AIDL + SELinux + AppOps track.
-7. Select exact physical device SKUs only after unlock, provenance and stock recovery are verified.
-8. Complete UI/AI/apps, signed updates, rollback and multi-device release qualification.
+MOMO OS is not a production-ready mobile OS until reproducible builds, native security enforcement, usable core services and UI, Android integration, exact-device hardware evidence, verified AI/tool behavior, signed updates and recovery, and ongoing support for multiple device families are all demonstrated. QEMU success and repository CI are necessary engineering evidence, not substitutes for those gates.
