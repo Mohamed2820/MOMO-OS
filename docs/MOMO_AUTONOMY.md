@@ -18,11 +18,11 @@ The worker also supports an explicitly selected local OpenAI-compatible inferenc
 - `MOMO_AGENT_API_URL=http://127.0.0.1:8080/v1/chat/completions`
 - `MOMO_AGENT_MODEL=momo-local-coder`
 
-Local mode accepts only HTTP loopback addresses (`127.0.0.1`, `localhost`, or `::1`), rejects API keys, and never silently redirects local requests to a remote provider. The experimental GitHub Actions workflow builds llama.cpp and downloads the Qwen2.5-Coder 1.5B Q4_K_M GGUF model (Apache-2.0 distribution) into the disposable runner, then runs one bounded candidate cycle with read-only GitHub permissions.
+Local mode accepts only HTTP loopback addresses (`127.0.0.1`, `localhost`, or `::1`), rejects API keys, and never silently redirects local requests to a remote provider. The experimental GitHub Actions workflow builds llama.cpp and downloads the Qwen2.5-Coder 7B Q3_K_M GGUF model (Apache-2.0 distribution) into the disposable runner, then runs one bounded candidate cycle with read-only GitHub permissions.
 
 This is local inference, not model training. MOMO specializes the model at runtime using its project brief, bounded source snapshot, strict output contract, and deterministic tests. Fine-tuning model weights would require a separately prepared, licensed training dataset and suitable accelerator hardware; no weight training is claimed or performed here.
 
-The 1.5B model is deliberately an experiment, not an assumed replacement for a stronger hosted coding model. Its candidate must pass the same patch policy and full independent test suite. A failed, malformed, empty, or low-quality proposal is a failed experiment, not a successful development cycle.
+The earlier 1.5B model failed the strict JSON proposal contract. The 7B model is the stronger follow-up experiment, not an assumed replacement for a stronger hosted coding model. Its candidate must pass the same patch policy and full independent test suite. A failed, malformed, empty, or low-quality proposal is a failed experiment, not a successful development cycle.
 
 ## Authority granted
 
