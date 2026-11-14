@@ -2,7 +2,7 @@ name: Repository validation
 
 on:
   push:
-    branches: ["main", "foundation/**", "integration/**"]
+    branches: ["main", "foundation/**", "integration/**", "ci/**"]
   pull_request:
   workflow_dispatch:
 
