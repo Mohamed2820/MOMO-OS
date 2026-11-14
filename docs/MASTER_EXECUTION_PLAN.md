@@ -304,3 +304,35 @@ Current acceptance runs:
 Do not merge further changes to the bootable branch while these image workflows are running. Once complete, inspect kernel/rootfs outputs, QEMU serial logs, IPC status response and uploaded artifacts independently for each architecture. Green repository-validation is not a substitute for either image test.
 
 Remaining gates: resolve image/boot failures; adversarial IPC/seccomp tests; explicit operation/capability authorization; namespace and cgroup isolation plus LSM policy; durable side-effect idempotency and recovery; only then a non-privileged executor adapter. Android remains a separate AOSP/Binder-AIDL/SELinux/AppOps track, followed by per-device bootloader/kernel/DTB/firmware/driver validation.
+
+
+## Execution Progress Record — 2026-11-14: plan-bound execution and Linux IPC
+
+### Delivered in the integration candidate
+- Integrated the durable per-step journal with TaskCoordinator and the Buildroot rootfs overlay.
+- Added plan-bound task/step start enforcement, single-use expiring approval tokens, argument/plan binding, replay and concurrency regression tests.
+- Added Linux AF_UNIX framing, kernel-derived peer credentials and a read-only IPC status daemon under a dedicated unprivileged service account.
+- Added process limits, `no_new_privs` and a required libseccomp denylist for the status daemon.
+- Added x86_64 and AArch64 Buildroot/QEMU workflow definitions and refreshed the SRS, roadmap, support matrix and engineering specifications.
+- Added execution runtime, service API, Linux sandbox and Android integration design documents.
+
+### Canonical validation
+Integration PR #48 passed repository validation on its current initial head: 167 unit tests, documentation/JSON validation, device-profile schema validation and shell utility checks (run [#43597582878](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597582878)). The PR remains an integration candidate until its latest head is revalidated after documentation/workflow additions.
+
+### Evidence not yet achieved
+- Fresh x86_64 QEMU build and boot for the execution gate + IPC daemon revision.
+- Fresh AArch64 QEMU build and boot for the same revision.
+- Production Linux namespaces/cgroups/LSM policy and strict per-service seccomp allowlists.
+- Authenticated approval identity; the current approval issuer still accepts a caller-provided approver label.
+- Executor-computed canonical argument digest; the current gate accepts a digest argument from its caller.
+- A real typed tool executor and outcome reconciler; tool execution remains disabled.
+- Android AOSP baseline, Binder/AIDL services, SELinux/AppOps integration and physical device port.
+
+### Next critical path
+1. Re-run repository validation on the latest PR #48 head.
+2. Build and boot the x86_64 and AArch64 QEMU images; inspect serial logs and artifacts.
+3. Fix all build/boot failures before promoting the integration.
+4. Close the remaining execution-gate trust gaps: authenticated human identity and executor-computed argument binding.
+5. Add native Linux service isolation and split authority-bearing databases behind service APIs.
+6. Implement one non-destructive typed reference adapter, then test timeout, cancellation, idempotency and ambiguous outcomes.
+7. Only then progress to Android platform selection and device feasibility.
