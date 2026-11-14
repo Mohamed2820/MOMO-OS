@@ -21,7 +21,7 @@
 | Durable step state and history | `docs/STEP_EXECUTION_JOURNAL.md` | `intelligence/execution/step_journal.py` | State transition, event-chain, retry and recovery tests | Implemented / unit-tested |
 | Plan-bound execution authorization | `docs/EXECUTION_RUNTIME_DESIGN.md` | `intelligence/runtime/execution_gate.py` | Forgery, replay, expiry, binding and concurrency tests | Implemented / unit-tested; in-process only |
 | One-time approval tokens | `docs/EXECUTION_RUNTIME_DESIGN.md` | `intelligence/runtime/approval_store.py` | Token hashing, binding, expiry, replay and rollback tests | Implemented / unit-tested; approver identity not authenticated |
-| Trusted argument binding | `docs/EXECUTION_RUNTIME_DESIGN.md` | Current gate accepts caller-supplied digest | Gate binding tests | Partial; trusted executor must canonicalize actual arguments |
+| Trusted argument binding | `docs/EXECUTION_RUNTIME_DESIGN.md` | `intelligence/runtime/argument_binding.py` provides bounded strict-JSON parsing, duplicate-key rejection, deterministic canonical JSON and SHA-256 digest; mirrored in rootfs | `tests/test_argument_binding.py` and runtime overlay parity test | Primitive implemented / unit tests added; not yet wired to an authenticated executor or ExecutionGate |
 | Interrupted-step recovery | `docs/STEP_EXECUTION_JOURNAL.md` | `momo-task recover` and coordinator recovery | Restart quarantine and idempotence tests | Implemented / unit-tested |
 | Linux IPC framing | `docs/LINUX_IPC_SECURITY.md` | `intelligence/security/ipc_protocol.py` | Malformed frame, size, duplicate-key and schema tests | Implemented / unit-tested |
 | Linux peer identity | `docs/LINUX_IPC_SECURITY.md` | `intelligence/security/linux_peercred.py` | Peer UID/GID authorization tests | Implemented / unit-tested |
@@ -37,6 +37,9 @@
 | Storage, app, notification, network, power and OTA services | `docs/SERVICE_API_CONTRACTS.md` | No complete independently secured service set | No end-to-end conformance suite | Not implemented |
 
 ## Current CI evidence
+
+The strict canonical argument-binding primitive was added after the last recorded CI run. Its tests and rootfs parity check require a fresh repository validation run before the status above can be promoted beyond source-level implementation.
+
 
 The latest repository validation run for PR #48 head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab` is [#43598435793](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435793), completed successfully. It includes documentation/JSON validation, YAML parsing of GitHub workflows, device-profile schema validation, shell checks and 167 runtime unit tests. The two image workflows for the same head remain in progress; their QEMU boot evidence is still required.
 
