@@ -393,3 +393,17 @@ This is a per-service sandbox profile for the read-only status daemon only. PID/
 Previous image attempts built and reached `MOMO OS READY` but failed final acceptance because namespace reporting compared against `/proc/1` and returned false. The daemon now verifies its live namespace inode identities against values captured by the root launcher immediately after `unshare()`. Corrected image workflows are running; the section remains open until both architectures pass.
 
 **Boundary:** this section does not enable arbitrary or side-effecting tools. The IPC service remains read-only. Authenticated human/session identity, side-effecting operation adapters, full task/executor sandboxing, deadline/cancellation orchestration, outcome reconciliation, Android platform enforcement and physical-device qualification remain later sections.
+
+
+## MOMO CELL integration before Section 2 — 2026-11-14
+
+- [x] Add MOMO CELL as a first-class architecture subsystem, independent from boot-critical services.
+- [x] Implement an allowlisted specialist-cell registry (Guardian, Builder, Contract) with bounded repository traversal and file-size limits.
+- [x] Implement read-only Python AST and JSON contract checks plus required-document checks.
+- [x] Emit structured findings and approval-required repair proposals without mutating source files.
+- [x] Add unit tests proving detection, bounded scope, duplicate-cell rejection, and no file mutation.
+- [x] Run the health scan in repository validation and add a scheduled/manual GitHub Actions health cycle with retained JSON report.
+- [ ] Complete PR review and merge the MOMO CELL increment into the execution-runtime integration branch.
+- [ ] Extend the typed executor with a dedicated, authenticated, sandboxed repair-proposal adapter before enabling any source writes.
+
+**Operational boundary:** MOMO CELL v1 is active as a deterministic self-monitoring and repair-planning subsystem. It is not yet an autonomous code-writing or self-merging system. Model-driven repair, isolated patch application, authenticated GitHub write identity, rollback verification, and adversarial testing remain explicit later gates. Section 2 must not treat those capabilities as already delivered.

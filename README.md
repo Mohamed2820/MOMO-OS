@@ -45,6 +45,10 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 
 - [x86_64 QEMU bring-up image](docs/BOOTABLE_IMAGE.md) — Buildroot-based experimental Linux image with MOMO startup and diagnostics. It is not a phone ROM; QEMU boot evidence is required before calling the target bootable.
 
+## Autonomous maintenance
+
+- [MOMO CELL — self-maintenance core](docs/MOMO_CELL.md): bounded specialist cells, repository health scans, repair proposals, and guarded evolution.
+
 ## Technical specifications
 
 - [Vision](docs/VISION.md)

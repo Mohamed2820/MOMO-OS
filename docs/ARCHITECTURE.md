@@ -71,3 +71,10 @@ Route tasks across on-device and remote models using privacy classification, cap
 - Prefer stable interfaces and modular components.
 - Keep upstream patches small and documented.
 - Do not couple system boot or emergency functions to an AI service.
+
+
+## MOMO CELL — autonomous maintenance subsystem
+
+MOMO CELL is a first-class, separately bounded maintenance subsystem. Its v1 registry contains Guardian, Builder, and Contract specialist cells. It performs deterministic repository health checks, emits structured findings and repair proposals, and runs from repository validation plus a scheduled GitHub Actions health cycle. It is not on the boot-critical path and cannot prevent core OS startup when unavailable.
+
+The initial implementation is read-only: it cannot edit files, execute shell commands, mint credentials, grant itself permissions, or merge changes. Any future repair worker must submit typed work through the task planner and ExecutionGate, use an isolated branch/worker, pass tests and platform acceptance, and open a reviewed pull request. Protected security and execution-gate code require independent approval. See [MOMO CELL design](MOMO_CELL.md).
