@@ -109,10 +109,10 @@ class IPCServiceTests(unittest.TestCase):
             "assert ctypes.CDLL(None).prctl(39, 0, 0, 0, 0) == 1; "
             "apply_seccomp_filter(); "
             "import socket; "
-            "socket_denied=False; "
+            "socket_denied=False\n"
             "try: socket.socket()\n"
             "except PermissionError: socket_denied=True\n"
-            "assert socket_denied, 'socket creation was not denied'; "
+            "assert socket_denied, 'socket creation was not denied'\n"
             "os.fork()"
         )
         env = os.environ.copy()
