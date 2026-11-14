@@ -118,6 +118,42 @@ class IPCServiceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("PermissionError", result.stderr)
 
+    def test_landlock_confines_filesystem_to_read_only_allowlist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            allowed = root / "allowed"
+            blocked = root / "blocked"
+            allowed.mkdir()
+            blocked.mkdir()
+            (allowed / "read.txt").write_text("safe", encoding="utf-8")
+            (blocked / "secret.txt").write_text("private", encoding="utf-8")
+
+            service_path = ROOT / "board/momo/rootfs-overlay/usr/lib/momo"
+            code = (
+                "from pathlib import Path; import sys; "
+                "from momo_ipcd import apply_landlock_restrictions; "
+                "allowed=Path(sys.argv[1]); blocked=Path(sys.argv[2]); "
+                "apply_landlock_restrictions(read_paths=(allowed,), removable_paths=()); "
+                "assert (allowed / 'read.txt').read_text(encoding='utf-8') == 'safe'; "
+                "try_read=False; "
+                "try: (blocked / 'secret.txt').read_text(encoding='utf-8')\n"
+                "except PermissionError: try_read=True\n"
+                "assert try_read, 'Landlock allowed a read outside the allowlist'; "
+                "try_write=False; "
+                "try: (allowed / 'new.txt').write_text('no', encoding='utf-8')\n"
+                "except PermissionError: try_write=True\n"
+                "assert try_write, 'Landlock allowed a write in a read-only path'; "
+                "print('landlock-ok')"
+            )
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(service_path)
+            result = subprocess.run(
+                [sys.executable, "-c", code, str(allowed), str(blocked)],
+                env=env, capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("landlock-ok", result.stdout)
+
     def test_refuses_to_replace_regular_file_or_foreign_path(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ipc.sock"
