@@ -31,14 +31,14 @@
 | Versioned core service contracts | `docs/SERVICE_API_CONTRACTS.md` | Current status-only IPC protocol is narrower | Contract review; no full service conformance suite | Design only |
 | Android service integration | `docs/ANDROID_PLATFORM_INTEGRATION.md` | No Binder/AIDL or SELinux/AppOps adapter | No Android build/device tests | Not implemented |
 | Device inventory portability | `docs/PLATFORM_ADAPTERS.md` | Platform-neutral contracts and initial inventory components | Unit tests; no complete per-device adapters | Partial |
-| x86_64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU target and rootfs overlay | Fresh run [#43598234455](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598234455) was superseded/cancelled during an integration-branch update; current run [#43598283486](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598283486) must complete | Pending |
-| AArch64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU virt workflow and rootfs overlay | Current run [#43598283490](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598283490) must complete | Pending |
+| x86_64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU target and rootfs overlay | Current PR #48 head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) is building the kernel/root filesystem; image verification and QEMU boot are pending | Pending |
+| AArch64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU virt workflow and rootfs overlay | Current PR #48 head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) is building the kernel/root filesystem; image verification and QEMU boot are pending | Pending |
 | Physical Android phone support | `docs/DEVICE_COMPATIBILITY.md`, `docs/PLATFORM_SUPPORT_MATRIX.md` | No exact-SKU port | No device boot or hardware validation | Unsupported |
 | Storage, app, notification, network, power and OTA services | `docs/SERVICE_API_CONTRACTS.md` | No complete independently secured service set | No end-to-end conformance suite | Not implemented |
 
 ## Current CI evidence
 
-The latest repository validation run for the integration candidate is [#43598234532](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598234532). It includes documentation/JSON validation, YAML parsing of GitHub workflows, device-profile schema validation, shell checks and 167 runtime unit tests. The job must finish successfully before the integration candidate is promoted.
+The latest repository validation run for PR #48 head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab` is [#43598435793](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435793), completed successfully. It includes documentation/JSON validation, YAML parsing of GitHub workflows, device-profile schema validation, shell checks and 167 runtime unit tests. The two image workflows for the same head remain in progress; their QEMU boot evidence is still required.
 
 ## Release rule
 
