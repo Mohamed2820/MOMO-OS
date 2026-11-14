@@ -120,14 +120,6 @@
           "workspace": { "properties": { "mode": { "const": "ephemeral" } }, "required": ["mode"] }
         }
       }
-    },
-    {
-      "if": { "properties": { "runtime": { "const": "builtin" } }, "required": ["runtime"] },
-      "then": {
-        "properties": {
-          "artifact_sha256": { "const": "0000000000000000000000000000000000000000000000000000000000000000" }
-        }
-      }
     }
   ]
 }
