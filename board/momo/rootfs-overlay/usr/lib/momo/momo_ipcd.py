@@ -216,11 +216,14 @@ def _response_frame(payload: dict[str, Any]) -> bytes:
 
 
 def _namespace_isolated(name: str) -> bool:
+    """Verify this daemon still has the namespace created by its root launcher."""
     try:
-        own = os.stat(f"/proc/self/ns/{name}").st_ino
-        init = os.stat(f"/proc/1/ns/{name}").st_ino
-        return own != init
-    except OSError:
+        expected = json.loads(os.environ.get("MOMO_NAMESPACE_INODES", "{}"))
+        expected_inode = expected.get(name)
+        if type(expected_inode) is not int:
+            return False
+        return os.stat(f"/proc/self/ns/{name}").st_ino == expected_inode
+    except (OSError, TypeError, ValueError):
         return False
 
 
