@@ -31,14 +31,14 @@
 | Versioned core service contracts | `docs/SERVICE_API_CONTRACTS.md` | Current status-only IPC protocol is narrower | Contract review; no full service conformance suite | Design only |
 | Android service integration | `docs/ANDROID_PLATFORM_INTEGRATION.md` | No Binder/AIDL or SELinux/AppOps adapter | No Android build/device tests | Not implemented |
 | Device inventory portability | `docs/PLATFORM_ADAPTERS.md` | Platform-neutral contracts and initial inventory components | Unit tests; no complete per-device adapters | Partial |
-| x86_64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU target and rootfs overlay | Current PR #48 head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) is building the kernel/root filesystem; image verification and QEMU boot are pending | Pending |
-| AArch64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU virt workflow and rootfs overlay | Current PR #48 head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) is building the kernel/root filesystem; image verification and QEMU boot are pending | Pending |
+| x86_64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU target and rootfs overlay | Run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) is still on older head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; current PR #48 head is newer and has no fresh image run | Pending — stale build evidence |
+| AArch64 Buildroot image | `docs/BOOTABLE_IMAGE.md` | Buildroot QEMU virt workflow and rootfs overlay | Run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) is still on older head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; current PR #48 head is newer and has no fresh image run | Pending — stale build evidence |
 | Physical Android phone support | `docs/DEVICE_COMPATIBILITY.md`, `docs/PLATFORM_SUPPORT_MATRIX.md` | No exact-SKU port | No device boot or hardware validation | Unsupported |
 | Storage, app, notification, network, power and OTA services | `docs/SERVICE_API_CONTRACTS.md` | No complete independently secured service set | No end-to-end conformance suite | Not implemented |
 
 ## Current CI evidence
 
-The strict canonical argument-binding primitive and its gate/approval integration were added after the last recorded CI run. Focused parser, approval-binding, immutable-argument and rootfs parity tests require a fresh repository validation run before the status above can be promoted beyond source-level implementation.
+The strict canonical argument-binding primitive and its gate/approval integration were added after the last recorded CI run. Focused parser, approval-binding, immutable-argument and rootfs parity tests require a fresh repository validation run before the status above can be promoted beyond source-level implementation. The old image workflows are also tied to an earlier commit and cannot qualify the current PR head.
 
 
 The latest repository validation run for PR #48 head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab` is [#43598435793](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435793), completed successfully. It includes documentation/JSON validation, YAML parsing of GitHub workflows, device-profile schema validation, shell checks and 167 runtime unit tests. The two image workflows for the same head remain in progress; their QEMU boot evidence is still required.
