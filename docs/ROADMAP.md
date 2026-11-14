@@ -205,3 +205,27 @@ PR #42 is merged into `bootable/x86_64-buildroot-mvp-v2`, integrating the read-o
 Fresh x86_64 and AArch64 image workflows are running against integrated commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`: [x86_64](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) and [AArch64](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951). At last inspection, both were in the kernel/rootfs build stage; QEMU acceptance and artifacts remain pending. Historical x86_64 baseline evidence must not be used to claim this integrated revision passed.
 
 Next gates: fresh image/QEMU evidence on both architectures; adversarial security tests; explicit capability authorization; namespace/cgroup/LSM isolation; durable execution/idempotency design; then separate AOSP/Binder-AIDL/SELinux/AppOps implementation and per-device hardware enablement. No universal physical-device compatibility is claimed.
+
+
+## Progress Evidence Update — 2026-11-14: execution runtime and IPC integration
+
+The latest integration candidate adds the plan-bound execution gate and durable step journal to the coordinator and Buildroot overlay. It adds single-use, expiring approval tokens bound to task/step/plan/arguments, plus regression tests for forgery, replay, expiry, concurrency, plan substitution and interrupted-step recovery.
+
+The Linux x86_64 target now has a dedicated unprivileged status daemon using AF_UNIX, SO_PEERCRED, bounded versioned framing, process limits, `no_new_privs` and a required libseccomp denylist. The endpoint is deliberately read-only and returns `tool_execution: disabled`. An AArch64 QEMU workflow is also defined.
+
+**Repository CI evidence:** integration PR #48 run [#43597582878](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597582878) passed documentation/JSON, device-profile schema, shell and 167 runtime unit tests on the initial PR head. Subsequent engineering-document and workflow changes require a fresh CI run.
+
+**Still not accepted:** the integrated x86_64 and AArch64 images have not yet passed fresh QEMU boot acceptance for this revision. The earlier x86_64 boot evidence applies only to its recorded older commit.
+
+### Stage 2 — updated status
+- [x] TaskCoordinator integration with durable per-step journal.
+- [x] Plan-bound execution gate and single-use approval token primitive.
+- [x] Restart recovery quarantine and event-chain tamper tests.
+- [x] Linux read-only IPC status service and peer credential checks.
+- [ ] Executor-authenticated user identity and trusted argument canonicalization.
+- [ ] Typed tool executor, idempotency propagation, deadlines and outcome reconciliation.
+- [ ] Native Linux namespaces/cgroups/LSM enforcement and strict seccomp profiles.
+- [ ] Fresh x86_64 and AArch64 QEMU integration acceptance.
+- [ ] Android Binder/AIDL and SELinux/AppOps implementation.
+
+The current work advances the runtime and Linux security foundations but does not close Stage 2, Stage 3, or any phone support gate.
