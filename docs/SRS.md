@@ -596,3 +596,32 @@ PR #42 is merged into `bootable/x86_64-buildroot-mvp-v2`. The integrated branch 
 AArch64 QEMU virtual-target workflow is integrated. Fresh x86_64 and AArch64 image workflows were triggered against commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; both had entered kernel/rootfs build at last inspection. Image verification, QEMU boot, IPC evidence and artifact publication remain unconfirmed. No support claim for this integrated revision is made until both workflows pass.
 
 Physical hardware, Android/AOSP, device-specific drivers, namespaces/cgroups/LSM policy, strict syscall allowlisting, capability authorization and any tool executor remain unaccepted requirements.
+
+
+---
+
+## Implementation Evidence Addendum — 2026-11-14
+
+This addendum updates implementation evidence without changing the normative product requirements above.
+
+### Execution authorization requirements traceability
+
+| Requirement area | Current implementation evidence | Status / remaining work |
+|---|---|---|
+| Immutable task-plan binding | Canonical plan JSON and SHA-256 digest persisted with the task | Implemented and tested |
+| Durable step state | SQLite step journal, append-only hash-linked events, dependency readiness and restart quarantine | Implemented and tested |
+| Central task/step authorization | ExecutionGate is the supported plan-bound start path | Implemented in-process; not an OS boundary |
+| High-risk approval | Random, hashed, single-use, expiring task/step tokens bound to plan and declared arguments digest | Implemented; authenticated human identity and trusted approval UI remain open |
+| Low-risk capability grants | Persistent permission broker checks scoped grants | Implemented; separate-database transaction gap remains |
+| Approval replay/race protection | Atomic token consumption with step start; concurrent-consumer and rollback tests | Implemented and tested |
+| Linux local IPC | Unprivileged read-only AF_UNIX status daemon with peer credentials and bounded protocol | Implemented on Linux virtual baseline; no executor dispatch |
+| Linux process restrictions | rlimits, no_new_privs and libseccomp default-allow denylist | Implemented as defense in depth; namespaces/cgroups/LSM/strict allowlist remain open |
+| Cross-architecture virtual boot | Buildroot x86_64 and AArch64 QEMU image workflows | Both passed on baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; later gate revision needs fresh image builds |
+
+### Current verification references
+
+- Execution-gate code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2`: repository-validation workflow [#43596879520](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43596879520), 167 unit tests completed with `OK`.
+- x86_64 QEMU baseline: [#43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact 14057431431.
+- AArch64 QEMU baseline: [#43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054.
+
+The newer execution-gate commit has not yet been image-tested. No Android image, physical phone port, production tool executor, native per-task sandbox, signed release or OTA recovery qualification is claimed.
