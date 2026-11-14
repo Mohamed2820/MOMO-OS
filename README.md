@@ -43,7 +43,7 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 
 ## First bootable target
 
-- [x86_64 QEMU bring-up image](docs/BOOTABLE_IMAGE.md) — Buildroot-based experimental Linux image with MOMO startup and diagnostics. It is not a phone ROM; QEMU boot evidence is required before calling the target bootable.
+- [Buildroot/QEMU virtual targets](docs/BOOTABLE_IMAGE.md) — x86_64 and AArch64 experimental Linux images have both passed QEMU boot and MOMO readiness checks. These are virtual bring-up targets, not phone ROMs.
 
 ## Technical specifications
 

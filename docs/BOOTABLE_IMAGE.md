@@ -76,3 +76,13 @@ The current development branch adds the durable plan-bound step journal, the exe
 The x86_64 and AArch64 workflows now include the daemon and require the boot log to show both `MOMO OS READY` and the IPC service marker with tool execution explicitly disabled.
 
 **Evidence boundary:** these additions are not covered by the earlier QEMU acceptance run. A fresh successful run of each workflow is required before claiming that the updated image boots on either virtual target. Neither virtual target proves physical phone compatibility.
+
+## Latest integrated image evidence — 2026-11-14
+
+The execution-gate integration is included in commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. Fresh builds passed:
+- x86_64: [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750.
+- AArch64: [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046.
+
+Both guests reached `MOMO OS READY` and returned the `momo-ipcd` read-only status response with `tool_execution: disabled`. Buildroot cache recovery now forces a Linux package rebuild if the expected kernel image is absent from `output/images`.
+
+These are QEMU virtual targets. They do not establish Android ROM support or compatibility with any physical phone.

@@ -232,3 +232,17 @@ Stage 3 remains open: Linux namespaces, cgroups, LSM and strict operation-specif
 5. Build the Android baseline and choose exact phone SKUs only after bootloader and recovery evidence.
 6. Implement the MOMO shell, AI runtime and essential applications.
 7. Complete signing, SBOM, OTA, rollback, hardware qualification and multi-device maintenance.
+
+
+## Fresh image acceptance — execution-gate revision (2026-11-14)
+
+The cache/output recovery from PR #49 resolved the missing kernel-image failure. The integrated revision `b762dd742e8b3b3ede0e5f98578960446c9b5e25` passed both virtual targets:
+
+- [x86_64 Buildroot/QEMU run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750.
+- [AArch64 Buildroot/QEMU run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046.
+
+Each run passed image verification and QEMU readiness, and confirmed the read-only IPC service with `tool_execution: disabled`. The current execution-gate revision is therefore image-integrated on both virtual architectures. It remains a development system, not a phone ROM.
+
+Stage 2 now includes tested plan-bound authorization state transitions, but the execution gate remains in-process and there is no tool executor. Stage 3 remains open for authenticated human identity, trusted argument hashing, atomic low-risk authorization, Linux namespaces/cgroups/LSM/strict seccomp, Android Binder/AIDL/SELinux/AppOps and adversarial isolation tests.
+
+Next: implement identity and native OS isolation before typed tool dispatch; then complete storage/app/notification/network/power/update services, Android base integration, device ports, UX/AI, signing and release qualification.

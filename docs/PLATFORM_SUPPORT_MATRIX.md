@@ -37,3 +37,12 @@ The integrated baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda` subseq
 The execution-gate code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` is newer and has passed repository CI (167 unit tests), but it has not yet passed fresh x86_64 or AArch64 image workflows. It must not inherit the prior image success.
 
 No physical device or Android target is certified. AArch64 QEMU virt is not proof of compatibility with any particular ARM phone.
+
+
+## Execution-gate revision — fresh virtual-target acceptance (2026-11-14)
+
+Commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25` passed both full Buildroot/QEMU workflows after the cache recovery fix:
+- x86_64: [run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750.
+- AArch64: [run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046.
+
+Both builds verified non-empty kernel/rootfs outputs, booted QEMU, reached `MOMO OS READY`, returned authenticated read-only IPC status and reported `tool_execution: disabled`. This validates the integrated virtual images only. No physical ARM device or Android build is certified.
