@@ -40,6 +40,7 @@ jobs:
       - name: Validate GitHub Actions workflow YAML
         shell: bash
         run: |
+          python3 tools/validate_kernel_security_config.py --fragment board/momo/kernel-security.fragment
           python3 - <<'PY'
           from pathlib import Path
           import yaml
