@@ -1,0 +1,5 @@
+# Optional cloud engineering worker dependencies
+# Install only in a dedicated, isolated engineering runner (Python >= 3.12).
+# Do not add this file to the Android/Buildroot root filesystem requirements.
+openhands-sdk==1.62.0
+openhands-tools==1.62.0
