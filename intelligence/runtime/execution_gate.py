@@ -43,6 +43,14 @@ def _utc(now: datetime | None) -> datetime:
     return now.astimezone(timezone.utc)
 
 
+def _freeze_json(value):
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze_json(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze_json(item) for item in value)
+    return value
+
+
 @dataclass(frozen=True)
 class AuthorizedStepStart:
     """A durable step start paired with the exact validated arguments."""
@@ -128,7 +136,7 @@ class ExecutionGate:
             task_id, plan, step_id, args_sha256, approval_token=approval_token,
         )
         return AuthorizedStepStart(
-            execution, MappingProxyType(arguments), canonical_json, args_sha256,
+            execution, _freeze_json(arguments), canonical_json, args_sha256,
         )
 
     def start_step(
