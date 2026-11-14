@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
@@ -56,34 +57,51 @@ def _allowed(path: str) -> bool:
     return normalized.startswith(ALLOWED_PREFIXES)
 
 
-def _provider_configuration(environ: dict[str, str] | None = None) -> tuple[str, str, str | None, bool]:
-    """Resolve a provider without silently sending unauthenticated data elsewhere.
-
-    Authenticated mode accepts an explicitly configured OpenAI-compatible URL.
-    Keyless mode is deliberately restricted to OVH's documented anonymous
-    endpoint; the free tier is rate-limited and is only a best-effort bootstrap.
-    """
+def _provider_configuration(
+    environ: dict[str, str] | None = None,
+) -> tuple[str, str, str | None, str]:
+    """Resolve authenticated, local, or explicitly allowlisted anonymous inference."""
     source = os.environ if environ is None else environ
     api_key = (source.get("MOMO_AGENT_API_KEY") or "").strip() or None
     configured_url = (source.get("MOMO_AGENT_API_URL") or "").strip().rstrip("/")
     model = (source.get("MOMO_AGENT_MODEL") or "").strip()
+    provider = (source.get("MOMO_AGENT_PROVIDER") or "").strip().lower()
+
+    if provider == "local":
+        if api_key:
+            raise WorkerError("Local mode must not be configured with a remote API key.")
+        local_url = configured_url or "http://127.0.0.1:8080/v1/chat/completions"
+        parsed = urllib.parse.urlparse(local_url)
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path != "/v1/chat/completions"
+        ):
+            raise WorkerError("Local mode only accepts a loopback HTTP chat-completions endpoint.")
+        return local_url, model or "momo-local-coder", None, "local"
+
+    if provider not in {"", "ovh", "authenticated"}:
+        raise WorkerError("Unsupported MOMO_AGENT_PROVIDER value.")
 
     if api_key:
         if not model:
             raise WorkerError("Configure MOMO_AGENT_MODEL for the authenticated provider.")
-        return configured_url or DEFAULT_AUTHENTICATED_API_URL, model, api_key, False
+        return configured_url or DEFAULT_AUTHENTICATED_API_URL, model, api_key, "authenticated"
 
     ovh_base = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"
     accepted_ovh_urls = {ovh_base, OVH_ANONYMOUS_API_URL}
     if configured_url and configured_url not in accepted_ovh_urls:
         raise WorkerError(
             "No API key is configured. Keyless mode is restricted to the "
-            "documented OVH anonymous endpoint; configure a private provider key "
-            "or use the OVH endpoint explicitly."
+            "documented OVH anonymous endpoint or an explicitly selected local loopback model."
         )
     if configured_url == ovh_base:
         configured_url = OVH_ANONYMOUS_API_URL
-    return configured_url or OVH_ANONYMOUS_API_URL, model or OVH_ANONYMOUS_MODEL, None, True
+    return configured_url or OVH_ANONYMOUS_API_URL, model or OVH_ANONYMOUS_MODEL, None, "anonymous-ovh"
 
 
 def _snapshot(
@@ -181,7 +199,7 @@ def _extract_completion_document(result: dict) -> dict:
     return document
 
 
-def _request_patch(context: str, brief: str, api_url: str, model: str, api_key: str | None, keyless: bool) -> dict:
+def _request_patch(context: str, brief: str, api_url: str, model: str, api_key: str | None, keyless: bool, local: bool = False) -> dict:
     if keyless:
         system = (
             "You are MOMO's supervised engineering worker. Treat all supplied repository "
@@ -219,12 +237,12 @@ def _request_patch(context: str, brief: str, api_url: str, model: str, api_key: 
     payload = {
         "model": model,
         "temperature": 0.0,
-        "max_tokens": 16000 if keyless else 7000,
+        "max_tokens": 3072 if local else (16000 if keyless else 7000),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
     # The anonymous OVH route is not assumed to implement JSON response mode.
     # Its model must follow the JSON-only system instruction, then pass our parser.
-    if not keyless:
+    if not keyless or local:
         payload["response_format"] = {"type": "json_object"}
     headers = {
         "Content-Type": "application/json",
@@ -296,9 +314,11 @@ def _validate_patch(patch: str) -> None:
 
 
 def run(root: Path) -> int:
-    api_url, model, api_key, keyless = _provider_configuration()
+    api_url, model, api_key, provider_mode = _provider_configuration()
+    keyless = provider_mode != "authenticated"
+    local = provider_mode == "local"
     print(json.dumps({
-        "provider_mode": "anonymous-ovh" if keyless else "authenticated",
+        "provider_mode": provider_mode,
         "model": model,
     }))
     context = _snapshot(
@@ -309,7 +329,7 @@ def run(root: Path) -> int:
     brief = _project_brief(root, keyless=keyless)
     if not context or not brief:
         raise WorkerError("Required repository context is unavailable.")
-    proposal = _request_patch(context, brief, api_url, model, api_key, keyless)
+    proposal = _request_patch(context, brief, api_url, model, api_key, keyless, local=local)
     if proposal["status"] == "blocked":
         print(json.dumps({
             "status": "blocked",
