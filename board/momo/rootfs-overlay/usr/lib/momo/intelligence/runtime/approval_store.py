@@ -90,7 +90,7 @@ class ApprovalStore:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.executescript(_SCHEMA)
 
-    def issue(
+    def _issue(
         self,
         task_id: str,
         plan,
@@ -151,6 +151,20 @@ class ApprovalStore:
             connection.commit()
         return token
 
+    def issue(
+        self,
+        task_id: str,
+        plan,
+        approver: str,
+        ttl_seconds: int,
+        step_id: str | None = None,
+        args_sha256: str | None = None,
+    ) -> str:
+        """Issue a task-level approval; step approvals require raw JSON arguments."""
+        if step_id is not None or args_sha256 is not None:
+            raise ValueError("Use issue_for_arguments() for step-bound approvals")
+        return self._issue(task_id, plan, approver, ttl_seconds)
+
     def issue_for_arguments(
         self,
         task_id: str,
@@ -164,7 +178,7 @@ class ApprovalStore:
         if not isinstance(step_id, str) or not step_id:
             raise ValueError("A step identifier is required")
         _arguments, _canonical_json, args_sha256 = parse_and_bind(args_payload)
-        return self.issue(
+        return self._issue(
             task_id, plan, approver, ttl_seconds,
             step_id=step_id, args_sha256=args_sha256,
         )
