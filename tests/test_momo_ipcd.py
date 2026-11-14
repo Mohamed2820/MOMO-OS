@@ -129,22 +129,28 @@ class IPCServiceTests(unittest.TestCase):
             (blocked / "secret.txt").write_text("private", encoding="utf-8")
 
             service_path = ROOT / "board/momo/rootfs-overlay/usr/lib/momo"
-            code = (
-                "from pathlib import Path; import sys; "
-                "from momo_ipcd import apply_landlock_restrictions; "
-                "allowed=Path(sys.argv[1]); blocked=Path(sys.argv[2]); "
-                "apply_landlock_restrictions(read_paths=(allowed,), removable_paths=()); "
-                "assert (allowed / 'read.txt').read_text(encoding='utf-8') == 'safe'; "
-                "try_read=False; "
-                "try: (blocked / 'secret.txt').read_text(encoding='utf-8')\n"
-                "except PermissionError: try_read=True\n"
-                "assert try_read, 'Landlock allowed a read outside the allowlist'; "
-                "try_write=False; "
-                "try: (allowed / 'new.txt').write_text('no', encoding='utf-8')\n"
-                "except PermissionError: try_write=True\n"
-                "assert try_write, 'Landlock allowed a write in a read-only path'; "
-                "print('landlock-ok')"
-            )
+            code = """from pathlib import Path
+import sys
+from momo_ipcd import apply_landlock_restrictions
+
+allowed = Path(sys.argv[1])
+blocked = Path(sys.argv[2])
+apply_landlock_restrictions(read_paths=(allowed,), removable_paths=())
+assert (allowed / "read.txt").read_text(encoding="utf-8") == "safe"
+try:
+    (blocked / "secret.txt").read_text(encoding="utf-8")
+except PermissionError:
+    pass
+else:
+    raise AssertionError("Landlock allowed a read outside the allowlist")
+try:
+    (allowed / "new.txt").write_text("no", encoding="utf-8")
+except PermissionError:
+    pass
+else:
+    raise AssertionError("Landlock allowed a write in a read-only path")
+print("landlock-ok")
+"""
             env = os.environ.copy()
             env["PYTHONPATH"] = str(service_path)
             result = subprocess.run(
