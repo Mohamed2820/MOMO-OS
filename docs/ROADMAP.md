@@ -304,3 +304,10 @@ This is a real filesystem restriction for the status daemon, not a complete MOMO
 ## Landlock CI verification — 2026-11-14
 
 The Landlock status-daemon implementation, source and test changes passed repository validation [#43603174498](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43603174498): **201 tests passed**, including the subprocess check that allows reads only from an explicit directory and denies unrelated reads and writes. The x86_64 and AArch64 Buildroot/QEMU workflows are currently running on commit `3bc18a52976909d72f3e82da4fccdbc54a7edad9`: [x86_64 #43603174532](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43603174532) and [AArch64 #43603174676](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43603174676). QEMU readiness and artifact upload remain pending.
+
+
+## IPC status-service namespace and cgroup profile — 2026-11-14
+
+Added `momo-ipc-sandbox`, a root-started launcher that moves the daemon into a dedicated cgroup before dropping privileges, creates private mount/IPC/UTS/network namespaces, makes mount propagation private, clears supplementary groups, drops to the dedicated `momo-ipc` UID/GID and sets `no_new_privs`. Init script `S98momo-ipc` now requires cgroup v2 CPU/memory/PID controllers and sets a 50% CPU quota, 128 MiB memory limit and 16-process limit. The daemon then applies its existing seccomp denylist and Landlock filesystem boundary.
+
+This is a per-service sandbox profile for the read-only status daemon only. PID/user namespaces, task/executor service isolation, authenticated human/session identity, a strict syscall allowlist, network firewall policy, and adversarial QEMU tests remain open. The wrapper/init changes have not yet passed a fresh CI/QEMU run; do not mark the sandbox gate complete until they do.
