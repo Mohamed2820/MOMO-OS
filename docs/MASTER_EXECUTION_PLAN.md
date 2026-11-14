@@ -297,10 +297,34 @@ PR #42 has been merged into the bootable development branch. It integrates the s
 
 Integrated commit: `a7a4caf381553d9a697b68a093eff9520d8b0bda`.
 
-Current acceptance runs:
-- x86_64 image: [run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) — build in progress at last inspection.
-- AArch64 image: [run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951) — build in progress at last inspection.
+Verified acceptance runs:
+- x86_64 image: [run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) — build, output verification, QEMU boot, `MOMO OS READY`, IPC status response and artifact upload all succeeded. Artifact ID 14057431431.
+- AArch64 image: [run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951) — build, output verification, QEMU boot, `MOMO OS READY`, IPC status response and artifact upload all succeeded. Artifact ID 14055169054.
 
-Do not merge further changes to the bootable branch while these image workflows are running. Once complete, inspect kernel/rootfs outputs, QEMU serial logs, IPC status response and uploaded artifacts independently for each architecture. Green repository-validation is not a substitute for either image test.
+These results apply to integrated commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`, not automatically to later commits. The execution-gate revision requires its own fresh x86_64 and AArch64 image runs. Repository-validation is not a substitute for either image test.
 
 Remaining gates: resolve image/boot failures; adversarial IPC/seccomp tests; explicit operation/capability authorization; namespace and cgroup isolation plus LSM policy; durable side-effect idempotency and recovery; only then a non-privileged executor adapter. Android remains a separate AOSP/Binder-AIDL/SELinux/AppOps track, followed by per-device bootloader/kernel/DTB/firmware/driver validation.
+
+
+## Execution Authorization Gate — 2026-11-14
+
+### Implemented on the active feature branch
+- Added `ApprovalStore` with cryptographically random, single-use, expiring tokens. The database stores token hashes only.
+- Bound approvals to task, step, action/domain, resource, risk, canonical plan digest and a supplied arguments digest.
+- Added the central `ExecutionGate` for plan-bound task and step start.
+- Blocked direct TaskStore and step-journal start paths for plan-bound work.
+- Kept high-risk approval consumption and step-start persistence in one SQLite write transaction; rollback restores the token if the start fails.
+- Added negative and concurrency tests for bypasses, mismatched plans/arguments, expiry, replay, races and injected transaction failures.
+- Repository validation passed 167 unit tests on code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` in PR #45.
+
+### Explicit limitations
+The gate is an in-process authorization layer, not an OS boundary or executor. Approver labels are not yet authenticated identities; step-argument digests are caller-supplied; R0–R2 grant consumption occurs in a separate database and can be spent before a failed step start. No external tool dispatch is enabled. See [Execution Authorization Gate](EXECUTION_AUTHORIZATION_GATE.md).
+
+### Updated next execution sequence
+1. Rebuild the execution-gate revision for x86_64 and AArch64, boot both under QEMU, and inspect logs/artifacts.
+2. Add authenticated approver identity and broker-only approval issuance.
+3. Make low-risk grant reservation and step-start persistence atomic or provide a tested reservation protocol.
+4. Implement a separate Linux executor identity with per-task namespaces, cgroups, LSM and strict operation-specific seccomp.
+5. Define typed executor operations, trusted argument canonicalization, idempotency propagation, deadlines, cancellation and independent result verification.
+6. Keep tool execution disabled until adversarial tests and native OS enforcement pass.
+7. Continue core services, Android platform integration, device feasibility, user experience, AI runtime and release engineering in the master phase order.
