@@ -30,6 +30,16 @@ jobs:
                   json.load(stream)
               print(f"Valid JSON: {path}")
           PY
+          grep -q "Reuse" README.md
+          grep -q "Do not" docs/SECURITY.md
+          echo "Repository validation passed."
+      - name: Install native security test dependency
+        run: sudo apt-get update && sudo apt-get install -y libseccomp-dev
+      - name: Install schema validation dependency
+        run: python3 -m pip install -r requirements-dev.txt
+      - name: Validate GitHub Actions workflow YAML
+        shell: bash
+        run: |
           python3 - <<'PY'
           from pathlib import Path
           import yaml
@@ -40,13 +50,6 @@ jobs:
                   raise SystemExit(f"Invalid workflow YAML document: {path}")
               print(f"Valid workflow YAML: {path}")
           PY
-          grep -q "Reuse" README.md
-          grep -q "Do not" docs/SECURITY.md
-          echo "Repository validation passed."
-      - name: Install native security test dependency
-        run: sudo apt-get update && sudo apt-get install -y libseccomp-dev
-      - name: Install schema validation dependency
-        run: python3 -m pip install -r requirements-dev.txt
       - name: Validate device profiles against JSON Schema
         run: python3 tools/validate_device_profiles.py
       - name: Check MOMO shell utilities
