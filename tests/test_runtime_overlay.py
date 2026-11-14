@@ -30,6 +30,7 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
             "approval_store.py",
             "execution_gate.py",
             "argument_binding.py",
+            "typed_executor.py",
         ):
             with self.subTest(module=name):
                 self.assertEqual(
