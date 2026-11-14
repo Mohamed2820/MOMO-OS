@@ -74,6 +74,7 @@ jobs:
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-device
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-permissions
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-ipcctl
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-ipc-sandbox
           make -C "$BUILDROOT_DIR" qemu_x86_64_defconfig
           # QEMU is already installed on the GitHub runner; do not build a second host QEMU from source.
           sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
