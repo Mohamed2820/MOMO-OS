@@ -14,11 +14,18 @@ class SecurityOverlayParityTests(unittest.TestCase):
         source = SANDBOX.read_text(encoding="utf-8")
         for required in (
             "CLONE_NEWNS", "CLONE_NEWIPC", "CLONE_NEWUTS", "CLONE_NEWNET",
+            "MOMO_NAMESPACE_INODES", "os.stat(f\"/proc/self/ns/{name}\").st_ino",
             "MS_PRIVATE", "os.setgroups([])", 'os.setgid(account.pw_gid)',
             'os.setuid(account.pw_uid)', "PR_SET_NO_NEW_PRIVS",
         ):
             with self.subTest(required=required):
                 self.assertIn(required, source)
+
+    def test_ipc_daemon_verifies_launch_time_namespace_inodes(self):
+        source = (ROOT / "board/momo/rootfs-overlay/usr/lib/momo/momo_ipcd.py").read_text(encoding="utf-8")
+        self.assertIn("MOMO_NAMESPACE_INODES", source)
+        self.assertIn("expected_inode", source)
+        self.assertNotIn('/proc/1/ns/{name}', source)
 
     def test_ipc_init_assigns_cgroup_resource_limits(self):
         source = INIT.read_text(encoding="utf-8")
