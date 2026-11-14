@@ -46,14 +46,14 @@ This is not a strict syscall allowlist and is not equivalent to a complete sandb
 
 The Linux status service is now implemented in `board/momo/rootfs-overlay/usr/lib/momo/momo_ipcd.py` and mirrored in the Buildroot overlay. Init script `S98momo-ipc` starts it as the dedicated unprivileged `momo-ipc` account. The service accepts root-owned clients only, authenticates the connected process using `SO_PEERCRED`, parses one bounded protocol frame, rejects duplicate request IDs within the daemon lifetime, and serves only `status.read` with an empty argument object.
 
-The root-started `momo-ipc-sandbox` wrapper joins a dedicated cgroup (128 MiB memory, 16 processes, 50% CPU quota), enters private mount/IPC/UTS/network namespaces and drops to `momo-ipc`. The daemon applies resource limits and `PR_SET_NO_NEW_PRIVS`, requires libseccomp to install a default-allow denylist, binds its socket, then applies a fail-closed Landlock read-only filesystem policy before accepting requests. It refuses to start if libseccomp is missing or filter installation fails. The current CLI `momo-ipcctl status` is read-only. The response explicitly reports `tool_execution: disabled`.
+The root-started `momo-ipc-sandbox` wrapper joins a dedicated cgroup (128 MiB memory, 16 processes, 50% CPU quota), enters private mount/IPC/UTS/network namespaces and drops to `momo-ipc`. The daemon applies resource limits and `PR_SET_NO_NEW_PRIVS`, requires libseccomp to install a denylist that also blocks creation/connection/binding/listening of new sockets after the AF_UNIX listener is established, then applies a fail-closed Landlock read-only filesystem policy before accepting requests. The status response reports the observed namespace IDs, cgroup path and active Landlock/seccomp flags; QEMU boot workflows assert these values. It refuses to start if libseccomp is missing or filter installation fails. The current CLI `momo-ipcctl status` is read-only. The response explicitly reports `tool_execution: disabled`.
 
 ### Verified and pending
 
 - Repository CI for integration PR #48 passed 203 unit tests, including Landlock filesystem allow/deny, kernel config validation, namespace/cgroup launcher checks, typed executor and source/rootfs parity (run #43603613845).
 - The earlier QEMU acceptance applies to an older image revision and does not validate this daemon.
 - Fresh x86_64 and AArch64 Buildroot/QEMU boot checks are required before this increment receives image-integrated/emulator-tested status.
-- The daemon is not a general-purpose executor. Future mutating operations require a separate authorization design, durable idempotency, outcome reconciliation and stronger per-operation principals.
+- The daemon is not a general-purpose executor. Future mutating operations require a separate authorization design, durable idempotency, outcome reconciliation and stronger per-operation principals. Its current socket syscall restrictions apply only after the existing AF_UNIX listener is bound.
 
 
 ## Landlock filesystem confinement — 2026-11-14
