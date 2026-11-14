@@ -57,7 +57,7 @@ jobs:
           exit 1
 
       - name: Verify local provider policy and parser
-        run: python3 -m unittest tests.test_momo_autonomy -v
+        run: python3 -m unittest discover -s tests -p 'test_momo_autonomy.py' -v
 
       - name: Run one bounded local-model engineering cycle
         env:
