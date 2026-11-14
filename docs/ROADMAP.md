@@ -280,3 +280,10 @@ This is a source-level read-only reference adapter, not a general or side-effect
 The integrated source/test candidate on PR #48 commit `fbd9d96caba43346af63adf2c829f32efce7557c` passed the full repository-validation workflow [#43602320431](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602320431): **196 runtime unit tests passed**, including the new argument-binding, approval/start integration, typed read-only executor and rootfs parity tests, plus documentation/JSON, YAML workflow, device-profile schema, shell utility and compile checks. A follow-up validation run [#43602466765](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602466765) is running on the latest documentation-updated PR head.
 
 Current-head x86_64 and AArch64 Buildroot/QEMU acceptance is being run on the dedicated validation branch derived from the same PR source tree: [x86_64 run #43602390663](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602390663) and [AArch64 run #43602394024](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602394024). Both must reach QEMU readiness and artifact upload before image acceptance is recorded.
+
+
+## Linux kernel isolation prerequisites — 2026-11-14
+
+Added a shared Buildroot kernel fragment requesting UTS/IPC/user/PID/network namespaces, cgroups with PID/CPU/memory/freezer/device controllers, seccomp filtering and Landlock. Both x86_64 and AArch64 image workflows now apply the fragment and validate the generated kernel `.config` before image acceptance. A validator and four unit tests cover missing options and inactive Landlock.
+
+This is groundwork only. A configured kernel does not isolate a service by itself. Service launch still needs explicit namespace setup, cgroup assignment, Landlock rules, filesystem/network policy, authenticated principal mapping and adversarial integration tests. Fresh image builds must prove the options survive Buildroot configuration on both architectures.
