@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-from .momo_runtime import Risk, Task, TaskEvent, TaskStatus
+from .momo_runtime import GATE_AUTHORITY, Risk, Task, TaskEvent, TaskStatus
 
 
 class TaskNotFoundError(KeyError):
@@ -145,42 +145,66 @@ class TaskStore:
                 result.append(self._task_from_rows(row, events))
         return result
 
+    @staticmethod
+    def _plan_bound(connection: sqlite3.Connection, task_id: str) -> bool:
+        exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_plans'"
+        ).fetchone()
+        if exists is None:
+            return False
+        return connection.execute(
+            "SELECT 1 FROM task_plans WHERE task_id = ?", (task_id,)
+        ).fetchone() is not None
+
     def transition(self, task_id: str, target: TaskStatus, reason: str) -> Task:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
-            ).fetchone()
-            if row is None:
-                connection.rollback()
-                raise TaskNotFoundError(task_id)
-
-            events = connection.execute(
-                "SELECT at, previous, current, reason FROM task_events "
-                "WHERE task_id = ? ORDER BY event_id",
-                (task_id,),
-            ).fetchall()
-            task = self._task_from_rows(row, events)
-            task.transition(target, reason)
-            event = task.events[-1]
-            updated_at = event.at.isoformat()
-
-            connection.execute(
-                "UPDATE tasks SET status = ?, updated_at = ? WHERE task_id = ?",
-                (task.status.value, updated_at, task_id),
-            )
-            connection.execute(
-                """
-                INSERT INTO task_events(task_id, at, previous, current, reason)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    task_id,
-                    updated_at,
-                    event.previous.value,
-                    event.current.value,
-                    event.reason,
-                ),
-            )
+            self._transition_locked(connection, task_id, target, reason, authority=None)
             connection.commit()
         return self.get_task(task_id)
+
+    def _transition_locked(
+        self,
+        connection: sqlite3.Connection,
+        task_id: str,
+        target: TaskStatus,
+        reason: str,
+        authority=None,
+    ) -> None:
+        """Apply one transition inside the caller's open write transaction.
+
+        Entering EXECUTING is reserved for ExecutionGate: R3/R4 tasks and any
+        plan-bound task are refused unless the gate authority is presented.
+        """
+        row = connection.execute(
+            "SELECT * FROM tasks WHERE task_id = ?", (task_id,)
+        ).fetchone()
+        if row is None:
+            raise TaskNotFoundError(task_id)
+        if target is TaskStatus.EXECUTING and authority is not GATE_AUTHORITY:
+            if Risk(row["risk"]) in {Risk.R3, Risk.R4}:
+                raise ValueError("R3/R4 tasks can start execution only through ExecutionGate")
+            if self._plan_bound(connection, task_id):
+                raise ValueError("Plan-bound tasks can start execution only through ExecutionGate")
+
+        events = connection.execute(
+            "SELECT at, previous, current, reason FROM task_events "
+            "WHERE task_id = ? ORDER BY event_id",
+            (task_id,),
+        ).fetchall()
+        task = self._task_from_rows(row, events)
+        task.transition(target, reason)
+        event = task.events[-1]
+        updated_at = event.at.isoformat()
+
+        connection.execute(
+            "UPDATE tasks SET status = ?, updated_at = ? WHERE task_id = ?",
+            (task.status.value, updated_at, task_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO task_events(task_id, at, previous, current, reason)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (task_id, updated_at, event.previous.value, event.current.value, event.reason),
+        )
