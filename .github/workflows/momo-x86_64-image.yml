@@ -7,6 +7,10 @@ on:
       - "bootable/**"
     paths:
       - "board/momo/**"
+      - "intelligence/security/**"
+      - "tests/test_momo_ipcd.py"
+      - "tests/test_ipc_protocol.py"
+      - "tests/test_security_overlay.py"
       - "intelligence/runtime/**"
       - "tests/test_task_store.py"
       - "tests/test_device_inventory.py"
@@ -52,18 +56,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          chmod +x board/momo/rootfs-overlay/etc/init.d/S98momo-ipc
           chmod +x board/momo/rootfs-overlay/etc/init.d/S99momo
           chmod +x board/momo/rootfs-overlay/usr/bin/momoctl
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-task
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-device
           chmod +x board/momo/rootfs-overlay/usr/bin/momo-permissions
+          chmod +x board/momo/rootfs-overlay/usr/bin/momo-ipcctl
           make -C "$BUILDROOT_DIR" qemu_x86_64_defconfig
           # QEMU is already installed on the GitHub runner; do not build a second host QEMU from source.
           sed -i '/^BR2_PACKAGE_HOST_QEMU=/d; /^BR2_PACKAGE_HOST_QEMU_SYSTEM_MODE=/d' "$BUILDROOT_DIR/.config"
-          sed -i '/^BR2_ROOTFS_OVERLAY=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d' "$BUILDROOT_DIR/.config"
+          sed -i '/^BR2_ROOTFS_OVERLAY=/d; /^BR2_ROOTFS_USERS_TABLES=/d; /^BR2_PACKAGE_PYTHON3=/d; /^BR2_PACKAGE_PYTHON3_SQLITE=/d' "$BUILDROOT_DIR/.config"
           printf 'BR2_ROOTFS_OVERLAY="%s/board/momo/rootfs-overlay"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
-          printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\n' >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_ROOTFS_USERS_TABLES="%s/board/momo/users.table"\n' "$GITHUB_WORKSPACE" >> "$BUILDROOT_DIR/.config"
+          printf 'BR2_PACKAGE_PYTHON3=y\nBR2_PACKAGE_PYTHON3_SQLITE=y\nBR2_PACKAGE_LIBSECCOMP=y\n' >> "$BUILDROOT_DIR/.config"
           make -C "$BUILDROOT_DIR" olddefconfig
+
+      - name: Restore Buildroot build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            buildroot-2026.08.1/output/host/
+            buildroot-2026.08.1/output/build/
+            buildroot-2026.08.1/output/target/
+            buildroot-2026.08.1/output/staging/
+            buildroot-2026.08.1/dl/
+          key: momo-buildroot-2026.08.1-qemu-x86_64-v1
+          restore-keys: |
+            momo-buildroot-2026.08.1-qemu-x86_64-
 
       - name: Build Linux kernel and MOMO root filesystem
         run: |
@@ -98,6 +118,8 @@ jobs:
             exit "$qemu_status"
           fi
           grep -F "MOMO OS READY" "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"service": "momo-ipcd"' "$GITHUB_WORKSPACE/qemu-boot.log"
+          grep -F '"tool_execution": "disabled"' "$GITHUB_WORKSPACE/qemu-boot.log"
 
       - name: Record build provenance
         if: always()
