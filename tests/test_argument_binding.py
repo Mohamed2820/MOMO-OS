@@ -42,7 +42,7 @@ class ArgumentBindingTests(unittest.TestCase):
         with self.assertRaises(ArgumentBindingError):
             parse_arguments('{"x":"\\ud800"}')
         with self.assertRaises(ArgumentBindingError):
-            canonical_arguments({"x": "\\ud800"})
+            canonical_arguments({"x": chr(0xD800)})
 
     def test_payload_size_is_bounded(self):
         with self.assertRaises(ArgumentBindingError):
