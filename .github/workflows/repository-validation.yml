@@ -19,7 +19,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/DEVICE_RESEARCH.md docs/UNIVERSAL_PLATFORM_STRATEGY.md docs/DEVICE_COMPATIBILITY.md docs/PLATFORM_ADAPTERS.md docs/AGENT_METHODOLOGY.md docs/AI_RUNTIME.md docs/TOOL_AND_PERMISSION_MODEL.md docs/CLOUD_BUILD.md docs/DESKTOP_EXPERIENCE.md docs/TEST_STRATEGY.md docs/LICENSING.md docs/CORE_SERVICES.md docs/AI_SYSTEM_DESIGN.md docs/RELEASE_AND_UPDATE.md docs/SRS.md docs/TASK_COORDINATOR.md intelligence/README.md platform_adapters/README.md; do
+          for file in README.md docs/VISION.md docs/ARCHITECTURE.md docs/ROADMAP.md docs/SECURITY.md docs/UPSTREAM_POLICY.md docs/DEVICE_FEASIBILITY.md docs/DEVICE_RESEARCH.md docs/UNIVERSAL_PLATFORM_STRATEGY.md docs/DEVICE_COMPATIBILITY.md docs/PLATFORM_SUPPORT_MATRIX.md docs/PLATFORM_ADAPTERS.md docs/AGENT_METHODOLOGY.md docs/AI_RUNTIME.md docs/TOOL_AND_PERMISSION_MODEL.md docs/CLOUD_BUILD.md docs/DESKTOP_EXPERIENCE.md docs/TEST_STRATEGY.md docs/LICENSING.md docs/CORE_SERVICES.md docs/AI_SYSTEM_DESIGN.md docs/RELEASE_AND_UPDATE.md docs/SRS.md docs/TASK_COORDINATOR.md docs/STEP_EXECUTION_JOURNAL.md docs/LINUX_IPC_SECURITY.md intelligence/README.md platform_adapters/README.md; do
             test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
           done
           python3 - <<'PY'
@@ -33,17 +33,20 @@ jobs:
           grep -q "Reuse" README.md
           grep -q "Do not" docs/SECURITY.md
           echo "Repository validation passed."
+      - name: Install native security test dependency
+        run: sudo apt-get update && sudo apt-get install -y libseccomp-dev
       - name: Install schema validation dependency
         run: python3 -m pip install -r requirements-dev.txt
       - name: Validate device profiles against JSON Schema
         run: python3 tools/validate_device_profiles.py
       - name: Check MOMO shell utilities
         run: |
+          sh -n board/momo/rootfs-overlay/etc/init.d/S98momo-ipc
           sh -n board/momo/rootfs-overlay/etc/init.d/S99momo
           sh -n board/momo/rootfs-overlay/usr/bin/momoctl
           sh board/momo/rootfs-overlay/usr/bin/momoctl version
           sh board/momo/rootfs-overlay/usr/bin/momoctl help
-          python3 -m py_compile intelligence/runtime/momo_runtime.py intelligence/runtime/task_store.py intelligence/runtime/task_coordinator.py intelligence/runtime/orchestrator.py board/momo/rootfs-overlay/usr/bin/momo-task
+          python3 -m py_compile intelligence/runtime/momo_runtime.py intelligence/runtime/task_store.py intelligence/runtime/task_coordinator.py intelligence/runtime/orchestrator.py intelligence/execution/step_journal.py intelligence/security/linux_peercred.py intelligence/security/ipc_protocol.py board/momo/rootfs-overlay/usr/lib/momo/momo_ipcd.py board/momo/rootfs-overlay/usr/bin/momo-ipcctl board/momo/rootfs-overlay/usr/bin/momo-task
           PYTHONPATH="$GITHUB_WORKSPACE" python3 board/momo/rootfs-overlay/usr/bin/momo-task self-test
           MOMO_TASK_DB="$RUNNER_TEMP/momo-task-ci.sqlite3" PYTHONPATH="$GITHUB_WORKSPACE" python3 board/momo/rootfs-overlay/usr/bin/momo-task doctor
       - name: Run MOMO runtime unit tests
