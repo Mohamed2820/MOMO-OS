@@ -15,6 +15,8 @@ files can still bypass the gate; OS-level separation is a later milestone.
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
+from types import MappingProxyType
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -23,6 +25,7 @@ from intelligence.runtime.approval_store import (
     TASK_ACTION, ApprovalDenied, ApprovalStore, binding_digest, is_sha256_hex,
 )
 from intelligence.runtime.momo_runtime import GATE_AUTHORITY, Risk, Task, TaskStatus
+from intelligence.runtime.argument_binding import parse_and_bind
 
 _LOW_RISK = frozenset({Risk.R0, Risk.R1, Risk.R2})
 _HIGH_RISK = frozenset({Risk.R3, Risk.R4})
@@ -38,6 +41,24 @@ def _utc(now: datetime | None) -> datetime:
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("Authorization time must be timezone-aware")
     return now.astimezone(timezone.utc)
+
+
+def _freeze_json(value):
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze_json(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(_freeze_json(item) for item in value)
+    return value
+
+
+@dataclass(frozen=True)
+class AuthorizedStepStart:
+    """A durable step start paired with the exact validated arguments."""
+
+    execution: StepExecution
+    arguments: object
+    canonical_json: str
+    args_sha256: str
 
 
 class ExecutionGate:
@@ -97,7 +118,37 @@ class ExecutionGate:
             )
         return self.coordinator.tasks.get_task(task_id)
 
+    def start_step_with_arguments(
+        self, task_id: str, plan, step_id: str, args_payload: str | bytes,
+        approval_token: str | None = None,
+    ) -> AuthorizedStepStart:
+        """Validate exact JSON arguments, derive their digest, then authorize start.
+
+        The returned parsed arguments are the same values whose canonical digest
+        was bound to approval. A future executor must consume this object rather
+        than reparsing caller-controlled input after authorization.
+        """
+        try:
+            arguments, canonical_json, args_sha256 = parse_and_bind(args_payload)
+        except ValueError as error:
+            raise AuthorizationDenied(f"Invalid step arguments: {error}") from error
+        execution = self._start_step_with_digest(
+            task_id, plan, step_id, args_sha256, approval_token=approval_token,
+        )
+        return AuthorizedStepStart(
+            execution, _freeze_json(arguments), canonical_json, args_sha256,
+        )
+
     def start_step(
+        self, task_id: str, plan, step_id: str, args_payload: str | bytes,
+        approval_token: str | None = None,
+    ) -> StepExecution:
+        """Public start API: accept raw arguments, never a caller-supplied digest."""
+        return self.start_step_with_arguments(
+            task_id, plan, step_id, args_payload, approval_token=approval_token,
+        ).execution
+
+    def _start_step_with_digest(
         self, task_id: str, plan, step_id: str, args_sha256: str,
         approval_token: str | None = None,
     ) -> StepExecution:

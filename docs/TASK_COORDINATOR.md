@@ -1,6 +1,6 @@
 # Task Coordinator
 
-**Status:** Integrated policy, durable-plan, dependency-readiness and in-process execution-authorization coordinator. It is not a tool executor or a complete runtime scheduler.
+**Status:** Integrated policy, durable-plan and dependency-readiness coordinator. It is not a tool executor or a complete runtime scheduler.
 
 ## Implemented
 
@@ -17,8 +17,6 @@
 - Stores bounded retry-policy metadata. Explicit retries are restricted to R0/R1 read-only steps.
 - Requests per-step authorization through the persistent permission broker using exact subject/action/task-resource/risk scope.
 - Requires matching explicit per-action approval for R3/R4 operations according to broker policy.
-- Uses the central ExecutionGate for plan-bound task/step start; approval tokens are single-use, expiring and bound to the task/step/action/risk/plan/arguments digest.
-- Prevents direct public TaskStore and journal paths from starting plan-bound execution; the Buildroot overlay mirrors the gate and token store.
 - Is mirrored into the Buildroot root filesystem overlay and covered by repository source/overlay parity tests.
 
 ## Security boundary
@@ -53,20 +51,3 @@ After the current QEMU image passes, define and test a non-executing executor pr
 ## Image Acceptance Evidence — 2026-11-13
 
 The first x86_64 baseline booted successfully under QEMU, but it predates the current Step Journal/TaskCoordinator integration. The integrated revision requires fresh target-image validation in [workflow #43446234529](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43446234529). The earlier QEMU result is not evidence for the integrated revision.
-
-
-## Execution authorization integration — 2026-11-14
-
-PR #45 adds `intelligence/runtime/execution_gate.py` and `approval_store.py`. The gate revalidates the persisted plan, checks task and step state, verifies durable dependencies, and starts a step only after a scoped R0–R2 grant or an R3–R4 approval token. High-risk token consumption and the step-start journal write share one SQLite transaction; failed starts roll the token consumption back. Concurrent-consumer, replay, expiry, mismatch, bypass and rollback tests are included.
-
-The PR #45 code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` passed repository validation with 167 unit tests. Fresh x86_64/AArch64 image builds for this exact revision remain required.
-
-### Remaining security and reliability work
-- Approver is currently a non-empty caller-supplied label, not an authenticated human principal. Trusted identity/session integration and broker-only issuance are required.
-- The step arguments digest is caller-supplied. A trusted executor must canonicalize the actual typed operation arguments and compute the digest itself.
-- R0–R2 grants live in a separate permission database and can be consumed before a failed task-step transaction. This is fail-closed but not atomic across databases.
-- The in-process gate is not a security boundary against hostile code with the same OS identity or database access.
-- There is still no worker scheduler, tool dispatcher, executor, deadline enforcement, resource quota manager, cancellation supervisor or independent outcome reconciler.
-- Native Linux namespace/cgroup/LSM/strict-seccomp enforcement and Android Binder/SELinux/AppOps enforcement remain mandatory.
-
-The gate must not be described as autonomous execution. See [Execution Authorization Gate](EXECUTION_AUTHORIZATION_GATE.md) and [Linux Executor Isolation Specification](LINUX_EXECUTION_SANDBOX.md).
