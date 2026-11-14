@@ -92,7 +92,8 @@ def apply_landlock_restrictions(
     syscall.restype = ctypes.c_long
 
     version = syscall(
-        _LANDLOCK_CREATE_RULESET, None, 0, _LANDLOCK_CREATE_RULESET_VERSION,
+        _LANDLOCK_CREATE_RULESET, ctypes.c_void_p(0),
+        ctypes.c_size_t(0), ctypes.c_uint(_LANDLOCK_CREATE_RULESET_VERSION),
     )
     if version < 1:
         error = ctypes.get_errno()
@@ -126,8 +127,8 @@ def apply_landlock_restrictions(
     ruleset_fd = syscall(
         _LANDLOCK_CREATE_RULESET,
         ctypes.byref(ruleset_attr),
-        ctypes.sizeof(ruleset_attr),
-        0,
+        ctypes.c_size_t(ctypes.sizeof(ruleset_attr)),
+        ctypes.c_uint(0),
     )
     if ruleset_fd < 0:
         error = ctypes.get_errno()
@@ -139,10 +140,10 @@ def apply_landlock_restrictions(
             rule = PathBeneathAttr(allowed_access, path_fd, 0)
             result = syscall(
                 _LANDLOCK_ADD_RULE,
-                ruleset_fd,
-                _LANDLOCK_RULE_PATH_BENEATH,
+                ctypes.c_int(ruleset_fd),
+                ctypes.c_uint(_LANDLOCK_RULE_PATH_BENEATH),
                 ctypes.byref(rule),
-                0,
+                ctypes.c_uint(0),
             )
             if result < 0:
                 error = ctypes.get_errno()
@@ -154,7 +155,7 @@ def apply_landlock_restrictions(
         read_access = _LANDLOCK_EXECUTE | _LANDLOCK_READ_FILE | _LANDLOCK_READ_DIR
         for path in read_paths:
             add_path_rule(Path(path), read_access)
-        cleanup_access = _LANDLOCK_READ_DIR | _LANDLOCK_REMOVE_FILE
+        cleanup_access = _LANDLOCK_READ_FILE | _LANDLOCK_READ_DIR | _LANDLOCK_REMOVE_FILE
         for path in removable_paths:
             add_path_rule(Path(path), cleanup_access)
 
@@ -162,7 +163,9 @@ def apply_landlock_restrictions(
         if libc.prctl(38, 1, 0, 0, 0) != 0:
             error = ctypes.get_errno()
             raise OSError(error, os.strerror(error), "PR_SET_NO_NEW_PRIVS")
-        result = syscall(_LANDLOCK_RESTRICT_SELF, ruleset_fd, 0)
+        result = syscall(
+            _LANDLOCK_RESTRICT_SELF, ctypes.c_int(ruleset_fd), ctypes.c_uint(0),
+        )
         if result < 0:
             error = ctypes.get_errno()
             raise OSError(error, os.strerror(error), "landlock_restrict_self")
@@ -315,8 +318,8 @@ def serve(path: Path = SOCKET_PATH) -> None:
         os.chmod(path, 0o660)
         server.listen(MAX_CLIENTS_PER_LOOP)
         server.settimeout(1.0)
-        apply_landlock_restrictions()
         apply_seccomp_filter()
+        apply_landlock_restrictions()
         while True:
             try:
                 connection, _ = server.accept()
