@@ -220,7 +220,7 @@ No fixed delivery date is promised until build capacity, device access, maintain
 
 ### Explicitly not complete
 
-The journal is integrated into TaskCoordinator: accepted plan steps are registered in the same SQLite transaction as the parent task, immutable plan and task events. The journal and coordinator are mirrored into the Buildroot rootfs overlay, with source/overlay parity tests. The target image has not yet been rebuilt with the coordinator integration and startup recovery hook or validated in QEMU. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered.
+The journal is integrated into TaskCoordinator: accepted plan steps are registered in the same SQLite transaction as the parent task, immutable plan and task events. The journal and coordinator are mirrored into the Buildroot rootfs overlay, with source/overlay parity tests. The target image has not yet been rebuilt with the coordinator integration and startup recovery hook or validated in QEMU. No tool execution adapter, authenticated user/session identity, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered.
 
 ### Next execution sequence
 
@@ -324,7 +324,8 @@ Integration PR #48 passed repository validation on its current initial head: 167
 - Fresh AArch64 QEMU build and boot for the same revision.
 - Production Linux namespaces/cgroups/LSM policy and strict per-service seccomp allowlists.
 - Authenticated approval identity; the current approval issuer still accepts a caller-provided approver label.
-- Executor-computed canonical argument digest; the current gate accepts a digest argument from its caller.
+- Authenticated human/session identity; the approver label is still caller-asserted.
+- Operation-specific argument schemas, a typed executor, and outcome reconciliation; the gate now derives canonical argument digests from strict JSON, but does not dispatch tools.
 - A real typed tool executor and outcome reconciler; tool execution remains disabled.
 - Android AOSP baseline, Binder/AIDL services, SELinux/AppOps integration and physical device port.
 
@@ -332,7 +333,7 @@ Integration PR #48 passed repository validation on its current initial head: 167
 1. Re-run repository validation on the latest PR #48 head.
 2. Build and boot the x86_64 and AArch64 QEMU images; inspect serial logs and artifacts.
 3. Fix all build/boot failures before promoting the integration.
-4. Close the remaining execution-gate trust gaps: authenticated human identity and executor-computed argument binding.
+4. Close the remaining execution trust gaps: authenticated human/session identity, operation-specific schema validation, typed executor boundary, native OS isolation, and independent outcome reconciliation. Canonical argument digest computation is now performed by the public gate from exact JSON input, but remains source-level until CI/QEMU evidence is recorded.
 5. Add native Linux service isolation and split authority-bearing databases behind service APIs.
 6. Implement one non-destructive typed reference adapter, then test timeout, cancellation, idempotency and ambiguous outcomes.
 7. Only then progress to Android platform selection and device feasibility.
