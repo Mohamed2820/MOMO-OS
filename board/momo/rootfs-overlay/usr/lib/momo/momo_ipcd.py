@@ -74,10 +74,12 @@ _LANDLOCK_MAKE_SYM = 1 << 12
 _LANDLOCK_REFER = 1 << 13
 _LANDLOCK_TRUNCATE = 1 << 14
 _LANDLOCK_IOCTL_DEV = 1 << 15
+_LANDLOCK_ACTIVE = False
+_SECCOMP_ACTIVE = False
 
 
 def apply_landlock_restrictions(
-    read_paths: tuple[Path, ...] = (Path("/usr"), Path("/etc")),
+    read_paths: tuple[Path, ...] = (Path("/usr"), Path("/etc"), Path("/proc")),
     removable_paths: tuple[Path, ...] = (Path("/run/momo"),),
 ) -> None:
     """Restrict filesystem access to read-only runtime paths and socket cleanup.
@@ -85,6 +87,7 @@ def apply_landlock_restrictions(
     This is a filesystem boundary for the status daemon, not a general-purpose
     executor sandbox. The socket is bound before this function is called.
     """
+    global _LANDLOCK_ACTIVE
     if not hasattr(os, "O_PATH"):
         raise RuntimeError("O_PATH is required for Landlock path rules")
     libc = ctypes.CDLL(None, use_errno=True)
@@ -169,6 +172,7 @@ def apply_landlock_restrictions(
         if result < 0:
             error = ctypes.get_errno()
             raise OSError(error, os.strerror(error), "landlock_restrict_self")
+        _LANDLOCK_ACTIVE = True
     finally:
         os.close(ruleset_fd)
 
@@ -211,6 +215,22 @@ def _response_frame(payload: dict[str, Any]) -> bytes:
     return struct.pack("!I", len(body)) + body
 
 
+def _namespace_isolated(name: str) -> bool:
+    try:
+        own = os.stat(f"/proc/self/ns/{name}").st_ino
+        init = os.stat(f"/proc/1/ns/{name}").st_ino
+        return own != init
+    except OSError:
+        return False
+
+
+def _cgroup_membership() -> str:
+    try:
+        return Path("/proc/self/cgroup").read_text(encoding="ascii").strip()
+    except OSError:
+        return "unavailable"
+
+
 def _status_payload() -> dict[str, Any]:
     uname = os.uname()
     return {
@@ -221,6 +241,16 @@ def _status_payload() -> dict[str, Any]:
         "protocol_version": 1,
         "capabilities": ["status.read"],
         "tool_execution": "disabled",
+        "sandbox": {
+            "namespaces": {
+                name: _namespace_isolated(name)
+                for name in ("mnt", "ipc", "uts", "net")
+            },
+            "cgroup": _cgroup_membership(),
+            "landlock": _LANDLOCK_ACTIVE,
+            "seccomp": _SECCOMP_ACTIVE,
+            "network_socket_creation": "blocked",
+        },
     }
 
 
@@ -267,6 +297,7 @@ def apply_seccomp_filter() -> None:
     The default action is ALLOW; dangerous process/namespace and execution
     syscalls are denied. This is defense in depth, not a complete allowlist.
     """
+    global _SECCOMP_ACTIVE
     try:
         seccomp = ctypes.CDLL("libseccomp.so.2", use_errno=True)
     except OSError as exc:
@@ -292,7 +323,8 @@ def apply_seccomp_filter() -> None:
         "unshare", "setns", "reboot", "kexec_load", "bpf", "keyctl",
         "perf_event_open", "open_by_handle_at", "io_uring_setup",
         "io_uring_enter", "io_uring_register", "userfaultfd",
-        "process_vm_readv", "process_vm_writev",
+        "process_vm_readv", "process_vm_writev", "socket", "socketpair",
+        "connect", "bind", "listen",
     )
     try:
         for name in denied:
@@ -305,6 +337,7 @@ def apply_seccomp_filter() -> None:
         result = seccomp.seccomp_load(context)
         if result != 0:
             raise OSError(-result, "seccomp_load failed")
+        _SECCOMP_ACTIVE = True
     finally:
         seccomp.seccomp_release(context)
 
