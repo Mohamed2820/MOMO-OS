@@ -38,6 +38,12 @@ class ArgumentBindingTests(unittest.TestCase):
         with self.assertRaises(ArgumentBindingError):
             parse_arguments(b'{"x":"\xff"}')
 
+    def test_lone_surrogate_text_is_rejected(self):
+        with self.assertRaises(ArgumentBindingError):
+            parse_arguments('{"x":"\\ud800"}')
+        with self.assertRaises(ArgumentBindingError):
+            canonical_arguments({"x": "\\ud800"})
+
     def test_payload_size_is_bounded(self):
         with self.assertRaises(ArgumentBindingError):
             parse_arguments('{"x":"' + ('a' * 100) + '"}', max_bytes=32)
