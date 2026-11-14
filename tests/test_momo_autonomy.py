@@ -1,10 +1,50 @@
 """Safety tests for the MOMO autonomous patch worker."""
 import unittest
 
-from intelligence.autonomy.runner import _allowed, _validate_patch, WorkerError
+from intelligence.autonomy.runner import (
+    OVH_ANONYMOUS_API_URL,
+    OVH_ANONYMOUS_MODEL,
+    _allowed,
+    _provider_configuration,
+    _validate_patch,
+    WorkerError,
+)
 
 
 class AutonomyPolicyTests(unittest.TestCase):
+    def test_keyless_mode_defaults_to_restricted_ovh_provider(self):
+        url, model, key, keyless = _provider_configuration({})
+        self.assertEqual(url, OVH_ANONYMOUS_API_URL)
+        self.assertEqual(model, OVH_ANONYMOUS_MODEL)
+        self.assertIsNone(key)
+        self.assertTrue(keyless)
+
+    def test_keyless_mode_accepts_ovh_base_url_only(self):
+        url, model, key, keyless = _provider_configuration({
+            "MOMO_AGENT_API_URL": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+        })
+        self.assertEqual(url, OVH_ANONYMOUS_API_URL)
+        self.assertTrue(keyless)
+
+    def test_keyless_mode_refuses_untrusted_or_arbitrary_providers(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({
+                "MOMO_AGENT_API_URL": "https://example.com/v1/chat/completions",
+            })
+
+    def test_authenticated_mode_requires_model_and_preserves_provider_config(self):
+        with self.assertRaises(WorkerError):
+            _provider_configuration({"MOMO_AGENT_API_KEY": "test-secret"})
+        url, model, key, keyless = _provider_configuration({
+            "MOMO_AGENT_API_KEY": "test-secret",
+            "MOMO_AGENT_MODEL": "provider/model",
+            "MOMO_AGENT_API_URL": "https://gateway.example/v1/chat/completions",
+        })
+        self.assertEqual(url, "https://gateway.example/v1/chat/completions")
+        self.assertEqual(model, "provider/model")
+        self.assertEqual(key, "test-secret")
+        self.assertFalse(keyless)
+
     def test_allows_source_and_test_files(self):
         self.assertTrue(_allowed("intelligence/runtime/example.py"))
         self.assertTrue(_allowed("tests/test_example.py"))
