@@ -243,7 +243,12 @@ class TaskCoordinator:
         approval: Approval | None = None,
         now: datetime | None = None,
     ) -> AuthorizationDecision:
-        """Consume one narrowly scoped grant; successful authorization is not execution."""
+        """Check a LOW-risk (R0-R2) grant for one step. Never starts anything.
+
+        Plain Approval objects are refused: an approval is valid only as a
+        server-issued token consumed by ExecutionGate. R3/R4 steps are refused
+        here for the same reason.
+        """
         task = self.tasks.get_task(task_id)
         if task.status not in {
             TaskStatus.PLANNED, TaskStatus.AWAITING_APPROVAL, TaskStatus.EXECUTING
@@ -253,6 +258,16 @@ class TaskCoordinator:
         step = next((item for item in plan.steps if item.step_id == step_id), None)
         if step is None:
             return AuthorizationDecision(False, "Step is not part of the validated plan")
+        if approval is not None:
+            return AuthorizationDecision(
+                False,
+                "Plain approval objects are not accepted; approvals must be issued "
+                "tokens consumed through ExecutionGate",
+            )
+        if step.risk in {Risk.R3, Risk.R4}:
+            return AuthorizationDecision(
+                False, "R3/R4 steps require ExecutionGate with an issued approval token"
+            )
 
         request = ToolRequest(
             subject=step.agent_role,
@@ -260,7 +275,7 @@ class TaskCoordinator:
             resource=task_id,
             risk=step.risk,
         )
-        return self.permissions.authorize(request, approval=approval, now=now)
+        return self.permissions.authorize(request, approval=None, now=now)
 
     def _validate_task_plan(self, task: Task, plan: Plan) -> None:
         self.validator.validate(plan)
