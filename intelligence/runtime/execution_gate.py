@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from types import MappingProxyType
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -47,7 +48,7 @@ class AuthorizedStepStart:
     """A durable step start paired with the exact validated arguments."""
 
     execution: StepExecution
-    arguments: dict
+    arguments: object
     canonical_json: str
     args_sha256: str
 
@@ -123,12 +124,23 @@ class ExecutionGate:
             arguments, canonical_json, args_sha256 = parse_and_bind(args_payload)
         except ValueError as error:
             raise AuthorizationDenied(f"Invalid step arguments: {error}") from error
-        execution = self.start_step(
+        execution = self._start_step_with_digest(
             task_id, plan, step_id, args_sha256, approval_token=approval_token,
         )
-        return AuthorizedStepStart(execution, arguments, canonical_json, args_sha256)
+        return AuthorizedStepStart(
+            execution, MappingProxyType(arguments), canonical_json, args_sha256,
+        )
 
     def start_step(
+        self, task_id: str, plan, step_id: str, args_payload: str | bytes,
+        approval_token: str | None = None,
+    ) -> StepExecution:
+        """Public start API: accept raw arguments, never a caller-supplied digest."""
+        return self.start_step_with_arguments(
+            task_id, plan, step_id, args_payload, approval_token=approval_token,
+        ).execution
+
+    def _start_step_with_digest(
         self, task_id: str, plan, step_id: str, args_sha256: str,
         approval_token: str | None = None,
     ) -> StepExecution:
