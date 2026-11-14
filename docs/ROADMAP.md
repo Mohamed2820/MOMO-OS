@@ -255,12 +255,12 @@ This is a serialization primitive, not an authorization boundary. It is not yet 
 
 The public step authorization path no longer accepts a caller-supplied digest. `ApprovalStore.issue_for_arguments()` and `ExecutionGate.start_step()` accept the exact bounded JSON payload and derive canonical SHA-256 internally. The low-level digest transition is private to the gate module. `start_step_with_arguments()` returns the exact parsed values as a recursively immutable structure, alongside canonical JSON and digest, for a future typed executor to consume without reparsing mutable input. Rootfs copies are kept byte-for-byte in parity.
 
-Focused tests cover approval/start digest agreement, changed-payload rejection, duplicate-key rejection, malformed-input rejection, canonical key ordering and deep immutability. These tests are source-added but have not yet run in CI. The approver label is still caller-asserted; there is no authenticated user/session identity, operation-specific schema registry, typed side-effect executor, or OS-enforced isolation. Tool execution stays disabled.
+Focused tests cover approval/start digest agreement, changed-payload rejection, duplicate-key rejection, malformed-input rejection, canonical key ordering and deep immutability; the TaskCoordinator tests were migrated from precomputed digests to raw JSON payloads. These tests are source-added but have not yet run in CI. The approver label is still caller-asserted; there is no authenticated user/session identity, operation-specific schema registry, typed side-effect executor, or OS-enforced isolation. Tool execution stays disabled.
 
 
 ## Current candidate verification status — PR #48
 
-Latest inspected PR #48 head: `7d00674d88306226c91b67ec4c4a80e92d0082cf`. The previous repository validation [#43598435793](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435793) passed on older head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; it predates the strict argument-binding integration and its new tests. It cannot be used to claim the current candidate is CI-tested.
+Latest inspected PR #48 head: `794a8eeb693e4d21aa9d580d0845c66b0724a39e`. The previous repository validation [#43598435793](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435793) passed on older head `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`; it predates the strict argument-binding integration and its new tests. It cannot be used to claim the current candidate is CI-tested.
 
 The x86_64 run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) and AArch64 run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) are also tied to the older `eac08aed...` head. At last inspection x86_64 remained in kernel/rootfs compilation and AArch64 completed image verification, QEMU readiness, provenance and artifact upload successfully; neither is evidence for the current PR head. Do not merge PR #48 or close Section 1 on these stale runs.
 
