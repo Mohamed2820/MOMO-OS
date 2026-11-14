@@ -1,6 +1,6 @@
 # MOMO OS — Linux IPC Security Foundations
 
-**Status:** Linux AF_UNIX peer identity and bounded versioned message framing implemented and unit tested. Neither primitive is yet connected to a privileged daemon or executor.
+**Status (2026-11-14):** A read-only Linux AF_UNIX status daemon is integrated into the Buildroot rootfs. It uses kernel peer credentials, bounded versioned framing, replay detection, process resource limits, `no_new_privs`, and a required libseccomp denylist. Repository CI passes. Fresh x86_64 and AArch64 QEMU acceptance for this integrated revision is still pending. No tool executor or privileged operation dispatcher is enabled.
 
 ## Peer identity
 
@@ -40,3 +40,17 @@ Before binding its socket, the IPC daemon applies hard process limits: zero core
 The daemon now requires libseccomp and installs a syscall denylist after creating and listening on its AF_UNIX socket. The default action remains ALLOW; process creation/exec, ptrace, mount/namespace changes, reboot/kexec, BPF/keyctl/perf, io_uring, userfaultfd and cross-process memory syscalls are denied with EPERM. The image explicitly includes Buildroot libseccomp, and CI installs libseccomp development headers to test the filter in a subprocess.
 
 This is not a strict syscall allowlist and is not equivalent to a complete sandbox. Filesystem read/write syscalls and many other kernel interfaces remain available. Namespace isolation, cgroup limits and an LSM policy are still required. If libseccomp cannot load or the filter cannot be installed, the daemon refuses to start.
+
+
+## Integrated read-only daemon — 2026-11-14
+
+The Linux status service is now implemented in `board/momo/rootfs-overlay/usr/lib/momo/momo_ipcd.py` and mirrored in the Buildroot overlay. Init script `S98momo-ipc` starts it as the dedicated unprivileged `momo-ipc` account. The service accepts root-owned clients only, authenticates the connected process using `SO_PEERCRED`, parses one bounded protocol frame, rejects duplicate request IDs within the daemon lifetime, and serves only `status.read` with an empty argument object.
+
+The daemon applies resource limits and `PR_SET_NO_NEW_PRIVS`, then requires libseccomp to install a default-allow denylist before accepting requests. It refuses to start if libseccomp is missing or filter installation fails. The current CLI `momo-ipcctl status` is read-only. The response explicitly reports `tool_execution: disabled`.
+
+### Verified and pending
+
+- Repository CI for integration PR #48 passed: 167 unit tests, schema validation, documentation/JSON checks and shell checks (run #43597582878).
+- The earlier QEMU acceptance applies to an older image revision and does not validate this daemon.
+- Fresh x86_64 and AArch64 Buildroot/QEMU boot checks are required before this increment receives image-integrated/emulator-tested status.
+- The daemon is not a general-purpose executor. Future mutating operations require a separate authorization design, durable idempotency, outcome reconciliation and stronger per-operation principals.
