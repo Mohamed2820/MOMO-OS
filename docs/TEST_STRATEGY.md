@@ -22,3 +22,12 @@ Never describe a feature as device-supported based only on L0-L3. A bootable ima
 
 ## Release gates
 No public flashable build before L5 evidence for the exact supported model and a tested recovery procedure. Security-sensitive components require independent review.
+
+
+## Current evidence snapshot — 2026-11-14
+
+- Repository validation: 167 unit tests passed on the execution-gate code revision.
+- Linux x86_64 QEMU: full Buildroot build, image checks, readiness and read-only IPC passed on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25` ([run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201)).
+- Linux AArch64 QEMU virt: full Buildroot build, image checks, readiness and read-only IPC passed on the same commit ([run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262)).
+
+These are L4 virtual-target results for the declared QEMU machines only. No L5 physical-device test, Android platform build, production executor isolation, signed release or OTA/recovery qualification has passed.
