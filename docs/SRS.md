@@ -616,7 +616,7 @@ This addendum updates implementation evidence without changing the normative pro
 | Approval replay/race protection | Atomic token consumption with step start; concurrent-consumer and rollback tests | Implemented and tested |
 | Linux local IPC | Unprivileged read-only AF_UNIX status daemon with peer credentials and bounded protocol | Implemented on Linux virtual baseline; no executor dispatch |
 | Linux process restrictions | rlimits, no_new_privs and libseccomp default-allow denylist | Implemented as defense in depth; namespaces/cgroups/LSM/strict allowlist remain open |
-| Cross-architecture virtual boot | Buildroot x86_64 and AArch64 QEMU image workflows | Both passed on baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; later gate revision needs fresh image builds |
+| Cross-architecture virtual boot | Buildroot x86_64 and AArch64 QEMU image workflows | Both passed on baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`; the newer execution-gate revision also passed fresh x86_64 and AArch64 image builds on `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. |
 
 ### Current verification references
 
@@ -625,3 +625,11 @@ This addendum updates implementation evidence without changing the normative pro
 - AArch64 QEMU baseline: [#43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054.
 
 The newer execution-gate commit has not yet been image-tested. No Android image, physical phone port, production tool executor, native per-task sandbox, signed release or OTA recovery qualification is claimed.
+
+
+### Fresh image verification for the execution-gate revision — 2026-11-14
+
+- x86_64 Buildroot/QEMU: [workflow #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750.
+- AArch64 Buildroot/QEMU: [workflow #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046.
+
+Both workflows passed image output verification, QEMU boot, MOMO readiness, read-only IPC status and artifact upload on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`. Both guests explicitly reported `tool_execution: disabled`. This closes the virtual image integration requirement for this revision only; it does not establish physical-device or Android support, authenticated human approval, native worker isolation or production execution.
