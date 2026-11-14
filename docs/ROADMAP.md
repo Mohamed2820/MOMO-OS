@@ -144,7 +144,7 @@ The first x86_64 Buildroot image has booted successfully in QEMU. The merged Tas
 - Latest coordinator-integrated image build and QEMU recovery check are pending.
 - No Android/AOSP build or Android phone image is validated.
 - No physical device is certified.
-- No actual tool executor, authenticated IPC or OS-enforced MOMO sandbox exists.
+- No side-effecting tool executor, authenticated human/session principal or OS-enforced MOMO sandbox exists. A narrow R0/R1 read-only typed executor now exists in source.
 - No final Android base, first phone SKU, cloud build host or release signing infrastructure is selected.
 
 ## Progress Evidence Update — 2026-11-13
@@ -161,7 +161,7 @@ The integrated revision is undergoing a fresh Buildroot/QEMU run. Until that run
 
 ### Explicitly incomplete
 
-Stage 2 and Stage 3 remain open. There is no worker scheduler, actual tool executor, authenticated IPC, native OS sandbox, deadline/backoff service, concurrency/resource manager, independent outcome verifier or needs_review reconciler. The 111-test repository result is not a substitute for image or hardware validation.
+Stage 2 and Stage 3 remain open. There is no worker scheduler, side-effecting tool executor, authenticated human/session identity, native OS sandbox, deadline/backoff service, concurrency/resource manager, independent outcome verifier or needs_review reconciler. A narrow read-only typed executor is source-implemented but awaits fresh CI evidence. The 111-test repository result is not a substitute for image or hardware validation.
 
 
 ## Stage 3 Progress — IPC protocol framing (2026-11-13)
@@ -222,8 +222,9 @@ The Linux x86_64 target now has a dedicated unprivileged status daemon using AF_
 - [x] Plan-bound execution gate and single-use approval token primitive.
 - [x] Restart recovery quarantine and event-chain tamper tests.
 - [x] Linux read-only IPC status service and peer credential checks.
-- [ ] Executor-authenticated user identity and trusted argument canonicalization.
-- [ ] Typed tool executor, idempotency propagation, deadlines and outcome reconciliation.
+- [ ] Authenticated human/session identity and approval-principal binding.
+- [x] Strict argument canonicalization at public approval/start APIs (source-level; fresh CI pending).
+- [ ] Side-effecting typed adapters, idempotency propagation, deadlines, cancellation and outcome reconciliation.
 - [ ] Native Linux namespaces/cgroups/LSM enforcement and strict seccomp profiles.
 - [ ] Fresh x86_64 and AArch64 QEMU integration acceptance.
 - [ ] Android Binder/AIDL and SELinux/AppOps implementation.
@@ -255,7 +256,7 @@ This is a serialization primitive, not an authorization boundary. It is not yet 
 
 The public step authorization path no longer accepts a caller-supplied digest. `ApprovalStore.issue_for_arguments()` and `ExecutionGate.start_step()` accept the exact bounded JSON payload and derive canonical SHA-256 internally. The low-level digest transition is private to the gate module. `start_step_with_arguments()` returns the exact parsed values as a recursively immutable structure, alongside canonical JSON and digest, for a future typed executor to consume without reparsing mutable input. Rootfs copies are kept byte-for-byte in parity.
 
-Focused tests cover approval/start digest agreement, changed-payload rejection, duplicate-key rejection, malformed-input rejection, canonical key ordering and deep immutability; the TaskCoordinator tests were migrated from precomputed digests to raw JSON payloads. These tests are source-added but have not yet run in CI. The approver label is still caller-asserted; there is no authenticated user/session identity, operation-specific schema registry, typed side-effect executor, or OS-enforced isolation. Tool execution stays disabled.
+Focused tests cover approval/start digest agreement, changed-payload rejection, duplicate-key rejection, malformed-input rejection, canonical key ordering and deep immutability; the TaskCoordinator tests were migrated from precomputed digests to raw JSON payloads. These tests are source-added but have not yet run in CI. The approver label is still caller-asserted; there is no authenticated user/session identity, no broad operation-specific schema registry beyond the first status adapter, no side-effecting executor, and no OS-enforced isolation. Tool execution beyond the read-only status adapter stays disabled.
 
 
 ## Current candidate verification status — PR #48
@@ -264,7 +265,7 @@ Latest inspected PR #48 head: `794a8eeb693e4d21aa9d580d0845c66b0724a39e`. The pr
 
 The x86_64 run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) and AArch64 run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) are also tied to the older `eac08aed...` head. At last inspection x86_64 remained in kernel/rootfs compilation and AArch64 completed image verification, QEMU readiness, provenance and artifact upload successfully; neither is evidence for the current PR head. Do not merge PR #48 or close Section 1 on these stale runs.
 
-The latest source increment makes the public step approval/start APIs accept raw bounded JSON instead of caller-supplied digests, and returns deeply immutable authorized arguments through `start_step_with_arguments()`. The focused parser/gate tests and source/rootfs parity are added. They remain unverified by a fresh repository CI run. The remaining hard blockers are authenticated human/session identity, operation-specific schemas, a typed executor, OS-enforced sandboxing, outcome reconciliation, and current-head x86_64/AArch64 QEMU acceptance.
+The latest source increment makes the public step approval/start APIs accept raw bounded JSON instead of caller-supplied digests, and returns deeply immutable authorized arguments through `start_step_with_arguments()`. The focused parser/gate tests and source/rootfs parity are added. They remain unverified by a fresh repository CI run. The remaining hard blockers are authenticated human/session identity, broader operation-specific schemas, deadlines/cancellation and resource budgets, side-effecting adapter design, OS-enforced sandboxing, outcome reconciliation, fresh CI, and current-head x86_64/AArch64 QEMU acceptance.
 
 
 ## First typed execution adapter — 2026-11-14
