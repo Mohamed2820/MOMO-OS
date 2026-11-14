@@ -292,3 +292,10 @@ This is groundwork only. A configured kernel does not isolate a service by itsel
 ## Latest kernel-prerequisite validation — 2026-11-14
 
 Repository validation [#43602800965](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602800965) passed **200 tests** and validated the kernel fragment, workflow YAML, shell utilities, device profiles, Python compilation and rootfs parity. Fresh image workflows now run on the integration candidate with the kernel fragment enabled: x86_64 [#43602898660](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602898660) and AArch64 [#43602902414](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43602902414). Both must finish the kernel build, verify the generated security config, pass QEMU readiness and upload artifacts. They have not yet reached those acceptance gates.
+
+
+## Landlock filesystem boundary for IPC status service — 2026-11-14
+
+The unprivileged read-only IPC daemon now applies Landlock after binding its socket and loading seccomp. It can read/execute from `/usr`, read from `/etc`, and inspect/remove its own socket under `/run/momo`; other handled filesystem access is denied. The setup is fail-closed. A subprocess test checks allowed reads, denied reads outside the allowlist and denied writes.
+
+This is a real filesystem restriction for the status daemon, not a complete MOMO sandbox. Per-service namespaces, cgroups, network isolation, a strict syscall allowlist, authenticated principal mapping and security enforcement for future task/executor services remain open. The Landlock code and test require fresh CI and QEMU boot evidence before promotion.
