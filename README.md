@@ -49,6 +49,12 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 
 - [Vision](docs/VISION.md)
 - [Technical architecture](docs/ARCHITECTURE.md)\n- [Universal platform strategy](docs/UNIVERSAL_PLATFORM_STRATEGY.md)\n- [Device compatibility and porting](docs/DEVICE_COMPATIBILITY.md)\n- [Platform adapter contracts](docs/PLATFORM_ADAPTERS.md)
+- [Versioned core service API contracts](docs/SERVICE_API_CONTRACTS.md)
+- [Execution runtime and executor design](docs/EXECUTION_RUNTIME_DESIGN.md)
+- [Linux service isolation and sandbox design](docs/LINUX_SANDBOX_DESIGN.md)
+- [Linux IPC security](docs/LINUX_IPC_SECURITY.md)
+- [Android platform integration](docs/ANDROID_PLATFORM_INTEGRATION.md)
+- [Platform support matrix](docs/PLATFORM_SUPPORT_MATRIX.md)
 - [AI runtime](docs/AI_RUNTIME.md)
 - [Provider routing](intelligence/providers/README.md)
 - [Orchestrator implementation](intelligence/runtime/ORCHESTRATOR.md)
