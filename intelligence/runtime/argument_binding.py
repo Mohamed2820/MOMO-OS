@@ -42,7 +42,13 @@ def _validate(value: Any, *, depth: int, budget: list[int]) -> None:
     if depth > MAX_ARGUMENT_DEPTH:
         raise ArgumentBindingError("Argument payload exceeds the nesting limit")
 
-    if value is None or type(value) in (bool, str):
+    if value is None or type(value) is bool:
+        return
+    if type(value) is str:
+        try:
+            value.encode("utf-8", errors="strict")
+        except UnicodeEncodeError as error:
+            raise ArgumentBindingError("String arguments must contain valid Unicode") from error
         return
     if type(value) is int:
         if not -MAX_INTEGER - 1 <= value <= MAX_INTEGER:
