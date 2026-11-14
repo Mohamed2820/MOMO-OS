@@ -5,6 +5,7 @@ from intelligence.autonomy.runner import (
     OVH_ANONYMOUS_API_URL,
     OVH_ANONYMOUS_MODEL,
     _allowed,
+    _extract_completion_document,
     _provider_configuration,
     _validate_patch,
     WorkerError,
@@ -44,6 +45,33 @@ class AutonomyPolicyTests(unittest.TestCase):
         self.assertEqual(model, "provider/model")
         self.assertEqual(key, "test-secret")
         self.assertFalse(keyless)
+
+    def test_extracts_plain_json_completion(self):
+        document = _extract_completion_document({
+            "choices": [{"message": {"role": "assistant", "content": '{"status":"blocked","task":"none","summary":"No safe task","patch":""}'}}],
+        })
+        self.assertEqual(document["status"], "blocked")
+
+    def test_extracts_fenced_json_completion(self):
+        document = _extract_completion_document({
+            "choices": [{"message": {"role": "assistant", "content": ' ```json\\n{"status":"blocked","patch":""}\\n``` '}}],
+        })
+        self.assertEqual(document["status"], "blocked")
+
+    def test_extracts_text_segments_from_compatible_content_array(self):
+        document = _extract_completion_document({
+            "choices": [{"message": {"role": "assistant", "content": [
+                {"type": "text", "text": '{"status":"blocked",'},
+                {"type": "output_text", "text": '"patch":""}'},
+            ]}}],
+        })
+        self.assertEqual(document["status"], "blocked")
+
+    def test_rejects_reasoning_only_or_truncated_completion(self):
+        with self.assertRaises(WorkerError):
+            _extract_completion_document({
+                "choices": [{"finish_reason": "length", "message": {"role": "assistant", "reasoning": "not a final answer"}}],
+            })
 
     def test_allows_source_and_test_files(self):
         self.assertTrue(_allowed("intelligence/runtime/example.py"))
