@@ -1,4 +1,4 @@
-name: MOMO keyless provider smoke test (reasoning budget check)
+name: MOMO keyless provider smoke test (bounded-context autonomy check)
 
 on:
   push:
