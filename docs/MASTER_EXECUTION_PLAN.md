@@ -369,3 +369,27 @@ This is a real filesystem restriction for the status daemon, not a complete MOMO
 Added `momo-ipc-sandbox`, a root-started launcher that moves the daemon into a dedicated cgroup before dropping privileges, creates private mount/IPC/UTS/network namespaces, makes mount propagation private, clears supplementary groups, drops to the dedicated `momo-ipc` UID/GID and sets `no_new_privs`. Init script `S98momo-ipc` now requires cgroup v2 CPU/memory/PID controllers and sets a 50% CPU quota, 128 MiB memory limit and 16-process limit. The daemon then applies its existing seccomp denylist and Landlock filesystem boundary.
 
 This is a per-service sandbox profile for the read-only status daemon only. PID/user namespaces, task/executor service isolation, authenticated human/session identity, a strict syscall allowlist, network firewall policy, and adversarial QEMU tests remain open. The wrapper/init changes have not yet passed a fresh CI/QEMU run; do not mark the sandbox gate complete until they do.
+
+
+## Section 1 of the four remaining implementation sections — execution authorization foundation
+
+### Scope and implementation result
+- [x] D1: block the CLI transition command from entering `EXECUTING`; execution must use the gate.
+- [x] D2: block direct low-level step starts for plan-bound tasks and reject step records not present in the accepted plan.
+- [x] D3: replace caller-constructed approval objects with server-issued, random, expiring, single-use tokens stored by hash.
+- [x] D4: bind approvals to task/step, operation/domain, risk, immutable plan digest and exact canonical argument digest; reject mismatch, expiry, replay and concurrent double-consumption.
+- [x] Derive argument digests from bounded strict JSON inside the public approval/start APIs; return deeply immutable authorized arguments.
+- [x] Add focused negative, replay, expiry, concurrency, rollback, tamper and rootfs-parity tests.
+- [x] Add a typed R0/R1 read-only reference executor limited to the fixed `system.status.read` operation; keep IPC tool dispatch disabled.
+- [x] Add Linux status-daemon namespace/cgroup/seccomp/Landlock setup and QEMU assertions.
+- [x] Latest repository validation passed 204 tests on PR #48 code commit `39499f7e0d16d8c2dd6f2f3d2060a9d8fdc7048d` (run [#43605424201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43605424201)); the latest documentation-updated head also passed 204 tests (run [#43605522144](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43605522144)).
+
+### Remaining exit evidence
+- [ ] Fresh x86_64 QEMU image passes namespace inode, cgroup, Landlock, seccomp, network restriction and MOMO readiness assertions.
+- [ ] Fresh AArch64 QEMU image passes the same assertions.
+- [ ] Inspect and retain both successful image artifacts, boot logs, build metadata and hashes.
+- [ ] Review the complete PR diff and merge PR #48 only after both image acceptance runs pass.
+
+Previous image attempts built and reached `MOMO OS READY` but failed final acceptance because namespace reporting compared against `/proc/1` and returned false. The daemon now verifies its live namespace inode identities against values captured by the root launcher immediately after `unshare()`. Corrected image workflows are running; the section remains open until both architectures pass.
+
+**Boundary:** this section does not enable arbitrary or side-effecting tools. The IPC service remains read-only. Authenticated human/session identity, side-effecting operation adapters, full task/executor sandboxing, deadline/cancellation orchestration, outcome reconciliation, Android platform enforcement and physical-device qualification remain later sections.
