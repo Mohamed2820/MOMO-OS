@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# Start the unprivileged MOMO local IPC status service.
+#
+PIDFILE=/run/momo-ipcd.pid
+SOCKET=/run/momo/ipc.sock
+
+case "$1" in
+  start)
+    mkdir -p /run/momo
+    chown momo-ipc:momo-ipc /run/momo
+    chmod 0750 /run/momo
+    start-stop-daemon --start --background --make-pidfile --pidfile "$PIDFILE" \
+      --chuid momo-ipc:momo-ipc --exec /usr/bin/python3 -- \
+      /usr/lib/momo/momo_ipcd.py
+    for attempt in 1 2 3 4 5; do
+      [ -S "$SOCKET" ] && break
+      sleep 1
+    done
+    if [ ! -S "$SOCKET" ]; then
+      echo "[MOMO IPC] Service failed to create its socket."
+      exit 1
+    fi
+    ;;
+  stop)
+    start-stop-daemon --stop --retry TERM/5/KILL/2 --pidfile "$PIDFILE" 2>/dev/null || true
+    rm -f "$PIDFILE"
+    ;;
+  restart)
+    "$0" stop
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}" >&2
+    exit 1
+    ;;
+esac
+exit 0
