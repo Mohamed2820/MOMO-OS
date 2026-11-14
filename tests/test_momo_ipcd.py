@@ -107,7 +107,13 @@ class IPCServiceTests(unittest.TestCase):
             "assert resource.getrlimit(resource.RLIMIT_NOFILE) == (32, 32); "
             "assert resource.getrlimit(resource.RLIMIT_FSIZE) == (0, 0); "
             "assert ctypes.CDLL(None).prctl(39, 0, 0, 0, 0) == 1; "
-            "apply_seccomp_filter(); os.fork()"
+            "apply_seccomp_filter(); "
+            "import socket; "
+            "socket_denied=False; "
+            "try: socket.socket()\n"
+            "except PermissionError: socket_denied=True\n"
+            "assert socket_denied, 'socket creation was not denied'; "
+            "os.fork()"
         )
         env = os.environ.copy()
         env["PYTHONPATH"] = str(service_path)
