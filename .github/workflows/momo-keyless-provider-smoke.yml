@@ -1,4 +1,4 @@
-name: MOMO keyless provider smoke test
+name: MOMO keyless provider smoke test (response-shape check)
 
 on:
   push:
