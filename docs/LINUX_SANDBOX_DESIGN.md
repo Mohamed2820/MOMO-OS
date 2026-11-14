@@ -1,6 +1,6 @@
 # MOMO OS — Linux Service Isolation and Sandbox Design
 
-**Status:** Security design baseline. The current Buildroot IPC daemon uses a dedicated UID, resource limits, `no_new_privs` and a required libseccomp default-allow denylist. Full namespace, cgroup and LSM enforcement is not implemented. No privileged tool executor is enabled.
+**Status:** Security design baseline. The current Buildroot IPC daemon uses a dedicated UID, resource limits, `no_new_privs` and a required libseccomp default-allow denylist. A shared kernel config fragment now requests namespaces, cgroups v2 controllers, seccomp filtering and Landlock for both QEMU architectures; the image workflows verify the resulting kernel `.config`. Service-level namespace/cgroup/Landlock enforcement is not yet implemented. No side-effecting tool executor is enabled.
 
 ## 1. Objectives
 
@@ -52,7 +52,13 @@ The existing daemon accepts root UID only and exposes `status.read`. That policy
 
 ## 5. Linux kernel controls
 
-### 5.1 Identity and privilege
+### 5.1 Kernel prerequisites added to QEMU builds
+
+`board/momo/kernel-security.fragment` requests UTS/IPC/user/PID/network namespaces, cgroups and the PID/CPU/memory/freezer/device controllers, seccomp filtering, and Landlock. Both x86_64 and AArch64 Buildroot workflows pass this fragment to the Linux kernel configuration and run `tools/validate_kernel_security_config.py` against the generated kernel `.config` before accepting the image. Repository CI also validates the fragment itself.
+
+This proves only that the kernel exposes the required primitives. It does not prove that MOMO services enter namespaces, receive cgroup limits, or apply Landlock rules. Those enforcement and adversarial tests remain mandatory.
+
+### 5.2 Identity and privilege
 
 - Dedicated static service UID/GID per trust domain.
 - Drop supplementary groups and all unnecessary effective/permitted capabilities.
@@ -60,7 +66,7 @@ The existing daemon accepts root UID only and exposes `status.read`. That policy
 - `PR_SET_NO_NEW_PRIVS` before seccomp or untrusted input processing.
 - Explicit file/device access; no broad `/dev` or `/sys` access.
 
-### 5.2 Namespaces
+### 5.3 Namespaces
 
 Evaluate and enable per service as supported by the target kernel:
 - Mount namespace with a minimal read-only root view.
@@ -71,7 +77,7 @@ Evaluate and enable per service as supported by the target kernel:
 
 Namespace availability and configuration must be tested on the exact target kernel; a configuration file alone is not proof.
 
-### 5.3 Seccomp
+### 5.4 Seccomp
 
 - Prefer a default-deny allowlist for production service profiles.
 - Generate profiles from the actual syscall needs of each service and architecture.
@@ -80,7 +86,7 @@ Namespace availability and configuration must be tested on the exact target kern
 - Test both allowed and denied syscalls in a subprocess.
 - A default-allow denylist, including the current IPC daemon policy, is defense in depth and must never be described as complete isolation.
 
-### 5.4 LSM
+### 5.5 LSM
 
 Select and document an LSM strategy for the production Linux platform:
 - AppArmor profiles may be practical for a distribution-style Linux userspace.
@@ -88,7 +94,7 @@ Select and document an LSM strategy for the production Linux platform:
 - Landlock may add per-process filesystem restrictions where supported, but does not replace a full service policy.
 - The final choice must be made by ADR after evaluating kernel configuration, policy tooling, maintainability and integration with the chosen init system.
 
-### 5.5 Resource controls
+### 5.6 Resource controls
 
 Use cgroups v2 or the platform's supported equivalent to bound:
 - CPU quota and weight.
