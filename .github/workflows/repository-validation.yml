@@ -30,6 +30,16 @@ jobs:
                   json.load(stream)
               print(f"Valid JSON: {path}")
           PY
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in sorted(Path(".github/workflows").glob("*.yml")):
+              with path.open(encoding="utf-8") as stream:
+                  document = yaml.safe_load(stream)
+              if not isinstance(document, dict):
+                  raise SystemExit(f"Invalid workflow YAML document: {path}")
+              print(f"Valid workflow YAML: {path}")
+          PY
           grep -q "Reuse" README.md
           grep -q "Do not" docs/SECURITY.md
           echo "Repository validation passed."
