@@ -14,6 +14,7 @@ sys.path.insert(0, "/usr/lib/momo")
 
 from intelligence.runtime.momo_runtime import Risk, TaskStatus
 from intelligence.runtime.task_store import TaskNotFoundError, TaskStore
+from intelligence.execution.step_journal import StepExecutionJournal
 
 DATABASE = os.environ.get("MOMO_TASK_DB", "/var/lib/momo/tasks.sqlite3")
 
@@ -45,6 +46,7 @@ def build_parser():
 
     sub.add_parser("doctor", help="Check Python SQLite support and task database")
     sub.add_parser("self-test", help="Run a disposable persistence and transition test")
+    sub.add_parser("recover", help="Quarantine steps interrupted by a confirmed service restart")
 
     create = sub.add_parser("create", help="Create a task")
     create.add_argument("--goal", required=True)
@@ -89,6 +91,25 @@ def main(argv=None):
             self_test()
             return 0
 
+        if args.command == "recover":
+            store = TaskStore(DATABASE)
+            journal = StepExecutionJournal(store.database)
+            recovered = journal.recover_interrupted()
+            payload = {
+                "recovered_count": len(recovered),
+                "steps": [
+                    {
+                        "task_id": item.task_id,
+                        "step_id": item.step_id,
+                        "status": item.status.value,
+                        "attempt": item.attempt,
+                    }
+                    for item in recovered
+                ],
+            }
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+
         if args.command == "doctor":
             with sqlite3.connect(":memory:") as connection:
                 connection.execute("SELECT sqlite_version()").fetchone()
@@ -109,6 +130,9 @@ def main(argv=None):
         elif args.command == "show":
             print(json.dumps(serialize(store.get_task(args.task_id)), ensure_ascii=False, indent=2))
         elif args.command == "transition":
+            if args.status == TaskStatus.EXECUTING.value:
+                print("[MOMO] ERROR: execution may start only through the execution gate", file=sys.stderr)
+                return 1
             task = store.transition(
                 args.task_id, TaskStatus(args.status), args.reason
             )
