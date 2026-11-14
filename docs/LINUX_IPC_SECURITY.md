@@ -54,3 +54,10 @@ The daemon applies resource limits and `PR_SET_NO_NEW_PRIVS`, then requires libs
 - The earlier QEMU acceptance applies to an older image revision and does not validate this daemon.
 - Fresh x86_64 and AArch64 Buildroot/QEMU boot checks are required before this increment receives image-integrated/emulator-tested status.
 - The daemon is not a general-purpose executor. Future mutating operations require a separate authorization design, durable idempotency, outcome reconciliation and stronger per-operation principals.
+
+
+## Landlock filesystem confinement — 2026-11-14
+
+The read-only IPC daemon now installs a Landlock ruleset after binding its AF_UNIX socket and loading the seccomp filter. The daemon receives read/execute access to `/usr` and read access to `/etc`; `/run/momo` is limited to directory metadata and removal of its own socket during shutdown. Other filesystem paths receive no handled filesystem rights. Landlock setup is fail-closed: if the kernel syscall or ruleset operation is unavailable, the daemon does not enter its accept loop.
+
+A subprocess test proves that an explicitly allowed directory remains readable, an unrelated directory is unreadable, and writes in the allowed read-only directory are denied. This confines the status daemon's filesystem view only. It does not provide namespaces, cgroup limits, network isolation, a strict seccomp allowlist, or a principal/authorization boundary for future executors.
