@@ -27,6 +27,8 @@ class AutonomyPolicyTests(unittest.TestCase):
             ".git/config",
             "security/capability.schema.json",
             "intelligence/autonomy/runner.py",
+            "intelligence/runtime/execution_gate.py",
+            "platform_adapters/typed_executor.py",
             "docs/ROADMAP.md",
             "docs/ARCHITECTURE.md",
             "docs/MOMO_CELL.md",
