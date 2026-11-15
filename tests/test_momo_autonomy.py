@@ -1,4 +1,6 @@
 """Adversarial safety tests for the MOMO autonomous patch worker."""
+from pathlib import Path
+import tempfile
 import unittest
 
 from intelligence.autonomy.runner import _allowed, _validate_patch, WorkerError
@@ -100,6 +102,16 @@ class AutonomyPolicyTests(unittest.TestCase):
             with self.subTest(patch=patch[:100]):
                 with self.assertRaises(WorkerError):
                     _validate_patch(patch)
+
+    def test_rejects_symlinked_patch_target_and_parent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "target.py").write_text("safe", encoding="utf-8")
+            (root / "intelligence").symlink_to(outside, target_is_directory=True)
+            with self.assertRaises(WorkerError):
+                _validate_patch(text_patch("intelligence/target.py"), root)
 
     def test_rejects_mismatched_and_quoted_diff_headers(self):
         mismatch = text_patch().replace("--- a/intelligence/runtime/example.py",
