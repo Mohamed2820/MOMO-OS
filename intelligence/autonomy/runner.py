@@ -73,6 +73,16 @@ def _allowed(path: str) -> bool:
         return False
     return path.startswith(ALLOWED_PREFIXES)
 
+def _safe_regular_file(root: Path, relative: str) -> Path | None:
+    """Resolve a tracked regular file without traversing symlink components."""
+    candidate = root
+    for part in PurePosixPath(relative).parts:
+        candidate = candidate / part
+        if candidate.is_symlink():
+            return None
+    return candidate if candidate.is_file() else None
+
+
 def _snapshot(root: Path) -> str:
     listing = _run_git("ls-files", "-z").stdout.split("\0")
     chunks: list[str] = []
@@ -81,8 +91,8 @@ def _snapshot(root: Path) -> str:
     for relative in listing:
         if not relative or not _allowed(relative):
             continue
-        path = root / relative
-        if path.is_symlink() or not path.is_file():
+        path = _safe_regular_file(root, relative)
+        if path is None:
             continue
         try:
             data = path.read_bytes()
@@ -108,8 +118,8 @@ def _project_brief(root: Path) -> str:
     paths = ("docs/MASTER_EXECUTION_PLAN.md", "docs/ROADMAP.md", "docs/ARCHITECTURE.md")
     parts = []
     for name in paths:
-        path = root / name
-        if path.is_file():
+        path = _safe_regular_file(root, name)
+        if path is not None:
             text = path.read_text(encoding="utf-8")
             parts.append(f"\n--- PROJECT PLAN: {name} ---\n{text[-18000:]}\n")
     return "".join(parts)
@@ -171,7 +181,7 @@ def _request_patch(context: str, brief: str, api_key: str) -> dict:
     return document
 
 
-def _validate_patch(patch: str) -> None:
+def _validate_patch(patch: str, root: Path | None = None) -> None:
     """Accept only ordinary in-place text edits to explicitly allowed files."""
     if not isinstance(patch, str) or not patch.strip():
         raise WorkerError("The proposed patch is empty")
@@ -234,6 +244,14 @@ def _validate_patch(patch: str) -> None:
                 raise WorkerError("Git diff path and unified diff paths do not match")
             if not _allowed(str(current["old"])):
                 raise WorkerError("Patch violates path policy: " + str(current["old"]))
+            if root is not None:
+                target = root
+                for part in PurePosixPath(str(current["old"])).parts:
+                    target = target / part
+                    if target.is_symlink():
+                        raise WorkerError("Symlink targets and symlink parent directories are not accepted")
+                if not target.is_file():
+                    raise WorkerError("Only existing regular files may be modified")
             current["hunk"] = True
             in_hunk = True
         else:
@@ -274,7 +292,7 @@ def run(root: Path) -> int:
         }))
         return 2
     patch = proposal.get("patch")
-    _validate_patch(patch)
+    _validate_patch(patch, root)
     patch_file = root / ".momo-cell-proposal.patch"
     try:
         patch_file.write_text(patch, encoding="utf-8")
