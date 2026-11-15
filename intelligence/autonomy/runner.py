@@ -18,12 +18,19 @@ MAX_PATCH_BYTES = 48_000
 MAX_FILES = 24
 MAX_FILE_BYTES = 18_000
 BLOCKED_PREFIXES = (
-    ".github/", "security/", "intelligence/autonomy/",
+    ".github/", ".git/", "security/", "intelligence/autonomy/",
     "board/momo/kernel", "board/momo/rootfs-overlay/etc/",
+    "docs/decisions/", "docs/contracts/",
 )
+BLOCKED_PATHS = {
+    "docs/ROADMAP.md", "docs/ARCHITECTURE.md", "docs/MOMO_CELL.md",
+    "docs/MASTER_EXECUTION_PLAN.md", "docs/SRS.md",
+    "docs/REQUIREMENTS_TRACEABILITY.md",
+}
 BLOCKED_NAMES = {
     "SECURITY.md", "TOOL_AND_PERMISSION_MODEL.md", "AGENT_METHODOLOGY.md",
     "MASTER_EXECUTION_PLAN.md", "requirements.txt", "requirements-dev.txt",
+    "SECURITY_POLICY.md", "EXECUTION_GATE.md",
 }
 ALLOWED_PREFIXES = (
     "intelligence/", "platform_adapters/", "tests/", "docs/",
@@ -44,16 +51,25 @@ def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]
 
 
 def _allowed(path: str) -> bool:
-    normalized = path.strip().replace("\\", "/")
+    if not isinstance(path, str) or not path or path != path.strip():
+        return False
+    if any(ord(char) < 32 or ord(char) == 127 for char in path):
+        return False
+    normalized = path.replace("\\", "/")
+    if normalized.startswith("/") or "//" in normalized or "\\" in normalized:
+        return False
     pure = PurePosixPath(normalized)
-    if pure.is_absolute() or ".." in pure.parts or not normalized:
+    if any(part in {".", ".."} for part in pure.parts):
+        return False
+    if not re.fullmatch(r"[A-Za-z0-9._/-]+", normalized):
         return False
     if any(normalized.startswith(prefix) for prefix in BLOCKED_PREFIXES):
         return False
-    if pure.name in BLOCKED_NAMES or pure.suffix in {".pem", ".key", ".p12", ".pfx"}:
+    if normalized in BLOCKED_PATHS:
+        return False
+    if pure.name in BLOCKED_NAMES or pure.suffix.lower() in {".pem", ".key", ".p12", ".pfx"}:
         return False
     return normalized.startswith(ALLOWED_PREFIXES)
-
 
 def _snapshot(root: Path) -> str:
     listing = _run_git("ls-files", "-z").stdout.split("\0")
@@ -152,29 +168,67 @@ def _request_patch(context: str, brief: str, api_key: str) -> dict:
 
 
 def _validate_patch(patch: str) -> None:
+    """Accept only ordinary in-place text edits to explicitly allowed files."""
     if not isinstance(patch, str) or not patch.strip():
         raise WorkerError("The proposed patch is empty")
     if len(patch.encode("utf-8")) > MAX_PATCH_BYTES:
         raise WorkerError("The proposed patch exceeds the size budget")
-    paths = []
-    for line in patch.splitlines():
-        if line.startswith(("+++ ", "--- ")):
-            value = line[4:].split("\t", 1)[0]
-            if value == "/dev/null":
-                continue
-            if value.startswith("a/") or value.startswith("b/"):
-                value = value[2:]
-            paths.append(value)
-    if not paths:
-        raise WorkerError("The patch contains no file paths")
-    if len(set(paths)) > 8:
-        raise WorkerError("The patch changes more than eight files")
-    denied = [path for path in paths if not _allowed(path)]
-    if denied:
-        raise WorkerError("Patch violates path policy: " + ", ".join(denied))
-    if re.search(r"(?m)^GIT binary patch|^Binary files ", patch):
-        raise WorkerError("Binary patches are not accepted")
+    if "\x00" in patch or "\r" in patch:
+        raise WorkerError("The patch contains unsupported control characters")
+    if re.search(r"(?m)^(?:GIT binary patch|Binary files |old mode |new mode |new file mode |deleted file mode |similarity index |dissimilarity index |rename from |rename to |copy from |copy to |Submodule )", patch):
+        raise WorkerError("Binary, rename, copy, symlink, mode and submodule changes are not accepted")
 
+    lines = patch.splitlines()
+    sections: list[tuple[str, str, str]] = []
+    current: dict[str, object] | None = None
+    for line in lines:
+        if line.startswith("diff --git "):
+            if current is not None:
+                sections.append((str(current.get("old", "")), str(current.get("new", "")), str(current.get("path", ""))))
+            parts = line.split(" ")
+            if len(parts) != 4 or not parts[2].startswith("a/") or not parts[3].startswith("b/"):
+                raise WorkerError("Malformed or quoted git diff header")
+            old_path, new_path = parts[2][2:], parts[3][2:]
+            if old_path != new_path:
+                raise WorkerError("Renames and path substitutions are not accepted")
+            current = {"old": "", "new": "", "path": old_path}
+        elif line.startswith("--- "):
+            if current is None or current["old"]:
+                raise WorkerError("Malformed unified diff old-path header")
+            value = line[4:]
+            if not value.startswith("a/"):
+                raise WorkerError("File creation/deletion and unsupported old paths are not accepted")
+            current["old"] = value[2:]
+        elif line.startswith("+++ "):
+            if current is None or not current["old"] or current["new"]:
+                raise WorkerError("Malformed unified diff new-path header")
+            value = line[4:]
+            if not value.startswith("b/"):
+                raise WorkerError("File creation/deletion and unsupported new paths are not accepted")
+            current["new"] = value[2:]
+        elif line.startswith(("index ", "@@")) or line.startswith((" ", "+", "-", "\ No newline at end of file")):
+            continue
+        elif line.startswith(("---", "+++", "diff ", "GIT ")):
+            raise WorkerError("Unsupported or ambiguous patch metadata")
+    if current is not None:
+        sections.append((str(current.get("old", "")), str(current.get("new", "")), str(current.get("path", ""))))
+    if not sections:
+        raise WorkerError("The patch contains no standard git diff sections")
+    if len(sections) > 8:
+        raise WorkerError("The patch changes more than eight files")
+    seen: set[str] = set()
+    for old_path, new_path, diff_path in sections:
+        if not old_path or not new_path or old_path != new_path or diff_path != old_path:
+            raise WorkerError("Each patch section must modify one existing path in place")
+        if old_path in seen:
+            raise WorkerError("Duplicate file sections are not accepted")
+        seen.add(old_path)
+        if not _allowed(old_path):
+            raise WorkerError("Patch violates path policy: " + old_path)
+    if re.search(r"(?m)^index [0-9a-f]+\.\.[0-9a-f]+ (?!100644$)", patch):
+        raise WorkerError("Executable, symlink and non-regular file modes are not accepted")
+    if not re.search(r"(?m)^@@ ", patch):
+        raise WorkerError("The patch contains no unified text hunks")
 
 def run(root: Path) -> int:
     api_key = os.environ.get("MOMO_AGENT_API_KEY", "")
