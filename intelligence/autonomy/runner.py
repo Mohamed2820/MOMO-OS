@@ -30,7 +30,9 @@ BLOCKED_PATHS = {
 BLOCKED_NAMES = {
     "SECURITY.md", "TOOL_AND_PERMISSION_MODEL.md", "AGENT_METHODOLOGY.md",
     "MASTER_EXECUTION_PLAN.md", "requirements.txt", "requirements-dev.txt",
-    "SECURITY_POLICY.md", "EXECUTION_GATE.md", "execution_gate.py",\n    "typed_executor.py", "approval_store.py", "task_coordinator.py",\n    "permission_broker.py", "capability_broker.py",
+    "SECURITY_POLICY.md", "EXECUTION_GATE.md", "execution_gate.py",
+    "typed_executor.py", "approval_store.py", "task_coordinator.py",
+    "permission_broker.py", "capability_broker.py",
 }
 ALLOWED_PREFIXES = (
     "intelligence/", "platform_adapters/", "tests/", "docs/",
