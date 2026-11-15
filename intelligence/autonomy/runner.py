@@ -30,7 +30,7 @@ BLOCKED_PATHS = {
 BLOCKED_NAMES = {
     "SECURITY.md", "TOOL_AND_PERMISSION_MODEL.md", "AGENT_METHODOLOGY.md",
     "MASTER_EXECUTION_PLAN.md", "requirements.txt", "requirements-dev.txt",
-    "SECURITY_POLICY.md", "EXECUTION_GATE.md",
+    "SECURITY_POLICY.md", "EXECUTION_GATE.md", "execution_gate.py",\n    "typed_executor.py", "approval_store.py", "task_coordinator.py",\n    "permission_broker.py", "capability_broker.py",
 }
 ALLOWED_PREFIXES = (
     "intelligence/", "platform_adapters/", "tests/", "docs/",
@@ -206,7 +206,7 @@ def _validate_patch(patch: str) -> None:
                 continue
             raise WorkerError("Unsupported metadata inside or after a text hunk")
         if line.startswith("index "):
-            if current["index"] or not re.fullmatch(r"index [0-9a-f]{7,40}\\.\\.[0-9a-f]{7,40} 100644", line):
+            if current["index"] or not re.fullmatch(r"index [0-9a-f]{7,40}\.\.[0-9a-f]{7,40} 100644", line):
                 raise WorkerError("Only regular non-executable file mode 100644 is accepted")
             current["index"] = True
         elif line.startswith("--- "):
