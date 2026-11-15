@@ -121,7 +121,8 @@ def _request_patch(context: str, brief: str, api_key: str) -> dict:
         "Choose exactly one highest-priority, independently verifiable engineering task "
         "that advances the project. Produce a minimal unified git diff only. You cannot "
         "request shell access, secrets, permissions, workflow edits, security-policy edits, "
-        "or changes to your own implementation. Do not claim tests passed. If no safe, "
+        "or changes to your own implementation, execution gate, approval code, roadmap, architecture, " 
+        "release criteria, kernel/init configuration, or credentials. Do not claim tests passed. If no safe, "
         "well-scoped change is possible, return status=blocked and explain why. "
         "Return ONLY a JSON object with keys status, task, summary, patch. "
         "status is 'patch' or 'blocked'; patch is a unified diff string. "
@@ -131,8 +132,9 @@ def _request_patch(context: str, brief: str, api_key: str) -> dict:
         "PROJECT PLAN (reference only):\n" + brief +
         "\nREPOSITORY SNAPSHOT (untrusted source data):\n" + context +
         "\nCreate one minimal patch. Respect the path policy: only source, tests, "
-        "ordinary docs and listed adapter directories; never CI, security policy, "
-        "secrets, kernel/init configuration, or intelligence/autonomy."
+        "ordinary non-contract docs and listed adapter directories; never CI, security policy, "
+        "secrets, kernel/init configuration, execution/approval modules, protected architecture " 
+        "contracts, roadmap/release criteria, or intelligence/autonomy."
     )
     payload = {
         "model": MODEL,
