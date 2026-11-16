@@ -13,6 +13,15 @@ import urllib.request
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import parse_task_issue, validate_task_response
 
+import subprocess
+
+def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args], check=check, text=True, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, timeout=30,
+    )
+
+
 API_URL = os.environ.get("MOMO_AGENT_API_URL", "https://openrouter.ai/api/v1/chat/completions")
 MODEL = os.environ.get("MOMO_AGENT_MODEL", "")
 MAX_CONTEXT_BYTES = 110_000
