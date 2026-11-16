@@ -16,6 +16,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: read
+  actions: read
 
 concurrency:
   group: momo-cell-supervised-worker
