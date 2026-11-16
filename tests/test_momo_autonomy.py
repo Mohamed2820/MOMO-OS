@@ -111,7 +111,7 @@ class AutonomyPolicyTests(unittest.TestCase):
         _validate_patch(text_patch())
 
     def test_accepts_valid_unified_diff_without_optional_index_line(self):
-        patch = text_patch().replace("index 1111111..2222222 100644\\n", "")
+        patch = text_patch().replace("index 1111111..2222222 100644\n", "")
         _validate_patch(patch)
 
     def test_rejects_protected_path_even_in_patch_headers(self):
