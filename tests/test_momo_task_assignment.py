@@ -144,11 +144,18 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
                 return False
             def read(self, _limit):
                 return response_body
-        with patch("urllib.request.urlopen", return_value=FakeResponse()) as mocked:
+        with patch.object(runner, "MODEL", "particle-ai/particle-1:free"), patch(
+            "urllib.request.urlopen", return_value=FakeResponse()
+        ) as mocked:
             result = runner._request_patch("source snapshot", "project brief", task, "fake-key")
         self.assertEqual(result["task_id"], 73)
+        self.assertEqual(result["served_model"], "particle-ai/particle-1:free")
         request = mocked.call_args.args[0]
         payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(payload["models"][0], "particle-ai/particle-1:free")
+        self.assertIn("cohere/north-mini-code:free", payload["models"])
+        self.assertIn("nvidia/nemotron-3-ultra-550b-a55b:free", payload["models"])
+        self.assertNotIn("response_format", payload)
         prompt = payload["messages"][1]["content"]
         self.assertIn("EXACT ASSIGNED TASK CONTRACT", prompt)
         self.assertIn("Fix the parser edge case described here.", prompt)
