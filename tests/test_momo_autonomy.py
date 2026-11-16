@@ -110,6 +110,10 @@ class AutonomyPolicyTests(unittest.TestCase):
     def test_accepts_small_standard_in_place_text_patch(self):
         _validate_patch(text_patch())
 
+    def test_accepts_valid_unified_diff_without_optional_index_line(self):
+        patch = text_patch().replace("index 1111111..2222222 100644\n", "")
+        _validate_patch(patch)
+
     def test_rejects_protected_path_even_in_patch_headers(self):
         for path in ("docs/ROADMAP.md", "docs/ARCHITECTURE.md", ".github/workflows/x.yml",
                      "security/policy.json", "intelligence/autonomy/runner.py"):
