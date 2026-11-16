@@ -303,7 +303,15 @@ def run(root: Path) -> int:
             raise WorkerError("Assigned task scope must name existing regular files: " + relative)
     if _run_git("status", "--porcelain").stdout.strip():
         raise WorkerError("Repository must be clean before the assigned task starts.")
-    context = _snapshot(root, allowed_files)
+    related_context = {
+        "tests/test_momo_task_assignment.py": {"intelligence/autonomy/task_assignment.py"},
+        "tests/test_momo_autonomy.py": {"intelligence/autonomy/runner.py", "intelligence/autonomy/policy.py"},
+        "tests/test_momo_agent_runtime.py": {"intelligence/autonomy/agent_runtime.py", "intelligence/autonomy/evaluation.py"},
+    }
+    context_files = set(allowed_files)
+    for relative in allowed_files:
+        context_files.update(related_context.get(relative, set()))
+    context = _snapshot(root, context_files)
     brief = _project_brief(root)
     if not context or not brief:
         raise WorkerError("Required repository context is unavailable.")
