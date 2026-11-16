@@ -188,6 +188,49 @@ class AgentToolRuntimeTests(unittest.TestCase):
             with self.assertRaises(WorkerError):
                 _execute_tool("get_ci_run_jobs", {"run_id": True}, root, task, _validate_patch)
 
+    def test_reviewer_retries_once_when_first_response_is_malformed(self):
+        task = sample_task()
+        malformed = {"model": "critic-model", "choices": [{"finish_reason": "stop",
+            "message": {"content": "I approve this patch, but here is no JSON."}}]}
+        valid = {"model": "critic-model", "choices": [{"finish_reason": "stop",
+            "message": {"content": json.dumps({"verdict": "approve", "findings": [],
+                                                "summary": "Reviewed successfully."})}}]}
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       side_effect=[malformed, valid]) as request:
+                result = review_patch(task, sample_patch(), "builder-model", "fake-key",
+                                      "https://example.invalid")
+        self.assertTrue(result["approved"])
+        self.assertEqual(result["served_model"], "critic-model")
+        self.assertEqual(request.call_count, 2)
+        self.assertIn("Return ONLY one valid JSON object",
+                      request.call_args.args[2]["messages"][-1]["content"])
+
+    def test_reviewer_fails_closed_after_two_malformed_responses(self):
+        task = sample_task()
+        malformed = {"model": "critic-model", "choices": [{"finish_reason": "length",
+            "message": {"content": "not valid JSON"}}]}
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       side_effect=[malformed, malformed]) as request:
+                with self.assertRaisesRegex(WorkerError, "after one retry"):
+                    review_patch(task, sample_patch(), "builder-model", "fake-key",
+                                 "https://example.invalid")
+        self.assertEqual(request.call_count, 2)
+
+    def test_reviewer_rejection_is_not_retried_or_approved(self):
+        task = sample_task()
+        rejected = {"model": "critic-model", "choices": [{"message": {
+            "content": json.dumps({"verdict": "reject", "findings": ["unsafe change"],
+                                   "summary": "Rejected."})}}]}
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       return_value=rejected) as request:
+                with self.assertRaisesRegex(WorkerError, "Independent review rejected"):
+                    review_patch(task, sample_patch(), "builder-model", "fake-key",
+                                 "https://example.invalid")
+        request.assert_called_once()
+
     def test_evaluation_dataset_and_weighted_score_are_deterministic(self):
         from intelligence.autonomy.evaluation import load_cases, score_run
 
