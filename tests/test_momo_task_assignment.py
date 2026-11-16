@@ -81,6 +81,29 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
             with self.subTest(path=path), self.assertRaises(WorkerError):
                 parse_task_issue(make_issue(body=body))
 
+    def test_rejects_duplicate_scope_paths(self):
+        body = make_issue()["body"].replace(
+            "- intelligence/runtime/parser.py",
+            "- intelligence/runtime/parser.py\\n- intelligence/runtime/parser.py",
+        )
+        with self.assertRaisesRegex(WorkerError, "duplicate path"):
+            parse_task_issue(make_issue(body=body))
+
+    def test_rejects_malformed_scope_entries(self):
+        malformed_paths = (
+            "intelligence\\\\runtime\\\\parser.py",
+            "intelligence/runtime/my parser.py",
+            "intelligence/runtime/parser.py\\x00",
+            "intelligence/runtime/parser.py\\x07",
+        )
+        for path in malformed_paths:
+            with self.subTest(path=repr(path)):
+                body = make_issue()["body"].replace(
+                    "intelligence/runtime/parser.py", path
+                )
+                with self.assertRaises(WorkerError):
+                    parse_task_issue(make_issue(body=body))
+
     def test_rejects_non_exact_scope_syntax(self):
         body = make_issue()["body"].replace(
             "- intelligence/runtime/parser.py", "intelligence/runtime/parser.py"
