@@ -236,20 +236,11 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertIn("current_file_lines", repair_payload)
             self.assertIn("VALUE = 'old'", repair_payload)
 
-    def test_patch_validation_stops_after_two_rejected_submissions(self):
+    def test_patch_validation_stops_after_eight_rejected_submissions(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             make_repo(root)
             task = sample_task()
-            bad_patch = "not a unified diff"
-            second_bad_patch = (
-                "diff --git a/intelligence/runtime/demo.py b/intelligence/runtime/demo.py\n"
-                "--- a/intelligence/runtime/demo.py\n"
-                "+++ b/intelligence/runtime/demo.py\n"
-                "@@ -1 +1 @@\n"
-                "-VALUE = 'also-stale'\n"
-                "+VALUE = 'new'\n"
-            )
 
             def tool_call(call_id, name, arguments):
                 return {"id": call_id, "type": "function", "function": {
@@ -262,17 +253,20 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 }}]}
 
             responses = [
-                response(tool_call("read-1", "read_repo_file", {"path": "intelligence/runtime/demo.py"})),
-                response(tool_call("validate-1", "validate_patch", {"patch": bad_patch})),
-                response(tool_call("validate-2", "validate_patch", {"patch": second_bad_patch})),
+                response(tool_call("read-1", "read_repo_file", {"path": "intelligence/runtime/demo.py"}))
             ]
+            for attempt in range(1, 9):
+                responses.append(response(tool_call(
+                    f"validate-{attempt}", "validate_patch",
+                    {"patch": f"not a unified diff, attempt {attempt}"},
+                )))
             with patch("intelligence.autonomy.agent_runtime._request_json", side_effect=responses) as request:
-                with self.assertRaisesRegex(WorkerError, "after the two permitted submissions"):
+                with self.assertRaisesRegex(WorkerError, "after 8 permitted submissions"):
                     run_agent_cycle(
                         root, task, "brief", "no memory", "fake-key",
                         "https://example.invalid/chat", "builder-model", (), _validate_patch,
                     )
-            self.assertEqual(request.call_count, 3)
+            self.assertEqual(request.call_count, 9)
             self.assertFalse((root / "pwned").exists())
 
     def test_tool_result_serialization_preserves_full_reads_and_never_breaks_json(self):
