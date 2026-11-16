@@ -157,6 +157,7 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
             "particle-ai/particle-1:free", "openrouter/free"
         ])
         self.assertEqual(payload["response_format"], {"type": "json_object"})
+        self.assertEqual(payload["max_tokens"], 8000)
         prompt = payload["messages"][1]["content"]
         self.assertIn("EXACT ASSIGNED TASK CONTRACT", prompt)
         self.assertIn("Fix the parser edge case described here.", prompt)
