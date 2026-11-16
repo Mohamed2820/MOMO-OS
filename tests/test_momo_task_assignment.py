@@ -1,5 +1,12 @@
 """Adversarial tests for human-controlled MOMO CELL task assignment."""
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+import urllib.error
+
+import intelligence.autonomy.runner as runner
 
 from intelligence.autonomy.runner import WorkerError
 from intelligence.autonomy.task_assignment import parse_task_issue, validate_task_response
@@ -90,6 +97,24 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
         response = {"task_id": 74, "status": "blocked", "task": "other", "summary": "wrong"}
         with self.assertRaises(WorkerError):
             validate_task_response(response, task)
+
+    def test_missing_provider_configuration_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {"MOMO_AGENT_API_KEY": ""}, clear=False), patch.object(runner, "MODEL", ""):
+                with self.assertRaisesRegex(WorkerError, "Configure MOMO_AGENT_API_KEY"):
+                    runner.run(Path(temporary))
+
+    def test_rejects_invalid_issue_number_and_missing_github_token(self):
+        with self.assertRaises(WorkerError):
+            runner._fetch_assigned_issue("0", "Mohamed2820/MOMO-OS", "token")
+        with self.assertRaisesRegex(WorkerError, "GITHUB_TOKEN"):
+            runner._fetch_assigned_issue("73", "Mohamed2820/MOMO-OS", "")
+
+    def test_provider_network_errors_fail_closed_without_leaking_details(self):
+        task = parse_task_issue(make_issue())
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("private endpoint detail")):
+            with self.assertRaisesRegex(WorkerError, "Model provider request failed: URLError"):
+                runner._request_patch("repo", "plan", task, "not-a-real-secret")
 
     def test_rejects_malformed_structured_responses(self):
         task = parse_task_issue(make_issue())
