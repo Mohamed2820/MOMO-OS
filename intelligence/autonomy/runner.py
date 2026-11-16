@@ -89,6 +89,36 @@ def _project_brief(root: Path) -> str:
     return "".join(parts)[:MAX_PROJECT_BRIEF_CHARS]
 
 
+def _parse_model_document(content: object) -> dict:
+    """Parse a JSON object even when a provider wraps it in prose or fences."""
+    if isinstance(content, list):
+        content = "".join(
+            part.get("text", "") for part in content if isinstance(part, dict)
+        )
+    if not isinstance(content, str) or not content.strip():
+        raise WorkerError("Provider returned empty or unsupported message content")
+    candidate = content.strip()
+    if candidate.startswith("```"):
+        candidate = re.sub(r"^\`\`\`(?:json)?\s*|\s*\`\`\`$", "", candidate, flags=re.IGNORECASE)
+    try:
+        document = json.loads(candidate)
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        document = None
+        for index, character in enumerate(candidate):
+            if character == "{":
+                try:
+                    value, _ = decoder.raw_decode(candidate[index:])
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(value, dict):
+                    document = value
+                    break
+    if not isinstance(document, dict):
+        raise WorkerError("Provider response did not contain a valid JSON object")
+    return document
+
+
 def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
     system = (
         "You are MOMO CELL, an autonomous software engineering worker for MOMO-OS. "
@@ -117,7 +147,7 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
     payload = {
         "model": MODEL,
         "temperature": 0.1,
-        "max_tokens": 1000,
+        "max_tokens": 1100,
         "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
@@ -159,10 +189,11 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise WorkerError(f"Model provider request failed: {type(exc).__name__}") from exc
     try:
-        content = result["choices"][0]["message"]["content"]
-        document = json.loads(content)
-    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-        raise WorkerError("Provider returned an invalid structured response") from exc
+        choice = result["choices"][0]
+        content = choice["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise WorkerError("Provider response is missing the expected choice/message content") from exc
+    document = _parse_model_document(content)
     return validate_task_response(document, task)
 
 
