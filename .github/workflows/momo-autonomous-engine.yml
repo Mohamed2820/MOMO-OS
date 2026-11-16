@@ -1,13 +1,17 @@
 name: MOMO CELL autonomous engineering cycle
 
 on:
-  push:
-    branches: ["feature/momo-autonomous-engine"]
   workflow_dispatch:
+    inputs:
+      task_issue_number:
+        description: "Exact open GitHub Issue number labeled momo-cell:ready"
+        required: true
+        type: string
 
 permissions:
   contents: write
   pull-requests: write
+  issues: read
 
 concurrency:
   group: momo-autonomous-engine
@@ -32,11 +36,14 @@ jobs:
           MOMO_AGENT_API_KEY: ${{ secrets.MOMO_AGENT_API_KEY }}
           MOMO_AGENT_MODEL: ${{ vars.MOMO_AGENT_MODEL }}
           MOMO_AGENT_API_URL: ${{ vars.MOMO_AGENT_API_URL }}
+          MOMO_TASK_ISSUE_NUMBER: ${{ inputs.task_issue_number }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 -m intelligence.autonomy.runner
       - name: Verify patch with repository checks
         run: |
           set -euo pipefail
-          python3 -m py_compile intelligence/autonomy/runner.py
+          python3 -m py_compile intelligence/autonomy/runner.py intelligence/autonomy/task_assignment.py
           python3 -m unittest discover -s tests -v
           python3 -m intelligence.cell.cli --root . --output "$RUNNER_TEMP/momo-cell-report.json"
           git diff --check
