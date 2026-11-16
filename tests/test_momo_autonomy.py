@@ -17,6 +17,27 @@ def text_patch(path="intelligence/runtime/example.py"):
 
 
 class AutonomyPolicyTests(unittest.TestCase):
+    def test_raw_unified_diff_response_is_recovered_into_task_contract(self):
+        from intelligence.autonomy.runner import _recover_raw_diff
+
+        task = {"task_id": 63, "title": "Document worker"}
+        content = "Here is the patch:\n" + (
+            "diff --git a/intelligence/README.md b/intelligence/README.md\n"
+            "index 1111111..2222222 100644\n"
+            "--- a/intelligence/README.md\n"
+            "+++ b/intelligence/README.md\n"
+            "@@ -1 +1 @@\n-old\n+new\n"
+        )
+        recovered = _recover_raw_diff(content, task)
+        self.assertEqual(recovered["task_id"], 63)
+        self.assertEqual(recovered["status"], "patch")
+        self.assertTrue(recovered["patch"].startswith("diff --git "))
+
+    def test_raw_response_without_diff_is_not_recovered(self):
+        from intelligence.autonomy.runner import _recover_raw_diff
+
+        self.assertIsNone(_recover_raw_diff("I cannot make this change.", {"task_id": 63, "title": "x"}))
+
     def test_model_document_parser_accepts_plain_json_fenced_json_and_content_parts(self):
         from intelligence.autonomy.runner import _parse_model_document
 
