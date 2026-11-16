@@ -441,8 +441,15 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "submit that once and then finish. Never make a third submission. Do not modify files directly."
     )
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-    fallback_chain = list(dict.fromkeys([model, *fallback_models]))
+    fallback_chain = list(dict.fromkeys(fallback_models))
     active_model = model
+    active_api_url, active_api_key = api_url, api_key
+    active_provider = "gemini" if "generativelanguage.googleapis.com" in api_url else "openrouter"
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("MOMO_AGENT_API_KEY", "")
+    openrouter_url = os.environ.get("OPENROUTER_API_URL") or os.environ.get(
+        "MOMO_AGENT_API_URL", "https://openrouter.ai/api/v1/chat/completions"
+    )
+    openrouter_model = os.environ.get("OPENROUTER_MODEL", "particle-ai/particle-1:free").strip()
     available_tools = _select_tools(task)
     tool_counts: dict[str, int] = {}
     per_tool_limits = {
@@ -453,13 +460,31 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
     }
     calls_used, tools_used, repeated, served_model = 0, [], set(), model
     for turn in range(MAX_TOOL_ROUNDS):
-        request_models = fallback_chain if turn == 0 else [active_model]
-        payload = {"model": active_model, "models": request_models, "provider": {"allow_fallbacks": True},
-                   "temperature": 0.1, "max_tokens": 8000, "parallel_tool_calls": False,
-                   "tool_choice": "auto", "tools": available_tools, "messages": messages}
-        result = _request_json(api_url, api_key, payload)
+        payload = {"model": active_model, "temperature": 0.1, "max_tokens": 8000,
+                   "parallel_tool_calls": False, "tool_choice": "auto",
+                   "tools": available_tools, "messages": messages}
+        if active_provider == "openrouter":
+            payload["models"] = [active_model, *[item for item in fallback_chain if item != active_model]]
+            payload["provider"] = {"allow_fallbacks": True}
+        try:
+            result = _request_json(active_api_url, active_api_key, payload)
+        except WorkerError as primary_error:
+            if active_provider != "gemini" or not openrouter_key:
+                raise
+            active_provider = "openrouter"
+            active_api_url, active_api_key = openrouter_url, openrouter_key
+            active_model = openrouter_model
+            payload["model"] = active_model
+            payload["models"] = [active_model, *[item for item in fallback_chain if item != active_model]]
+            payload["provider"] = {"allow_fallbacks": True}
+            print(json.dumps({
+                "event": "momo_cell_provider_fallback",
+                "from": "gemini", "to": "openrouter",
+                "reason": str(primary_error)[:500],
+            }, ensure_ascii=False), flush=True)
+            result = _request_json(active_api_url, active_api_key, payload)
         served_model = str(result.get("model", active_model))[:160]
-        if turn == 0:
+        if turn == 0 or active_provider == "openrouter":
             active_model = served_model
         choices = result.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
@@ -610,10 +635,12 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
     )
     user = "Assigned task:\n" + json.dumps(task, ensure_ascii=False) + "\nCandidate diff:\n" + patch[:48000]
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    review_api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("MOMO_AGENT_API_KEY") or api_key
+    review_api_url = os.environ.get("OPENROUTER_API_URL") or os.environ.get("MOMO_AGENT_API_URL") or api_url
     payload = {"model": reviewer_model, "models": [reviewer_model],
                "provider": {"allow_fallbacks": True}, "temperature": 0,
                "max_tokens": 3000, "messages": messages}
-    result = _request_json(api_url, api_key, payload)
+    result = _request_json(review_api_url, review_api_key, payload)
     verdict, served, finish, content_length = _parse_review_verdict(result)
     if served.casefold() == builder_model.casefold():
         raise WorkerError("Independent reviewer resolved to the same model as the patch author")
@@ -634,7 +661,7 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
         retry_payload = {"model": reviewer_model, "models": [reviewer_model],
                          "provider": {"allow_fallbacks": True}, "temperature": 0,
                          "max_tokens": 1200, "messages": retry_messages}
-        retry_result = _request_json(api_url, api_key, retry_payload)
+        retry_result = _request_json(review_api_url, review_api_key, retry_payload)
         retry_verdict, retry_served, retry_finish, retry_length = _parse_review_verdict(retry_result)
         if retry_served.casefold() == builder_model.casefold():
             raise WorkerError("Independent reviewer resolved to the same model as the patch author")
