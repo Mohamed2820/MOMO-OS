@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from intelligence.autonomy.agent_runtime import (
     MEMORY_PATH, TOOLS, _execute_tool, _list_files, _read_file, _search_repo,
+    _serialize_tool_result,
     append_memory, load_memory, review_patch, run_agent_cycle,
 )
 from intelligence.autonomy.policy import WorkerError
@@ -130,6 +131,17 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertEqual(result["status"], "patch")
             self.assertEqual(result["tool_calls"], 2)
             self.assertEqual(result["tools_used"], ["read_repo_file", "validate_patch"])
+
+    def test_tool_result_serialization_preserves_full_reads_and_never_breaks_json(self):
+        content = "x" * 9000
+        encoded = _serialize_tool_result({"path": "tests/example.py", "content": content})
+        self.assertEqual(json.loads(encoded)["content"], content)
+
+        oversized = _serialize_tool_result({"content": "y" * 30000})
+        result = json.loads(oversized)
+        self.assertTrue(result["truncated"])
+        self.assertIn("safe message limit", result["error"])
+        self.assertLess(len(oversized), 3000)
 
     def test_memory_is_persistent_bounded_and_does_not_require_model_control(self):
         with tempfile.TemporaryDirectory() as temp:
