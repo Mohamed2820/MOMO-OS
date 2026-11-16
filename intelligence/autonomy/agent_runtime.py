@@ -503,6 +503,8 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                 raise WorkerError("Malformed model tool-call envelope")
             signature = name + ":" + raw_args
             if signature in repeated:
+                if name == "validate_patch":
+                    raise WorkerError("Model repeated an identical patch submission; refusing a duplicate retry.")
                 calls_used += 1
                 messages.append({
                     "role": "tool", "tool_call_id": call_id,
