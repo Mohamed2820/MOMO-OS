@@ -469,20 +469,51 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         try:
             result = _request_json(active_api_url, active_api_key, payload)
         except WorkerError as primary_error:
-            if active_provider != "gemini" or not openrouter_key:
+            if active_provider != "gemini":
                 raise
-            active_provider = "openrouter"
-            active_api_url, active_api_key = openrouter_url, openrouter_key
-            active_model = openrouter_model
-            payload["model"] = active_model
-            payload["models"] = [active_model, *[item for item in fallback_chain if item != active_model]]
-            payload["provider"] = {"allow_fallbacks": True}
-            print(json.dumps({
-                "event": "momo_cell_provider_fallback",
-                "from": "gemini", "to": "openrouter",
-                "reason": str(primary_error)[:500],
-            }, ensure_ascii=False), flush=True)
-            result = _request_json(active_api_url, active_api_key, payload)
+            # Try one separately configured Gemini model before leaving Google's API.
+            gemini_backup_model = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.6-flash").strip()
+            if gemini_backup_model and active_model != gemini_backup_model:
+                try:
+                    backup_payload = dict(payload, model=gemini_backup_model)
+                    result = _request_json(active_api_url, active_api_key, backup_payload)
+                    active_model = str(result.get("model", gemini_backup_model))[:160]
+                    print(json.dumps({
+                        "event": "momo_cell_model_fallback",
+                        "from": model, "to": active_model,
+                        "provider": "gemini", "reason": str(primary_error)[:400],
+                    }, ensure_ascii=False), flush=True)
+                except WorkerError as backup_error:
+                    primary_error = backup_error
+                    if not openrouter_key:
+                        raise
+                    active_provider = "openrouter"
+                    active_api_url, active_api_key = openrouter_url, openrouter_key
+                    active_model = openrouter_model
+                    payload["model"] = active_model
+                    payload["models"] = [active_model, *[item for item in fallback_chain if item != active_model]]
+                    payload["provider"] = {"allow_fallbacks": True}
+                    print(json.dumps({
+                        "event": "momo_cell_provider_fallback",
+                        "from": "gemini", "to": "openrouter",
+                        "reason": str(primary_error)[:500],
+                    }, ensure_ascii=False), flush=True)
+                    result = _request_json(active_api_url, active_api_key, payload)
+            else:
+                if not openrouter_key:
+                    raise
+                active_provider = "openrouter"
+                active_api_url, active_api_key = openrouter_url, openrouter_key
+                active_model = openrouter_model
+                payload["model"] = active_model
+                payload["models"] = [active_model, *[item for item in fallback_chain if item != active_model]]
+                payload["provider"] = {"allow_fallbacks": True}
+                print(json.dumps({
+                    "event": "momo_cell_provider_fallback",
+                    "from": "gemini", "to": "openrouter",
+                    "reason": str(primary_error)[:500],
+                }, ensure_ascii=False), flush=True)
+                result = _request_json(active_api_url, active_api_key, payload)
         served_model = str(result.get("model", active_model))[:160]
         if turn == 0 or active_provider == "openrouter":
             active_model = served_model
