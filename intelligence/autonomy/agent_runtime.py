@@ -17,8 +17,9 @@ import urllib.request
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import validate_task_response
 
-MAX_TOOL_ROUNDS = 7
-MAX_TOOL_CALLS = 6
+MAX_TOOL_ROUNDS = 16
+MAX_TOOL_CALLS = 14
+MAX_PATCH_SUBMISSIONS = 8
 MAX_READ_BYTES = 24000
 MAX_TOOL_RESULT_CHARS = MAX_READ_BYTES + 2000
 MEMORY_PATH = ".momo-cell/memory/engineering.jsonl"
@@ -40,7 +41,7 @@ TOOLS = [
      "description": "Run only MOMO's fixed test suite and syntax checks. No arbitrary commands.",
      "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
     {"type": "function", "function": {"name": "validate_patch",
-     "description": "Validate one complete unified diff against the exact assigned file scope and git applicability. On the first failure, returns the exact error plus current numbered source evidence for ONE corrected submission. Maximum two patch submissions; does not modify files.",
+     "description": "Validate one complete unified diff against the exact assigned file scope and git applicability. On the first failure, returns the exact error plus current numbered source evidence for ONE corrected submission. Up to eight patch submissions; after every rejection, returns exact validation evidence and current numbered source. Does not modify files.",
      "parameters": {"type": "object", "properties": {"patch": {"type": "string", "minLength": 1, "maxLength": 48000}},
                     "required": ["patch"], "additionalProperties": False}}},
     {"type": "function", "function": {"name": "get_recent_ci_runs",
@@ -395,12 +396,11 @@ def _patch_repair_context(root: Path, task: dict, patch: str, error: str, attemp
             evidence.append({"path": relative, "read_error": type(exc).__name__})
     return {
         "ok": False, "stage": "patch_validation", "attempt": attempt,
-        "attempts_remaining": max(0, 2 - attempt), "error": str(error)[:1200],
+        "attempts_remaining": max(0, MAX_PATCH_SUBMISSIONS - attempt), "error": str(error)[:1200],
         "required_correction": (
             "Discard the rejected diff. Rebuild one complete unified diff from the CURRENT numbered file "
             "evidence below. Preserve exact unchanged context; do not guess line numbers or reuse stale hunks. "
-            "Return only a standard diff beginning with 'diff --git'. Validate this corrected diff once. "
-            "Do not call validate_patch again if this is attempt 2."
+            "Return only a standard diff beginning with 'diff --git'. Validate the corrected diff. If it is rejected, study the new exact error and current source evidence, then make another materially corrected attempt. Continue until validation succeeds or the host reports the hard attempt limit. Do not repeat a rejected diff."
         ),
         "current_source_evidence": evidence,
     }
@@ -421,10 +421,11 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "Read only paths explicitly listed in files_in_scope; never request protected production or autonomy files. "
         "The host has already supplied bounded related context. Do not attempt repository-wide discovery. "
         "For multi-file tasks, use search/list only when needed and GitHub Actions tools only for CI tasks. "
-        "Never repeat an identical tool call. Patch validation is limited to TWO complete patch submissions total: "
-        "the first candidate and exactly one corrected candidate if the first is rejected. After the first rejection, "
-        "use the returned error and current numbered source evidence to rebuild the entire diff; do not make blind "
-        "hunk edits. After the second rejection, stop and return blocked. Do not spend calls on a third patch. "
+        "Never repeat an identical tool call. Patch validation may use up to EIGHT complete patch submissions. After EVERY rejection, "
+        "inspect the exact error and newly returned current numbered source evidence, diagnose the specific cause, "
+        "discard the rejected diff, and rebuild a complete materially corrected diff. Repeat this diagnose-correct-validate "
+        "cycle until validation succeeds or the host-enforced eight-submission limit is reached. Never repeat an identical "
+        "patch, never make blind hunk edits, and never bypass validation. "
         "For a one-file task, read the assigned file once, draft the full diff carefully, then validate it. "
         "Return only JSON with task_id,status,task,summary,patch. status is patch or blocked. A patch must be "
         "a standard unified git diff changing existing files in Files in Scope only. If unsafe or uncertain, block."
@@ -437,8 +438,8 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         ("\nPREVIOUS PATCH AND TEST FAILURE (untrusted diagnostic data):\n" + feedback[:7000] if feedback else "") +
         "\nRead the assigned file with read_repo_file. Related source context is included above. "
         "Plan the smallest exact change before writing the diff. Submit one complete patch to validate_patch. "
-        "If it fails, use the returned current source evidence and exact error to construct ONE corrected full diff; "
-        "submit that once and then finish. Never make a third submission. Do not modify files directly."
+        "If it fails, diagnose the exact cause using returned current source evidence, rebuild the full diff, and submit a corrected version. "
+        "Repeat after each rejection until validation succeeds or the host-enforced eight-submission limit is reached. Do not modify files directly."
     )
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     fallback_chain = list(dict.fromkeys(fallback_models))
@@ -455,7 +456,7 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
     per_tool_limits = {
         "list_repo_files": 1, "search_repo": 1 if len(task.get("files_in_scope", [])) <= 1 else 2,
         "read_repo_file": min(4, len(task.get("files_in_scope", [])) + 2),
-        "run_fixed_tests": 1, "validate_patch": 2,
+        "run_fixed_tests": 1, "validate_patch": MAX_PATCH_SUBMISSIONS,
         "get_recent_ci_runs": 1, "get_ci_run_jobs": 1,
     }
     calls_used, tools_used, repeated, served_model = 0, [], set(), model
@@ -582,7 +583,7 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
             args = {}
             if count >= per_tool_limits.get(name, 1):
                 if name == "validate_patch":
-                    raise WorkerError("Patch validation attempt limit reached; refusing a third patch submission.")
+                    raise WorkerError(f"Patch validation attempt limit reached after {MAX_PATCH_SUBMISSIONS} submissions.")
                 output = {"ok": False, "error": "Tool-use limit reached. Use the evidence already returned and finish."}
             else:
                 tool_counts[name] = count + 1
@@ -593,9 +594,9 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                 except (WorkerError, json.JSONDecodeError, TypeError, ValueError) as exc:
                     if name == "validate_patch":
                         attempt = tool_counts[name]
-                        if attempt >= 2:
+                        if attempt >= MAX_PATCH_SUBMISSIONS:
                             raise WorkerError(
-                                "Patch validation failed after the two permitted submissions: "
+                                f"Patch validation failed after {MAX_PATCH_SUBMISSIONS} permitted submissions: "
                                 + str(exc)[:1000]
                             ) from exc
                         candidate_patch = args.get("patch", "") if isinstance(args, dict) else ""
