@@ -10,7 +10,6 @@ import sys
 import urllib.error
 import urllib.request
 
-from intelligence.autonomy.task_assignment import parse_task_issue, validate_task_response
 
 
 API_URL = os.environ.get("MOMO_AGENT_API_URL", "https://openrouter.ai/api/v1/chat/completions")
@@ -74,6 +73,9 @@ def _allowed(path: str) -> bool:
     if pure.name in BLOCKED_NAMES or pure.suffix.lower() in {".pem", ".key", ".p12", ".pfx"}:
         return False
     return path.startswith(ALLOWED_PREFIXES)
+
+
+from intelligence.autonomy.task_assignment import parse_task_issue, validate_task_response
 
 def _safe_regular_file(root: Path, relative: str) -> Path | None:
     """Resolve a tracked regular file without traversing symlink components."""
