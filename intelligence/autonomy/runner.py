@@ -13,8 +13,6 @@ import urllib.request
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import parse_task_issue, validate_task_response
 
-import subprocess
-
 def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", *args], check=check, text=True, stdout=subprocess.PIPE,
