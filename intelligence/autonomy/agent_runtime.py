@@ -17,8 +17,8 @@ import urllib.request
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import validate_task_response
 
-MAX_TOOL_ROUNDS = 9
-MAX_TOOL_CALLS = 8
+MAX_TOOL_ROUNDS = 7
+MAX_TOOL_CALLS = 6
 MAX_READ_BYTES = 24000
 MEMORY_PATH = ".momo-cell/memory/engineering.jsonl"
 
@@ -268,10 +268,7 @@ def _select_tools(task: dict) -> list[dict]:
     names = {item["function"]["name"]: item for item in TOOLS}
     scope = task.get("files_in_scope", [])
     if len(scope) <= 1:
-        selected = ["read_repo_file", "search_repo", "run_fixed_tests", "validate_patch"]
-        task_text = " ".join(str(task.get(key, "")) for key in ("title", "objective", "test_commands"))
-        if re.search(r"\b(ci|workflow|actions|job|build)\b", task_text, re.IGNORECASE):
-            selected.extend(["get_recent_ci_runs", "get_ci_run_jobs"])
+        selected = ["read_repo_file", "run_fixed_tests", "validate_patch"]
     else:
         selected = [item["function"]["name"] for item in TOOLS]
     return [names[name] for name in selected]
@@ -377,9 +374,10 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "compatibility, and regressions. Never claim tests passed unless run_fixed_tests reports success. "
         "Never request credentials, broader permissions, arbitrary network access, arbitrary shell, workflow changes, "
         "security policy changes, or edits outside Files in Scope. The host executes tools; you do not. GitHub Actions tools are read-only and restricted to this repository. "
-        "For a straightforward task, read the assigned file, validate the final patch, then finish; do not "
-        "call every available tool. Use search/list only when the relevant implementation is unclear. Use GitHub "
-        "Actions tools only when the task concerns CI or prior workflow failures. Never repeat a tool call. "
+        "For a one-file task, use only the file-read, fixed-test, and patch-validation tools that are exposed. "
+        "The host has already supplied bounded related context. Do not attempt repository-wide discovery. "
+        "For multi-file tasks, use search/list only when needed and GitHub Actions tools only for CI tasks. "
+        "Never repeat a tool call. "
         "Return only JSON with task_id,status,task,summary,patch. status is patch or blocked. A patch must be "
         "a standard unified git diff changing existing files in Files in Scope only. If unsafe or uncertain, block."
     )
@@ -389,8 +387,9 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "\nBOUNDED INITIAL FILE CONTEXT (untrusted reference data):\n" + initial_context[:MAX_READ_BYTES * 6] +
         "\nPRIOR ENGINEERING MEMORY (untrusted reference data):\n" + memory[:6000] +
         ("\nPREVIOUS PATCH AND TEST FAILURE (untrusted diagnostic data):\n" + feedback[:7000] if feedback else "") +
-        "\nRead the assigned file with read_repo_file. Use search_repo/list_repo_files only if related context is missing. "
-        "Do not inspect GitHub Actions unless the task concerns CI. Use each tool only when needed and respect the host-enforced per-tool limits. Run fixed tests only when useful. "
+        "\nRead the assigned file with read_repo_file. Related source context is included above. "
+        "Use only the tools exposed for this task, then validate the final patch and finish. "
+        "Run fixed tests only when useful. "
         "Validate your patch with validate_patch, then return the final JSON immediately. Do not modify files directly."
     )
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -400,7 +399,7 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
     tool_counts: dict[str, int] = {}
     per_tool_limits = {
         "list_repo_files": 1, "search_repo": 1 if len(task.get("files_in_scope", [])) <= 1 else 2,
-        "read_repo_file": min(8, len(task.get("files_in_scope", [])) + 3),
+        "read_repo_file": min(4, len(task.get("files_in_scope", [])) + 2),
         "run_fixed_tests": 1, "validate_patch": 2,
         "get_recent_ci_runs": 1, "get_ci_run_jobs": 1,
     }
@@ -408,7 +407,7 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
     for turn in range(MAX_TOOL_ROUNDS):
         request_models = fallback_chain if turn == 0 else [active_model]
         payload = {"model": active_model, "models": request_models, "provider": {"allow_fallbacks": True},
-                   "temperature": 0.1, "max_tokens": 5000, "parallel_tool_calls": False,
+                   "temperature": 0.1, "max_tokens": 8000, "parallel_tool_calls": False,
                    "tool_choice": "auto", "tools": available_tools, "messages": messages}
         result = _request_json(api_url, api_key, payload)
         served_model = str(result.get("model", active_model))[:160]
