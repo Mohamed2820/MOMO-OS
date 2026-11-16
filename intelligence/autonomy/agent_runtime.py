@@ -455,7 +455,12 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                 raise WorkerError("Malformed model tool-call envelope")
             signature = name + ":" + raw_args
             if signature in repeated:
-                raise WorkerError("Model repeated an identical tool call; loop stopped")
+                calls_used += 1
+                messages.append({
+                    "role": "tool", "tool_call_id": call_id,
+                    "content": json.dumps({"ok": False, "error": "This exact call already ran. Use its previous result and continue; do not repeat."}),
+                })
+                continue
             repeated.add(signature)
             if name not in {item["function"]["name"] for item in available_tools}:
                 raise WorkerError("Model requested a tool not enabled for this task: " + name)
@@ -474,6 +479,13 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
             calls_used += 1
             if tool_ok:
                 tools_used.append(name)
+            print(json.dumps({
+                "event": "momo_cell_tool_result", "tool": name, "ok": tool_ok,
+                "path": args.get("path") if isinstance(args, dict) else None,
+                "bytes": output.get("bytes") if isinstance(output, dict) else None,
+                "matches": len(output.get("matches", [])) if isinstance(output, dict) else None,
+                "error": output.get("error") if isinstance(output, dict) else None,
+            }, ensure_ascii=False), flush=True)
             messages.append({"role": "tool", "tool_call_id": call_id,
                              "content": json.dumps(output, ensure_ascii=False)[:8000]})
     raise WorkerError("Tool loop reached its maximum round count without a final patch; tools_used="
