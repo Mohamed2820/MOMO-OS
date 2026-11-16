@@ -143,7 +143,7 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
                 detail = str(error_value)
         except (json.JSONDecodeError, TypeError, ValueError):
             detail = raw_error
-        detail = re.sub(r"(?i)(bearer\\s+)[^\\s,;]+", r"\\1[REDACTED]", str(detail))
+        detail = re.sub(r"(?i)(bearer\s+)[^\s,;]+", r"\1[REDACTED]", str(detail))
         detail = re.sub(r"(?i)(sk-or-v1-|sk-[A-Za-z0-9_-]{8,})[A-Za-z0-9_-]*", "[REDACTED]", detail)
         detail = " ".join(detail.split())[:1200] or "No provider error body returned"
         raise WorkerError(f"Model provider returned HTTP {exc.code}: {detail}") from None
