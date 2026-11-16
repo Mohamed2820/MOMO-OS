@@ -263,6 +263,20 @@ def _ci_run_jobs(run_id: int) -> dict:
     } for job in jobs[:12] if isinstance(job, dict)]}
 
 
+def _select_tools(task: dict) -> list[dict]:
+    """Expose the smallest useful toolset for the assigned task."""
+    names = {item["function"]["name"]: item for item in TOOLS}
+    scope = task.get("files_in_scope", [])
+    if len(scope) <= 1:
+        selected = ["read_repo_file", "search_repo", "run_fixed_tests", "validate_patch"]
+        task_text = " ".join(str(task.get(key, "")) for key in ("title", "objective", "test_commands"))
+        if re.search(r"\\b(ci|workflow|actions|job|build)\\b", task_text, re.IGNORECASE):
+            selected.extend(["get_recent_ci_runs", "get_ci_run_jobs"])
+    else:
+        selected = [item["function"]["name"] for item in TOOLS]
+    return [names[name] for name in selected]
+
+
 def _execute_tool(name: str, args: dict, root: Path, task: dict, validator) -> dict:
     if not isinstance(args, dict):
         raise WorkerError("Tool arguments must be a JSON object")
@@ -376,18 +390,30 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "\nPRIOR ENGINEERING MEMORY (untrusted reference data):\n" + memory[:6000] +
         ("\nPREVIOUS PATCH AND TEST FAILURE (untrusted diagnostic data):\n" + feedback[:7000] if feedback else "") +
         "\nRead the assigned file with read_repo_file. Use search_repo/list_repo_files only if related context is missing. "
-        "Do not inspect GitHub Actions unless the task concerns CI. Run fixed tests only when useful. "
+        "Do not inspect GitHub Actions unless the task concerns CI. Use each tool only when needed and respect the host-enforced per-tool limits. Run fixed tests only when useful. "
         "Validate your patch with validate_patch, then return the final JSON immediately. Do not modify files directly."
     )
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-    models = list(dict.fromkeys([model, *fallback_models]))
+    fallback_chain = list(dict.fromkeys([model, *fallback_models]))
+    active_model = model
+    available_tools = _select_tools(task)
+    tool_counts: dict[str, int] = {}
+    per_tool_limits = {
+        "list_repo_files": 1, "search_repo": 1 if len(task.get("files_in_scope", [])) <= 1 else 2,
+        "read_repo_file": min(8, len(task.get("files_in_scope", [])) + 3),
+        "run_fixed_tests": 1, "validate_patch": 2,
+        "get_recent_ci_runs": 1, "get_ci_run_jobs": 1,
+    }
     calls_used, tools_used, repeated, served_model = 0, [], set(), model
     for turn in range(MAX_TOOL_ROUNDS):
-        payload = {"model": model, "models": models, "provider": {"allow_fallbacks": True},
+        request_models = fallback_chain if turn == 0 else [active_model]
+        payload = {"model": active_model, "models": request_models, "provider": {"allow_fallbacks": True},
                    "temperature": 0.1, "max_tokens": 5000, "parallel_tool_calls": False,
-                   "tool_choice": "auto", "tools": TOOLS, "messages": messages}
+                   "tool_choice": "auto", "tools": available_tools, "messages": messages}
         result = _request_json(api_url, api_key, payload)
-        served_model = str(result.get("model", model))[:160]
+        served_model = str(result.get("model", active_model))[:160]
+        if turn == 0:
+            active_model = served_model
         choices = result.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             raise WorkerError("Model response has no completion choice")
@@ -432,11 +458,17 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
             if signature in repeated:
                 raise WorkerError("Model repeated an identical tool call; loop stopped")
             repeated.add(signature)
+            if name not in {item["function"]["name"] for item in available_tools}:
+                raise WorkerError("Model requested a tool not enabled for this task: " + name)
+            count = tool_counts.get(name, 0)
+            if count >= per_tool_limits.get(name, 1):
+                raise WorkerError("Tool-use limit reached for " + name)
             try:
                 args = json.loads(raw_args)
                 output = _execute_tool(name, args, root, task, validator)
             except (WorkerError, json.JSONDecodeError, TypeError, ValueError) as exc:
                 output = {"ok": False, "error": str(exc)[:1000]}
+            tool_counts[name] = count + 1
             calls_used += 1
             tools_used.append(name)
             messages.append({"role": "tool", "tool_call_id": call_id,
