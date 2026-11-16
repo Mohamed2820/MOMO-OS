@@ -25,8 +25,7 @@ MODEL = os.environ.get("MOMO_AGENT_MODEL", "")
 FALLBACK_MODELS = tuple(dict.fromkeys(
     model.strip()
     for model in os.environ.get(
-        "MOMO_AGENT_FALLBACK_MODELS",
-        "cohere/north-mini-code:free,nvidia/nemotron-3-ultra-550b-a55b:free",
+        "MOMO_AGENT_FALLBACK_MODELS", "openrouter/free"
     ).split(",")
     if model.strip()
 ))
@@ -199,6 +198,7 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
         "provider": {"allow_fallbacks": True},
         "temperature": 0.1,
         "max_tokens": 3000,
+        "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
     request = urllib.request.Request(
