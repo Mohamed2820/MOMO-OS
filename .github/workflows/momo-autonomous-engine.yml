@@ -70,6 +70,7 @@ jobs:
         env:
           MOMO_AGENT_API_KEY: ${{ secrets.MOMO_AGENT_API_KEY }}
           MOMO_AGENT_MODEL: particle-ai/particle-1:free
+          MOMO_AGENT_FALLBACK_MODELS: ${{ vars.MOMO_AGENT_FALLBACK_MODELS || 'cohere/north-mini-code:free,nvidia/nemotron-3-ultra-550b-a55b:free' }}
           MOMO_AGENT_API_URL: ${{ vars.MOMO_AGENT_API_URL }}
           MOMO_TASK_ISSUE_NUMBER: ${{ steps.assignment.outputs.task_issue_number }}
           GITHUB_TOKEN: ${{ github.token }}

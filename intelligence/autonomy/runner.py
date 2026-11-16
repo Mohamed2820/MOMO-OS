@@ -22,6 +22,14 @@ def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]
 
 API_URL = os.environ.get("MOMO_AGENT_API_URL", "https://openrouter.ai/api/v1/chat/completions")
 MODEL = os.environ.get("MOMO_AGENT_MODEL", "")
+FALLBACK_MODELS = tuple(dict.fromkeys(
+    model.strip()
+    for model in os.environ.get(
+        "MOMO_AGENT_FALLBACK_MODELS",
+        "cohere/north-mini-code:free,nvidia/nemotron-3-ultra-550b-a55b:free",
+    ).split(",")
+    if model.strip()
+))
 MAX_CONTEXT_BYTES = 110_000
 MAX_PATCH_BYTES = 48_000
 MAX_FILES = 24
@@ -187,9 +195,10 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
     )
     payload = {
         "model": MODEL,
+        "models": list(dict.fromkeys([MODEL, *FALLBACK_MODELS])),
+        "provider": {"allow_fallbacks": True},
         "temperature": 0.1,
         "max_tokens": 3000,
-        "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
     request = urllib.request.Request(
@@ -240,7 +249,9 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
         document = _recover_raw_diff(content, task)
         if document is None:
             raise
-    return validate_task_response(document, task)
+    validated = validate_task_response(document, task)
+    validated["served_model"] = result.get("model", MODEL)
+    return validated
 
 
 def _validate_patch(patch: str, root: Path | None = None, allowed_files: set[str] | None = None) -> None:
@@ -388,6 +399,7 @@ def run(root: Path) -> int:
             "status": "blocked", "task_id": task["task_id"],
             "brief_sha256": task["brief_sha256"],
             "task": str(proposal.get("task", ""))[:200],
+            "model": str(proposal.get("served_model", MODEL))[:160],
             "reason": str(proposal.get("summary", "No safe task available"))[:1000],
         }))
         return 2
@@ -411,6 +423,7 @@ def run(root: Path) -> int:
         "brief_sha256": task["brief_sha256"],
         "task": str(proposal.get("task", ""))[:200],
         "summary": str(proposal.get("summary", ""))[:1000],
+        "model": str(proposal.get("served_model", MODEL))[:160],
         "changed_files": changed_files,
     }, ensure_ascii=False))
     return 0
