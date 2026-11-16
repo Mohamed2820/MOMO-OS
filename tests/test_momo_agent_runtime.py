@@ -290,7 +290,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 result = review_patch(task, sample_patch(), "builder-model", "fake-key", "https://example.invalid")
         self.assertTrue(result["approved"])
         same = dict(good, model="builder-model")
-        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json", return_value=same):
                 with self.assertRaises(WorkerError):
                     review_patch(task, sample_patch(), "builder-model", "fake-key", "https://example.invalid")
@@ -320,7 +320,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
         valid = {"model": "critic-model", "choices": [{"finish_reason": "stop",
             "message": {"content": json.dumps({"verdict": "approve", "findings": [],
                                                 "summary": "Reviewed successfully."})}}]}
-        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        side_effect=[malformed, valid]) as request:
                 result = review_patch(task, sample_patch(), "builder-model", "fake-key",
@@ -335,7 +335,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
         task = sample_task()
         malformed = {"model": "critic-model", "choices": [{"finish_reason": "length",
             "message": {"content": "not valid JSON"}}]}
-        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        side_effect=[malformed, malformed]) as request:
                 with self.assertRaisesRegex(WorkerError, "after one retry"):
@@ -348,7 +348,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
         rejected = {"model": "critic-model", "choices": [{"message": {
             "content": json.dumps({"verdict": "reject", "findings": ["unsafe change"],
                                    "summary": "Rejected."})}}]}
-        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        return_value=rejected) as request:
                 with self.assertRaisesRegex(WorkerError, "Independent review rejected"):
