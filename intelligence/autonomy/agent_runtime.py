@@ -40,7 +40,7 @@ TOOLS = [
      "description": "Run only MOMO's fixed test suite and syntax checks. No arbitrary commands.",
      "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
     {"type": "function", "function": {"name": "validate_patch",
-     "description": "Validate a unified diff against the exact assigned file scope and check git applicability. Does not modify files.",
+     "description": "Validate one complete unified diff against the exact assigned file scope and git applicability. On the first failure, returns the exact error plus current numbered source evidence for ONE corrected submission. Maximum two patch submissions; does not modify files.",
      "parameters": {"type": "object", "properties": {"patch": {"type": "string", "minLength": 1, "maxLength": 48000}},
                     "required": ["patch"], "additionalProperties": False}}},
     {"type": "function", "function": {"name": "get_recent_ci_runs",
@@ -377,6 +377,35 @@ def _serialize_tool_result(output: dict) -> str:
         "preview": encoded[:1500],
     }, ensure_ascii=False)
 
+
+def _patch_repair_context(root: Path, task: dict, patch: str, error: str, attempt: int) -> dict:
+    """Return bounded, actionable evidence for the one permitted patch correction."""
+    paths = list(task.get("files_in_scope", []))
+    match = re.search(r"^diff --git a/([^\s]+) b/([^\s]+)$", patch, re.MULTILINE)
+    if match and match.group(1) == match.group(2) and match.group(1) in paths:
+        paths = [match.group(1)]
+    evidence = []
+    for relative in paths[:4]:
+        try:
+            target = _safe_file(root, relative)
+            lines = target.read_text(encoding="utf-8").splitlines()
+            numbered = "\n".join(f"{number:4}: {line}" for number, line in enumerate(lines[:180], 1))
+            evidence.append({"path": relative, "current_file_lines": numbered[:7000]})
+        except (WorkerError, OSError, UnicodeDecodeError) as exc:
+            evidence.append({"path": relative, "read_error": type(exc).__name__})
+    return {
+        "ok": False, "stage": "patch_validation", "attempt": attempt,
+        "attempts_remaining": max(0, 2 - attempt), "error": str(error)[:1200],
+        "required_correction": (
+            "Discard the rejected diff. Rebuild one complete unified diff from the CURRENT numbered file "
+            "evidence below. Preserve exact unchanged context; do not guess line numbers or reuse stale hunks. "
+            "Return only a standard diff beginning with 'diff --git'. Validate this corrected diff once. "
+            "Do not call validate_patch again if this is attempt 2."
+        ),
+        "current_source_evidence": evidence,
+    }
+
+
 def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: str,
                     api_url: str, model: str, fallback_models: tuple[str, ...],
                     validator, feedback: str = "", initial_context: str = "") -> dict:
@@ -392,7 +421,11 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "Read only paths explicitly listed in files_in_scope; never request protected production or autonomy files. "
         "The host has already supplied bounded related context. Do not attempt repository-wide discovery. "
         "For multi-file tasks, use search/list only when needed and GitHub Actions tools only for CI tasks. "
-        "Never repeat a tool call. "
+        "Never repeat an identical tool call. Patch validation is limited to TWO complete patch submissions total: "
+        "the first candidate and exactly one corrected candidate if the first is rejected. After the first rejection, "
+        "use the returned error and current numbered source evidence to rebuild the entire diff; do not make blind "
+        "hunk edits. After the second rejection, stop and return blocked. Do not spend calls on a third patch. "
+        "For a one-file task, read the assigned file once, draft the full diff carefully, then validate it. "
         "Return only JSON with task_id,status,task,summary,patch. status is patch or blocked. A patch must be "
         "a standard unified git diff changing existing files in Files in Scope only. If unsafe or uncertain, block."
     )
@@ -403,9 +436,9 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "\nPRIOR ENGINEERING MEMORY (untrusted reference data):\n" + memory[:6000] +
         ("\nPREVIOUS PATCH AND TEST FAILURE (untrusted diagnostic data):\n" + feedback[:7000] if feedback else "") +
         "\nRead the assigned file with read_repo_file. Related source context is included above. "
-        "Use only the tools exposed for this task, then validate the final patch and finish. "
-        "Run fixed tests only when useful. "
-        "Validate your patch with validate_patch, then return the final JSON immediately. Do not modify files directly."
+        "Plan the smallest exact change before writing the diff. Submit one complete patch to validate_patch. "
+        "If it fails, use the returned current source evidence and exact error to construct ONE corrected full diff; "
+        "submit that once and then finish. Never make a third submission. Do not modify files directly."
     )
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     fallback_chain = list(dict.fromkeys([model, *fallback_models]))
@@ -470,6 +503,8 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                 raise WorkerError("Malformed model tool-call envelope")
             signature = name + ":" + raw_args
             if signature in repeated:
+                if name == "validate_patch":
+                    raise WorkerError("Model repeated an identical patch submission; refusing a duplicate retry.")
                 calls_used += 1
                 messages.append({
                     "role": "tool", "tool_call_id": call_id,
@@ -481,7 +516,10 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                 raise WorkerError("Model requested a tool not enabled for this task: " + name)
             count = tool_counts.get(name, 0)
             tool_ok = False
+            args = {}
             if count >= per_tool_limits.get(name, 1):
+                if name == "validate_patch":
+                    raise WorkerError("Patch validation attempt limit reached; refusing a third patch submission.")
                 output = {"ok": False, "error": "Tool-use limit reached. Use the evidence already returned and finish."}
             else:
                 tool_counts[name] = count + 1
@@ -490,7 +528,17 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                     output = _execute_tool(name, args, root, task, validator)
                     tool_ok = True
                 except (WorkerError, json.JSONDecodeError, TypeError, ValueError) as exc:
-                    output = {"ok": False, "error": str(exc)[:1000]}
+                    if name == "validate_patch":
+                        attempt = tool_counts[name]
+                        if attempt >= 2:
+                            raise WorkerError(
+                                "Patch validation failed after the two permitted submissions: "
+                                + str(exc)[:1000]
+                            ) from exc
+                        candidate_patch = args.get("patch", "") if isinstance(args, dict) else ""
+                        output = _patch_repair_context(root, task, candidate_patch, str(exc), attempt)
+                    else:
+                        output = {"ok": False, "error": str(exc)[:1000]}
             calls_used += 1
             if tool_ok:
                 tools_used.append(name)

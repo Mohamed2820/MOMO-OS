@@ -132,6 +132,96 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertEqual(result["tool_calls"], 2)
             self.assertEqual(result["tools_used"], ["read_repo_file", "validate_patch"])
 
+    def test_patch_validation_failure_returns_current_numbered_source_for_one_repair(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            make_repo(root)
+            task = sample_task()
+            bad_patch = (
+                "diff --git a/intelligence/runtime/demo.py b/intelligence/runtime/demo.py\n"
+                "--- a/intelligence/runtime/demo.py\n"
+                "+++ b/intelligence/runtime/demo.py\n"
+                "@@ -1 +1 @@\n"
+                "-VALUE = 'stale'\n"
+                "+VALUE = 'new'\n"
+            )
+            good_patch = sample_patch()
+
+            def tool_call(call_id, name, arguments):
+                return {"id": call_id, "type": "function", "function": {
+                    "name": name, "arguments": json.dumps(arguments),
+                }}
+
+            def response(call):
+                return {"model": "builder-model", "choices": [{"message": {
+                    "role": "assistant", "content": None, "tool_calls": [call],
+                }}]}
+
+            final = {"model": "builder-model", "choices": [{"message": {
+                "role": "assistant", "content": json.dumps({
+                    "task_id": 901, "status": "patch", "task": "Update demo value",
+                    "summary": "Corrected the diff using current source evidence.", "patch": good_patch,
+                }),
+            }}]}
+            responses = [
+                response(tool_call("read-1", "read_repo_file", {"path": "intelligence/runtime/demo.py"})),
+                response(tool_call("validate-1", "validate_patch", {"patch": bad_patch})),
+                response(tool_call("validate-2", "validate_patch", {"patch": good_patch})),
+                final,
+            ]
+            with patch("intelligence.autonomy.agent_runtime._request_json", side_effect=responses) as request:
+                result = run_agent_cycle(
+                    root, task, "brief", "no memory", "fake-key",
+                    "https://example.invalid/chat", "builder-model", (), _validate_patch,
+                )
+            self.assertEqual(result["status"], "patch")
+            self.assertEqual(result["tool_calls"], 3)
+            self.assertEqual(request.call_count, 4)
+            repair_messages = request.call_args_list[2].args[2]["messages"]
+            repair_payload = json.dumps(repair_messages, ensure_ascii=False)
+            self.assertIn("attempts_remaining", repair_payload)
+            self.assertIn("current_file_lines", repair_payload)
+            self.assertIn("VALUE = 'old'", repair_payload)
+
+    def test_patch_validation_stops_after_two_rejected_submissions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            make_repo(root)
+            task = sample_task()
+            bad_patch = "not a unified diff"
+            second_bad_patch = (
+                "diff --git a/intelligence/runtime/demo.py b/intelligence/runtime/demo.py\n"
+                "--- a/intelligence/runtime/demo.py\n"
+                "+++ b/intelligence/runtime/demo.py\n"
+                "@@ -1 +1 @@\n"
+                "-VALUE = 'also-stale'\n"
+                "+VALUE = 'new'\n"
+            )
+
+            def tool_call(call_id, name, arguments):
+                return {"id": call_id, "type": "function", "function": {
+                    "name": name, "arguments": json.dumps(arguments),
+                }}
+
+            def response(call):
+                return {"model": "builder-model", "choices": [{"message": {
+                    "role": "assistant", "content": None, "tool_calls": [call],
+                }}]}
+
+            responses = [
+                response(tool_call("read-1", "read_repo_file", {"path": "intelligence/runtime/demo.py"})),
+                response(tool_call("validate-1", "validate_patch", {"patch": bad_patch})),
+                response(tool_call("validate-2", "validate_patch", {"patch": second_bad_patch})),
+            ]
+            with patch("intelligence.autonomy.agent_runtime._request_json", side_effect=responses) as request:
+                with self.assertRaisesRegex(WorkerError, "after the two permitted submissions"):
+                    run_agent_cycle(
+                        root, task, "brief", "no memory", "fake-key",
+                        "https://example.invalid/chat", "builder-model", (), _validate_patch,
+                    )
+            self.assertEqual(request.call_count, 3)
+            self.assertFalse((root / "pwned").exists())
+
     def test_tool_result_serialization_preserves_full_reads_and_never_breaks_json(self):
         content = "x" * 9000
         encoded = _serialize_tool_result({"path": "tests/example.py", "content": content})
