@@ -5,7 +5,7 @@ import hashlib
 import re
 from typing import Any
 
-from intelligence.autonomy.runner import WorkerError, _allowed
+from intelligence.autonomy.policy import WorkerError, _allowed
 
 READY_LABEL = "momo-cell:ready"
 REQUIRED_SECTIONS = (
