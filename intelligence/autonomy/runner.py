@@ -98,6 +98,14 @@ def _project_brief(root: Path) -> str:
 
 def _parse_model_document(content: object) -> dict:
     """Parse a JSON object even when a provider wraps it in prose or fences."""
+    if isinstance(content, dict):
+        # Some OpenAI-compatible providers wrap text or parsed JSON in an object.
+        if isinstance(content.get("text"), str):
+            content = content["text"]
+        elif isinstance(content.get("json"), str):
+            content = content["json"]
+        elif isinstance(content.get("content"), str):
+            content = content["content"]
     if isinstance(content, list):
         content = "".join(
             part.get("text", "") for part in content if isinstance(part, dict)
@@ -240,8 +248,33 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
         raise WorkerError(f"Model provider request failed: {type(exc).__name__}") from exc
     try:
         choice = result["choices"][0]
-        content = choice["message"]["content"]
-    except (KeyError, IndexError, TypeError) as exc:
+        message = choice["message"]
+        content = message.get("content")
+        # A few compatible endpoints return the structured object separately.
+        if content in (None, "") and isinstance(message.get("parsed"), dict):
+            content = json.dumps(message["parsed"], ensure_ascii=False)
+        if content in (None, "") and isinstance(message.get("tool_calls"), list):
+            for tool_call in message["tool_calls"]:
+                function = tool_call.get("function", {}) if isinstance(tool_call, dict) else {}
+                arguments = function.get("arguments") if isinstance(function, dict) else None
+                if isinstance(arguments, dict):
+                    content = json.dumps(arguments, ensure_ascii=False)
+                    break
+                if isinstance(arguments, str) and arguments.strip():
+                    content = arguments
+                    break
+        if content in (None, ""):
+            fields = ",".join(sorted(message.keys()))[:240] if isinstance(message, dict) else "unknown"
+            served = str(result.get("model", MODEL))[:120]
+            finish = str(choice.get("finish_reason", "unknown"))[:80]
+            refusal = str(message.get("refusal", ""))[:240] if isinstance(message, dict) else ""
+            raise WorkerError(
+                f"Provider returned no text content (model={served}; finish={finish}; "
+                f"message_fields={fields}; refusal={refusal})"
+            )
+    except WorkerError:
+        raise
+    except (KeyError, IndexError, TypeError, AttributeError) as exc:
         raise WorkerError("Provider response is missing the expected choice/message content") from exc
     try:
         document = _parse_model_document(content)
