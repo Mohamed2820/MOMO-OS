@@ -461,9 +461,9 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
     calls_used, tools_used, repeated, served_model = 0, [], set(), model
     for turn in range(MAX_TOOL_ROUNDS):
         payload = {"model": active_model, "temperature": 0.1, "max_tokens": 8000,
-                   "parallel_tool_calls": False, "tool_choice": "auto",
-                   "tools": available_tools, "messages": messages}
+                   "tool_choice": "auto", "tools": available_tools, "messages": messages}
         if active_provider == "openrouter":
+            payload["parallel_tool_calls"] = False
             payload["models"] = [active_model, *[item for item in fallback_chain if item != active_model]]
             payload["provider"] = {"allow_fallbacks": True}
         try:
@@ -494,6 +494,13 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         if not isinstance(message, dict):
             raise WorkerError("Model response has no assistant message")
         tool_calls = message.get("tool_calls")
+        if not isinstance(tool_calls, list) and isinstance(message.get("toolCalls"), list):
+            # Normalize a camelCase variant observed from some OpenAI-compatible Gemini responses.
+            tool_calls = message["toolCalls"]
+        if isinstance(tool_calls, list):
+            for index, call in enumerate(tool_calls):
+                if isinstance(call, dict) and not str(call.get("id", "")).strip():
+                    call["id"] = f"momo-gemini-{turn + 1}-{index + 1}"
         if not isinstance(tool_calls, list) or not tool_calls:
             content = _message_text(message)
             if not content.strip():
