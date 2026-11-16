@@ -268,7 +268,7 @@ def _select_tools(task: dict) -> list[dict]:
     names = {item["function"]["name"]: item for item in TOOLS}
     scope = task.get("files_in_scope", [])
     if len(scope) <= 1:
-        selected = ["read_repo_file", "run_fixed_tests", "validate_patch"]
+        selected = ["read_repo_file", "validate_patch"]
     else:
         selected = [item["function"]["name"] for item in TOOLS]
     return [names[name] for name in selected]
