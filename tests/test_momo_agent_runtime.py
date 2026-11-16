@@ -137,7 +137,14 @@ class AgentToolRuntimeTests(unittest.TestCase):
             root = Path(temp)
             make_repo(root)
             task = sample_task()
-            bad_patch = "not a unified diff"
+            bad_patch = (
+                "diff --git a/intelligence/runtime/demo.py b/intelligence/runtime/demo.py\n"
+                "--- a/intelligence/runtime/demo.py\n"
+                "+++ b/intelligence/runtime/demo.py\n"
+                "@@ -1 +1 @@\n"
+                "-VALUE = 'stale'\n"
+                "+VALUE = 'new'\n"
+            )
             good_patch = sample_patch()
 
             def tool_call(call_id, name, arguments):
