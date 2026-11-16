@@ -40,7 +40,7 @@ TOOLS = [
      "description": "Run only MOMO's fixed test suite and syntax checks. No arbitrary commands.",
      "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}},
     {"type": "function", "function": {"name": "validate_patch",
-     "description": "Validate a unified diff against the exact assigned file scope and check git applicability. Does not modify files.",
+     "description": "Validate one complete unified diff against the exact assigned file scope and git applicability. On the first failure, returns the exact error plus current numbered source evidence for ONE corrected submission. Maximum two patch submissions; does not modify files.",
      "parameters": {"type": "object", "properties": {"patch": {"type": "string", "minLength": 1, "maxLength": 48000}},
                     "required": ["patch"], "additionalProperties": False}}},
     {"type": "function", "function": {"name": "get_recent_ci_runs",
