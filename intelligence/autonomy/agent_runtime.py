@@ -20,6 +20,7 @@ from intelligence.autonomy.task_assignment import validate_task_response
 MAX_TOOL_ROUNDS = 7
 MAX_TOOL_CALLS = 6
 MAX_READ_BYTES = 24000
+MAX_TOOL_RESULT_CHARS = MAX_READ_BYTES + 2000
 MEMORY_PATH = ".momo-cell/memory/engineering.jsonl"
 
 TOOLS = [
@@ -363,6 +364,19 @@ def _parse_final(content: str, task: dict) -> dict:
     return validate_task_response(document, task)
 
 
+
+def _serialize_tool_result(output: dict) -> str:
+    """Preserve complete bounded file reads and never send malformed truncated JSON."""
+    encoded = json.dumps(output, ensure_ascii=False)
+    if len(encoded) <= MAX_TOOL_RESULT_CHARS:
+        return encoded
+    return json.dumps({
+        "ok": False,
+        "truncated": True,
+        "error": "Tool output exceeded the safe message limit; request a narrower result.",
+        "preview": encoded[:1500],
+    }, ensure_ascii=False)
+
 def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: str,
                     api_url: str, model: str, fallback_models: tuple[str, ...],
                     validator, feedback: str = "", initial_context: str = "") -> dict:
@@ -374,7 +388,8 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "compatibility, and regressions. Never claim tests passed unless run_fixed_tests reports success. "
         "Never request credentials, broader permissions, arbitrary network access, arbitrary shell, workflow changes, "
         "security policy changes, or edits outside Files in Scope. The host executes tools; you do not. GitHub Actions tools are read-only and restricted to this repository. "
-        "For a one-file task, use only the file-read, fixed-test, and patch-validation tools that are exposed. "
+        "For a one-file task, use only the file-read and patch-validation tools that are exposed. "
+        "Read only paths explicitly listed in files_in_scope; never request protected production or autonomy files. "
         "The host has already supplied bounded related context. Do not attempt repository-wide discovery. "
         "For multi-file tasks, use search/list only when needed and GitHub Actions tools only for CI tasks. "
         "Never repeat a tool call. "
@@ -487,7 +502,7 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                 "error": output.get("error") if isinstance(output, dict) else None,
             }, ensure_ascii=False), flush=True)
             messages.append({"role": "tool", "tool_call_id": call_id,
-                             "content": json.dumps(output, ensure_ascii=False)[:8000]})
+                             "content": _serialize_tool_result(output)})
     raise WorkerError("Tool loop reached its maximum round count without a final patch; tools_used="
                       + ",".join(tools_used) + "; calls=" + str(calls_used))
 
