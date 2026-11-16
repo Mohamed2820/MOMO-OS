@@ -17,7 +17,7 @@ import urllib.request
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import validate_task_response
 
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 6
 MAX_TOOL_CALLS = 10
 MAX_READ_BYTES = 24000
 MEMORY_PATH = ".momo-cell/memory/engineering.jsonl"
@@ -324,8 +324,11 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
                 finish = str(choice.get("finish_reason", "unknown"))
                 raise WorkerError("Model returned no final content (model=" + served_model + "; finish=" + finish + ")")
             proposal = _parse_final(content, task)
+            used = sorted(set(tools_used))
+            if not {"read_repo_file", "validate_patch"}.issubset(set(used)):
+                raise WorkerError("Model must inspect an in-scope file and validate its patch using the tools")
             proposal.update({"served_model": served_model, "tool_calls": calls_used,
-                             "tools_used": sorted(set(tools_used))})
+                             "tools_used": used})
             return proposal
         if calls_used + len(tool_calls) > MAX_TOOL_CALLS:
             raise WorkerError("Tool-call budget exceeded")
