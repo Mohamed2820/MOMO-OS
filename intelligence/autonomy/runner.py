@@ -69,15 +69,24 @@ def _snapshot(root: Path, allowed_files: set[str] | None = None) -> str:
     return "".join(chunks)
 
 
+MAX_PROJECT_BRIEF_CHARS = 6_000
+
+
 def _project_brief(root: Path) -> str:
-    paths = ("docs/MASTER_EXECUTION_PLAN.md", "docs/ROADMAP.md", "docs/ARCHITECTURE.md")
+    # Keep reference material bounded so small-context/low-credit models can
+    # still receive the actual assigned file and task contract.
+    limits = (
+        ("docs/MASTER_EXECUTION_PLAN.md", 2_500),
+        ("docs/ROADMAP.md", 1_500),
+        ("docs/ARCHITECTURE.md", 1_000),
+    )
     parts = []
-    for name in paths:
+    for name, limit in limits:
         path = _safe_regular_file(root, name)
         if path is not None:
-            text = path.read_text(encoding="utf-8")
-            parts.append(f"\n--- PROJECT PLAN: {name} ---\n{text[-18000:]}\n")
-    return "".join(parts)
+            content = path.read_text(encoding="utf-8")
+            parts.append(f"\n--- PROJECT PLAN: {name} ---\n{content[-limit:]}\n")
+    return "".join(parts)[:MAX_PROJECT_BRIEF_CHARS]
 
 
 def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
