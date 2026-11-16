@@ -94,12 +94,15 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
 
     def test_patch_cannot_escape_exact_assigned_file_scope(self):
         path = "intelligence/runtime/parser.py"
-        patch = (
-            f"diff --git a/{path} b/{path}\\n"
-            "index 1111111..2222222 100644\\n"
-            f"--- a/{path}\\n+++ b/{path}\\n"
-            "@@ -1 +1 @@\\n-old\\n+new\\n"
-        )
+        patch = chr(10).join([
+            f"diff --git a/{path} b/{path}",
+            "index 1111111..2222222 100644",
+            f"--- a/{path}",
+            f"+++ b/{path}",
+            "@@ -1 +1 @@",
+            "-old",
+            "+new",
+        ]) + chr(10)
         _validate_patch(patch, allowed_files={path})
         with self.assertRaisesRegex(WorkerError, "outside the assigned task scope"):
             _validate_patch(patch, allowed_files={"intelligence/runtime/other.py"})
