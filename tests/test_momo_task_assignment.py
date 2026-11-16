@@ -1,5 +1,8 @@
 """Adversarial tests for human-controlled MOMO CELL task assignment."""
+import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -124,6 +127,44 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
             runner._fetch_assigned_issue("0", "Mohamed2820/MOMO-OS", "token")
         with self.assertRaisesRegex(WorkerError, "GITHUB_TOKEN"):
             runner._fetch_assigned_issue("73", "Mohamed2820/MOMO-OS", "")
+
+    def test_provider_prompt_contains_the_human_assigned_task(self):
+        task = parse_task_issue(make_issue())
+        provider_document = {
+            "task_id": 73, "status": "blocked", "task": "assigned task",
+            "summary": "cannot safely patch", "patch": "",
+        }
+        response_body = json.dumps({
+            "choices": [{"message": {"content": json.dumps(provider_document)}}]
+        }).encode("utf-8")
+        class FakeResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self, _limit):
+                return response_body
+        with patch("urllib.request.urlopen", return_value=FakeResponse()) as mocked:
+            result = runner._request_patch("source snapshot", "project brief", task, "fake-key")
+        self.assertEqual(result["task_id"], 73)
+        request = mocked.call_args.args[0]
+        payload = json.loads(request.data.decode("utf-8"))
+        prompt = payload["messages"][1]["content"]
+        self.assertIn("EXACT ASSIGNED TASK CONTRACT", prompt)
+        self.assertIn("Fix the parser edge case described here.", prompt)
+        self.assertIn("intelligence/runtime/parser.py", prompt)
+
+    def test_module_entrypoint_handles_shared_worker_error_without_traceback(self):
+        env = dict(os.environ)
+        env["MOMO_AGENT_API_KEY"] = ""
+        env["MOMO_AGENT_MODEL"] = ""
+        completed = subprocess.run(
+            [sys.executable, "-m", "intelligence.autonomy.runner"],
+            capture_output=True, text=True, env=env, timeout=15,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn('"status": "blocked"', completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
 
     def test_provider_network_errors_fail_closed_without_leaking_details(self):
         task = parse_task_issue(make_issue())
