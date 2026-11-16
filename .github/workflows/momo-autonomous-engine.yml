@@ -56,7 +56,7 @@ jobs:
           fi
           git config user.name "momo-cell[bot]"
           git config user.email "momo-cell[bot]@users.noreply.github.com"
-          git add -- intelligence tests docs platform_adapters board/momo/rootfs-overlay/usr/lib/momo board/momo/rootfs-overlay/usr/bin
+          git diff --name-only -z | git add --pathspec-from-file=- --pathspec-file-nul
           git commit -m "feat(autonomy): apply verified MOMO CELL engineering patch"
           git push origin "HEAD:${GITHUB_REF_NAME}"
       - name: Open or update engineering pull request
