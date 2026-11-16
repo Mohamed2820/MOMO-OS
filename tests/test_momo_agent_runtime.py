@@ -160,8 +160,9 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 "OPENROUTER_MODEL": "particle-ai/particle-1:free",
             }):
                 with patch("intelligence.autonomy.agent_runtime._request_json",
-                           side_effect=[WorkerError("Gemini HTTP 429 quota"), tool_response(read_call),
-                                        tool_response(validate_call), final]) as request:
+                           side_effect=[WorkerError("Gemini HTTP 503 capacity"),
+                                        WorkerError("Gemini fallback model HTTP 503 capacity"),
+                                        tool_response(read_call), tool_response(validate_call), final]) as request:
                     result = run_agent_cycle(
                         root, task, "brief", "no memory", "gemini-test-key",
                         "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
@@ -174,10 +175,15 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 "gemini-test-key",
             ))
             self.assertEqual(request.call_args_list[1].args[:2], (
+                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+                "gemini-test-key",
+            ))
+            self.assertEqual(request.call_args_list[1].args[2]["model"], "gemini-3.6-flash")
+            self.assertEqual(request.call_args_list[2].args[:2], (
                 "https://openrouter.example/chat/completions", "openrouter-test-key",
             ))
-            self.assertEqual(request.call_args_list[1].args[2]["model"], "particle-ai/particle-1:free")
-            self.assertEqual(request.call_count, 4)
+            self.assertEqual(request.call_args_list[2].args[2]["model"], "particle-ai/particle-1:free")
+            self.assertEqual(request.call_count, 5)
 
     def test_patch_validation_failure_returns_current_numbered_source_for_one_repair(self):
         with tempfile.TemporaryDirectory() as temp:
