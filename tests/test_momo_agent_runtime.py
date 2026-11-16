@@ -156,7 +156,6 @@ class AgentToolRuntimeTests(unittest.TestCase):
             }}]}
             with patch.dict("os.environ", {
                 "GEMINI_FALLBACK_MODEL": "gemini-3.6-flash",
-                "OPENROUTER_API_KEY": "must-never-be-used",
             }):
                 with patch("intelligence.autonomy.agent_runtime._request_json",
                            side_effect=[WorkerError("Gemini HTTP 503 capacity"),
@@ -286,7 +285,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
         good = {"model": "critic-model", "choices": [{"message": {
             "content": json.dumps({"verdict": "approve", "findings": [], "summary": "Scope and logic look sound."})
         }}]}
-        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json", return_value=good):
                 result = review_patch(task, sample_patch(), "builder-model", "fake-key", "https://example.invalid")
         self.assertTrue(result["approved"])
