@@ -1,8 +1,6 @@
 name: MOMO CELL autonomous engineering cycle
 
 on:
-  push:
-    branches: ["feature/momo-autonomous-engine"]
   workflow_dispatch:
 
 permissions:
