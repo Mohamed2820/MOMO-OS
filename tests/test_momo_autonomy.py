@@ -47,6 +47,14 @@ class AutonomyPolicyTests(unittest.TestCase):
         self.assertEqual(_parse_model_document("Result:\n```json\n" + encoded + "\n```"), expected)
         self.assertEqual(_parse_model_document([{"type": "text", "text": encoded}]), expected)
 
+    def test_model_document_parser_accepts_provider_text_object_wrappers(self):
+        from intelligence.autonomy.runner import _parse_model_document
+
+        expected = {"task_id": 63, "status": "blocked", "task": "x", "summary": "y"}
+        encoded = json.dumps(expected)
+        self.assertEqual(_parse_model_document({"type": "text", "text": encoded}), expected)
+        self.assertEqual(_parse_model_document({"json": encoded}), expected)
+
     def test_model_document_parser_rejects_non_object_content(self):
         from intelligence.autonomy.runner import _parse_model_document
 
