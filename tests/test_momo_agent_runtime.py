@@ -93,7 +93,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
 
     def test_tool_schema_is_small_and_has_no_shell_or_write_tool(self):
         names = [item["function"]["name"] for item in TOOLS]
-        self.assertEqual(names, ["list_repo_files", "search_repo", "read_repo_file", "run_fixed_tests", "validate_patch"])
+        self.assertEqual(names, ["list_repo_files", "search_repo", "read_repo_file", "run_fixed_tests", "validate_patch", "get_recent_ci_runs", "get_ci_run_jobs"])
         self.assertNotIn("run_shell", names)
         self.assertNotIn("write_file", names)
 
@@ -157,6 +157,24 @@ class AgentToolRuntimeTests(unittest.TestCase):
             with patch("intelligence.autonomy.agent_runtime._request_json", return_value=same):
                 with self.assertRaises(WorkerError):
                     review_patch(task, sample_patch(), "builder-model", "fake-key", "https://example.invalid")
+
+    def test_github_actions_tools_are_read_only_and_repository_scoped(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            make_repo(root)
+            task = sample_task()
+            runs = {"workflow_runs": [{"id": 123, "name": "Repository validation", "event": "pull_request", "head_branch": "feature", "status": "completed", "conclusion": "success", "html_url": "https://github.com/Mohamed2820/MOMO-OS/actions/runs/123", "updated_at": "2026-11-16T00:00:00Z"}]}
+            with patch("intelligence.autonomy.agent_runtime._github_get", return_value=runs) as get:
+                result = _execute_tool("get_recent_ci_runs", {}, root, task, _validate_patch)
+            get.assert_called_once_with("actions/runs")
+            self.assertEqual(result["runs"][0]["conclusion"], "success")
+            jobs = {"jobs": [{"id": 456, "name": "validate", "status": "completed", "conclusion": "success", "steps": [{"name": "Run tests", "status": "completed", "conclusion": "success"}]}]}
+            with patch("intelligence.autonomy.agent_runtime._github_get", return_value=jobs) as get:
+                result = _execute_tool("get_ci_run_jobs", {"run_id": 123}, root, task, _validate_patch)
+            get.assert_called_once_with("actions/runs/123/jobs")
+            self.assertEqual(result["jobs"][0]["steps"][0]["name"], "Run tests")
+            with self.assertRaises(WorkerError):
+                _execute_tool("get_ci_run_jobs", {"run_id": True}, root, task, _validate_patch)
 
     def test_evaluation_dataset_and_weighted_score_are_deterministic(self):
         from intelligence.autonomy.evaluation import load_cases, score_run
