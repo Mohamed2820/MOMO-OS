@@ -132,7 +132,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertEqual(result["tool_calls"], 2)
             self.assertEqual(result["tools_used"], ["read_repo_file", "validate_patch"])
 
-    def test_gemini_primary_falls_back_to_openrouter_on_provider_error(self):
+    def test_gemini_primary_falls_back_only_to_gemini(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             make_repo(root)
@@ -145,45 +145,34 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 "name": "validate_patch", "arguments": json.dumps({"patch": patch_text}),
             }}
             def tool_response(call):
-                return {"model": "particle-ai/particle-1:free", "choices": [{"message": {
+                return {"model": "gemini-3.6-flash", "choices": [{"message": {
                     "role": "assistant", "content": None, "tool_calls": [call],
                 }}]}
-            final = {"model": "particle-ai/particle-1:free", "choices": [{"message": {
+            final = {"model": "gemini-3.6-flash", "choices": [{"message": {
                 "role": "assistant", "content": json.dumps({
                     "task_id": 901, "status": "patch", "task": "Update demo value",
-                    "summary": "Used OpenRouter after Gemini provider failure.", "patch": patch_text,
+                    "summary": "Used the Gemini fallback after primary capacity error.", "patch": patch_text,
                 }),
             }}]}
             with patch.dict("os.environ", {
-                "OPENROUTER_API_KEY": "openrouter-test-key",
-                "OPENROUTER_API_URL": "https://openrouter.example/chat/completions",
-                "OPENROUTER_MODEL": "particle-ai/particle-1:free",
+                "GEMINI_FALLBACK_MODEL": "gemini-3.6-flash",
+                "OPENROUTER_API_KEY": "must-never-be-used",
             }):
                 with patch("intelligence.autonomy.agent_runtime._request_json",
                            side_effect=[WorkerError("Gemini HTTP 503 capacity"),
-                                        WorkerError("Gemini fallback model HTTP 503 capacity"),
                                         tool_response(read_call), tool_response(validate_call), final]) as request:
                     result = run_agent_cycle(
                         root, task, "brief", "no memory", "gemini-test-key",
                         "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                        "gemini-3.8-flash", ("nvidia/nemotron-3.5-super-vl:free",), _validate_patch,
+                        "gemini-3.8-flash", (), _validate_patch,
                     )
             self.assertEqual(result["status"], "patch")
-            self.assertEqual(result["served_model"], "particle-ai/particle-1:free")
-            self.assertEqual(request.call_args_list[0].args[:2], (
-                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                "gemini-test-key",
-            ))
-            self.assertEqual(request.call_args_list[1].args[:2], (
-                "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                "gemini-test-key",
-            ))
+            self.assertEqual(result["served_model"], "gemini-3.6-flash")
+            self.assertEqual(request.call_count, 4)
+            for call in request.call_args_list:
+                self.assertEqual(call.args[0], "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+                self.assertEqual(call.args[1], "gemini-test-key")
             self.assertEqual(request.call_args_list[1].args[2]["model"], "gemini-3.6-flash")
-            self.assertEqual(request.call_args_list[2].args[:2], (
-                "https://openrouter.example/chat/completions", "openrouter-test-key",
-            ))
-            self.assertEqual(request.call_args_list[2].args[2]["model"], "particle-ai/particle-1:free")
-            self.assertEqual(request.call_count, 5)
 
     def test_patch_validation_failure_returns_current_numbered_source_for_one_repair(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -236,7 +225,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertIn("current_file_lines", repair_payload)
             self.assertIn("VALUE = 'old'", repair_payload)
 
-    def test_patch_validation_stops_after_eight_rejected_submissions(self):
+    def test_patch_validation_stops_after_ten_rejected_submissions(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             make_repo(root)
@@ -255,18 +244,18 @@ class AgentToolRuntimeTests(unittest.TestCase):
             responses = [
                 response(tool_call("read-1", "read_repo_file", {"path": "intelligence/runtime/demo.py"}))
             ]
-            for attempt in range(1, 9):
+            for attempt in range(1, 11):
                 responses.append(response(tool_call(
                     f"validate-{attempt}", "validate_patch",
                     {"patch": f"not a unified diff, attempt {attempt}"},
                 )))
             with patch("intelligence.autonomy.agent_runtime._request_json", side_effect=responses) as request:
-                with self.assertRaisesRegex(WorkerError, "after 8 permitted submissions"):
+                with self.assertRaisesRegex(WorkerError, "after 10 permitted submissions"):
                     run_agent_cycle(
                         root, task, "brief", "no memory", "fake-key",
                         "https://example.invalid/chat", "builder-model", (), _validate_patch,
                     )
-            self.assertEqual(request.call_count, 9)
+            self.assertEqual(request.call_count, 11)
             self.assertFalse((root / "pwned").exists())
 
     def test_tool_result_serialization_preserves_full_reads_and_never_breaks_json(self):
