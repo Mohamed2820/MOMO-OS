@@ -119,6 +119,27 @@ def _parse_model_document(content: object) -> dict:
     return document
 
 
+def _recover_raw_diff(content: object, task: dict) -> dict | None:
+    """Recover a plain unified diff when a model omits the requested JSON wrapper."""
+    if isinstance(content, list):
+        content = "".join(
+            part.get("text", "") for part in content if isinstance(part, dict)
+        )
+    if not isinstance(content, str):
+        return None
+    start = content.find("diff --git ")
+    if start < 0:
+        return None
+    patch = content[start:].strip()
+    return {
+        "task_id": task["task_id"],
+        "status": "patch",
+        "task": task["title"],
+        "summary": "Recovered a plain unified diff from the provider response.",
+        "patch": patch,
+    }
+
+
 def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
     system = (
         "You are MOMO CELL, an autonomous software engineering worker for MOMO-OS. "
@@ -193,7 +214,12 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
         content = choice["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
         raise WorkerError("Provider response is missing the expected choice/message content") from exc
-    document = _parse_model_document(content)
+    try:
+        document = _parse_model_document(content)
+    except WorkerError:
+        document = _recover_raw_diff(content, task)
+        if document is None:
+            raise
     return validate_task_response(document, task)
 
 
