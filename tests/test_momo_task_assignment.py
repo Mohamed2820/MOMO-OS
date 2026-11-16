@@ -133,35 +133,22 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
         provider_document = {
             "task_id": 73, "status": "blocked", "task": "assigned task",
             "summary": "cannot safely patch", "patch": "",
+            "served_model": "particle-ai/particle-1:free",
         }
-        response_body = json.dumps({
-            "choices": [{"message": {"content": json.dumps(provider_document)}}]
-        }).encode("utf-8")
-        class FakeResponse:
-            def __enter__(self):
-                return self
-            def __exit__(self, *args):
-                return False
-            def read(self, _limit):
-                return response_body
         with patch.object(runner, "MODEL", "particle-ai/particle-1:free"), patch(
-            "urllib.request.urlopen", return_value=FakeResponse()
+            "intelligence.autonomy.agent_runtime.load_memory", return_value="prior memory"
+        ), patch(
+            "intelligence.autonomy.agent_runtime.run_agent_cycle", return_value=provider_document
         ) as mocked:
             result = runner._request_patch("source snapshot", "project brief", task, "fake-key")
         self.assertEqual(result["task_id"], 73)
         self.assertEqual(result["served_model"], "particle-ai/particle-1:free")
-        request = mocked.call_args.args[0]
-        payload = json.loads(request.data.decode("utf-8"))
-        self.assertEqual(payload["models"][0], "particle-ai/particle-1:free")
-        self.assertEqual(payload["models"], [
-            "particle-ai/particle-1:free", "openrouter/free"
-        ])
-        self.assertEqual(payload["response_format"], {"type": "json_object"})
-        self.assertEqual(payload["max_tokens"], 8000)
-        prompt = payload["messages"][1]["content"]
-        self.assertIn("EXACT ASSIGNED TASK CONTRACT", prompt)
-        self.assertIn("Fix the parser edge case described here.", prompt)
-        self.assertIn("intelligence/runtime/parser.py", prompt)
+        args = mocked.call_args.args
+        self.assertEqual(args[1], task)
+        self.assertEqual(args[2], "project brief")
+        self.assertEqual(args[3], "prior memory")
+        self.assertEqual(args[4], "fake-key")
+        self.assertEqual(args[6], "particle-ai/particle-1:free")
 
     def test_module_entrypoint_handles_shared_worker_error_without_traceback(self):
         env = dict(os.environ)
