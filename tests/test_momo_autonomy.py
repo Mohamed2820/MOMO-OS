@@ -17,6 +17,18 @@ def text_patch(path="intelligence/runtime/example.py"):
 
 
 class AutonomyPolicyTests(unittest.TestCase):
+    def test_project_brief_is_bounded_for_small_context_models(self):
+        from intelligence.autonomy.runner import MAX_PROJECT_BRIEF_CHARS, _project_brief
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "docs").mkdir()
+            for name in ("MASTER_EXECUTION_PLAN.md", "ROADMAP.md", "ARCHITECTURE.md"):
+                (root / "docs" / name).write_text("reference " * 10_000, encoding="utf-8")
+            brief = _project_brief(root)
+        self.assertLessEqual(len(brief), MAX_PROJECT_BRIEF_CHARS)
+        self.assertIn("MASTER_EXECUTION_PLAN.md", brief)
+
     def test_allows_scoped_source_and_test_files(self):
         self.assertTrue(_allowed("intelligence/runtime/example.py"))
         self.assertTrue(_allowed("tests/test_example.py"))
