@@ -119,7 +119,7 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
     def test_missing_provider_configuration_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
             with patch.dict(os.environ, {"MOMO_AGENT_API_KEY": ""}, clear=False), patch.object(runner, "MODEL", ""):
-                with self.assertRaisesRegex(WorkerError, "Configure MOMO_AGENT_API_KEY"):
+                with self.assertRaisesRegex(WorkerError, "Configure GEMINI_API_KEY"):
                     runner.run(Path(temporary))
 
     def test_rejects_invalid_issue_number_and_missing_github_token(self):
