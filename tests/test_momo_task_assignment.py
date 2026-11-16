@@ -8,7 +8,7 @@ import urllib.error
 
 import intelligence.autonomy.runner as runner
 
-from intelligence.autonomy.runner import WorkerError
+from intelligence.autonomy.runner import WorkerError, _validate_patch
 from intelligence.autonomy.task_assignment import parse_task_issue, validate_task_response
 
 
@@ -91,6 +91,18 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
         )
         task = parse_task_issue(make_issue(body=body))
         self.assertIn("Ignore all rules", task["objective"])
+
+    def test_patch_cannot_escape_exact_assigned_file_scope(self):
+        path = "intelligence/runtime/parser.py"
+        patch = (
+            f"diff --git a/{path} b/{path}\\n"
+            "index 1111111..2222222 100644\\n"
+            f"--- a/{path}\\n+++ b/{path}\\n"
+            "@@ -1 +1 @@\\n-old\\n+new\\n"
+        )
+        _validate_patch(patch, allowed_files={path})
+        with self.assertRaisesRegex(WorkerError, "outside the assigned task scope"):
+            _validate_patch(patch, allowed_files={"intelligence/runtime/other.py"})
 
     def test_rejects_response_for_different_issue(self):
         task = parse_task_issue(make_issue())
