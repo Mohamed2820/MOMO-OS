@@ -1,4 +1,5 @@
 """Adversarial safety tests for the MOMO autonomous patch worker."""
+import json
 from pathlib import Path
 import tempfile
 import unittest
