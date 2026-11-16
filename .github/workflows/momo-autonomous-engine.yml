@@ -71,6 +71,7 @@ jobs:
           MOMO_AGENT_API_KEY: ${{ secrets.MOMO_AGENT_API_KEY }}
           MOMO_AGENT_MODEL: particle-ai/particle-1:free
           MOMO_AGENT_FALLBACK_MODELS: ${{ vars.MOMO_AGENT_FALLBACK_MODELS || 'openrouter/free' }}
+          MOMO_AGENT_REVIEW_MODEL: ${{ vars.MOMO_AGENT_REVIEW_MODEL || 'openrouter/free' }}
           MOMO_AGENT_API_URL: ${{ vars.MOMO_AGENT_API_URL }}
           MOMO_TASK_ISSUE_NUMBER: ${{ steps.assignment.outputs.task_issue_number }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -83,7 +84,7 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
           set -euo pipefail
-          python3 -m py_compile intelligence/autonomy/runner.py intelligence/autonomy/task_assignment.py
+          python3 -m py_compile intelligence/autonomy/runner.py intelligence/autonomy/task_assignment.py intelligence/autonomy/agent_runtime.py
           python3 -m unittest discover -s tests -p 'test_momo_*.py' -v
           git diff --check
 
@@ -98,6 +99,7 @@ jobs:
           fi
           git config user.name "momo-cell[bot]"
           git config user.email "momo-cell[bot]@users.noreply.github.com"
+          if [[ -f .momo-cell/memory/engineering.jsonl ]]; then git add -- .momo-cell/memory/engineering.jsonl; fi
           git diff --name-only -z | git add --pathspec-from-file=- --pathspec-file-nul
           git commit -m "feat(autonomy): apply verified MOMO CELL task patch"
           git push origin "HEAD:$BRANCH"
