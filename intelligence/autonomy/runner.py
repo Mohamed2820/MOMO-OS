@@ -309,6 +309,7 @@ def run(root: Path) -> int:
         raise WorkerError("Required repository context is unavailable.")
 
     from intelligence.autonomy.agent_runtime import append_memory, review_patch, run_fixed_tests
+    from intelligence.autonomy.evaluation import load_cases, score_run
 
     def apply_candidate(candidate: dict) -> tuple[str, list[str]]:
         patch_text = candidate.get("patch")
@@ -367,6 +368,15 @@ def run(root: Path) -> int:
     changed_files = sorted(set(_run_git("diff", "--name-only").stdout.splitlines()))
     if not changed_files or not set(changed_files).issubset(allowed_files):
         raise WorkerError("Final candidate changed files outside the assigned task scope.")
+    benchmark_cases = load_cases()
+    required_tools = next(
+        (case["required_tools"] for case in benchmark_cases if case["id"] == "repo-navigation"),
+        ["read_repo_file", "validate_patch"],
+    )
+    evaluation_score = score_run(
+        required_tools, proposal.get("tools_used", []), True, True, True,
+        1 if repair_lesson else 0,
+    )
     append_memory(root, {
         "task_id": task["task_id"], "title": task["title"],
         "served_model": proposal.get("served_model", MODEL),
@@ -376,6 +386,7 @@ def run(root: Path) -> int:
         "tool_calls": proposal.get("tool_calls", 0),
         "tools_used": proposal.get("tools_used", []),
         "patch_sha256": hashlib.sha256(patch.encode("utf-8")).hexdigest(),
+        "evaluation_score": evaluation_score,
         "lessons": repair_lesson or "Patch passed independent review and fixed verification on first attempt.",
     })
     print(json.dumps({
@@ -388,6 +399,7 @@ def run(root: Path) -> int:
         "tool_calls": proposal.get("tool_calls", 0),
         "tools_used": proposal.get("tools_used", []),
         "verification_passed": verification["passed"],
+        "evaluation_score": evaluation_score,
         "repair_used": bool(repair_lesson),
         "changed_files": changed_files,
     }, ensure_ascii=False))
