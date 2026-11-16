@@ -381,7 +381,7 @@ def _serialize_tool_result(output: dict) -> str:
 def _patch_repair_context(root: Path, task: dict, patch: str, error: str, attempt: int) -> dict:
     """Return bounded, actionable evidence for the one permitted patch correction."""
     paths = list(task.get("files_in_scope", []))
-    match = re.search(r"^diff --git a/([^\\s]+) b/([^\\s]+)$", patch, re.MULTILINE)
+    match = re.search(r"^diff --git a/([^\s]+) b/([^\s]+)$", patch, re.MULTILINE)
     if match and match.group(1) == match.group(2) and match.group(1) in paths:
         paths = [match.group(1)]
     evidence = []
@@ -389,7 +389,7 @@ def _patch_repair_context(root: Path, task: dict, patch: str, error: str, attemp
         try:
             target = _safe_file(root, relative)
             lines = target.read_text(encoding="utf-8").splitlines()
-            numbered = "\\n".join(f"{number:4}: {line}" for number, line in enumerate(lines[:180], 1))
+            numbered = "\n".join(f"{number:4}: {line}" for number, line in enumerate(lines[:180], 1))
             evidence.append({"path": relative, "current_file_lines": numbered[:7000]})
         except (WorkerError, OSError, UnicodeDecodeError) as exc:
             evidence.append({"path": relative, "read_error": type(exc).__name__})
