@@ -158,6 +158,21 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 with self.assertRaises(WorkerError):
                     review_patch(task, sample_patch(), "builder-model", "fake-key", "https://example.invalid")
 
+    def test_evaluation_dataset_and_weighted_score_are_deterministic(self):
+        from intelligence.autonomy.evaluation import load_cases, score_run
+
+        cases = load_cases()
+        self.assertGreaterEqual(len(cases), 6)
+        self.assertIn("prompt-injection", {case["id"] for case in cases})
+        score = score_run(
+            ["read_repo_file", "validate_patch"],
+            ["read_repo_file", "validate_patch"],
+            True, True, True, 0,
+        )
+        self.assertEqual(score["score"], 100)
+        failed = score_run(["read_repo_file", "validate_patch"], ["read_repo_file"], False, False, False, 2)
+        self.assertLess(failed["score"], 50)
+
 
 if __name__ == "__main__":
     unittest.main()
