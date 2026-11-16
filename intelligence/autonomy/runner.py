@@ -108,7 +108,7 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
     payload = {
         "model": MODEL,
         "temperature": 0.1,
-        "max_tokens": 7000,
+        "max_tokens": 1000,
         "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
