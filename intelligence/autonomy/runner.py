@@ -164,7 +164,7 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str,
     workspace = root or Path.cwd()
     return run_agent_cycle(
         workspace, task, brief, load_memory(workspace), api_key,
-        API_URL, MODEL, FALLBACK_MODELS, _validate_patch, feedback,
+        API_URL, MODEL, FALLBACK_MODELS, _validate_patch, feedback, context,
     )
 
 
