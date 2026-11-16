@@ -76,7 +76,7 @@ def _project_brief(root: Path) -> str:
         path = _safe_regular_file(root, name)
         if path is not None:
             text = path.read_text(encoding="utf-8")
-            parts.append(f"\n--- PROJECT PLAN: {name} ---\n{text[-18000:]}\n")
+            parts.append(f"\n--- PROJECT PLAN: {name} ---\n{text[-2500:]}\n")
     return "".join(parts)
 
 
