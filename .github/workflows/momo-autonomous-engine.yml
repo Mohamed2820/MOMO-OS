@@ -71,6 +71,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL || 'gemini-3.6-flash' }}
           GEMINI_API_URL: https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
           OPENROUTER_API_KEY: ${{ secrets.MOMO_AGENT_API_KEY }}
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL || 'particle-ai/particle-1:free' }}
