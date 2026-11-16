@@ -270,7 +270,7 @@ def _select_tools(task: dict) -> list[dict]:
     if len(scope) <= 1:
         selected = ["read_repo_file", "search_repo", "run_fixed_tests", "validate_patch"]
         task_text = " ".join(str(task.get(key, "")) for key in ("title", "objective", "test_commands"))
-        if re.search(r"\\b(ci|workflow|actions|job|build)\\b", task_text, re.IGNORECASE):
+        if re.search(r"\b(ci|workflow|actions|job|build)\b", task_text, re.IGNORECASE):
             selected.extend(["get_recent_ci_runs", "get_ci_run_jobs"])
     else:
         selected = [item["function"]["name"] for item in TOOLS]
