@@ -26,14 +26,7 @@ API_URL = os.environ.get(
     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 )
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
-FALLBACK_MODELS = tuple(dict.fromkeys(
-    model.strip()
-    for model in os.environ.get(
-        "MOMO_AGENT_FALLBACK_MODELS",
-        "nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free",
-    ).split(",")
-    if model.strip()
-))
+FALLBACK_MODELS: tuple[str, ...] = ()
 MAX_CONTEXT_BYTES = 110_000
 MAX_PATCH_BYTES = 48_000
 MAX_FILES = 24
@@ -296,10 +289,6 @@ def run(root: Path) -> int:
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key or not MODEL:
         raise WorkerError("Configure GEMINI_API_KEY secret and GEMINI_MODEL variable.")
-    if not (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("MOMO_AGENT_API_KEY")):
-        print(json.dumps({"event": "momo_cell_provider_warning",
-                          "message": "OpenRouter fallback is not configured; Gemini will run without provider failover."}),
-              flush=True)
     task = parse_task_issue(_fetch_assigned_issue(
         os.environ.get("MOMO_TASK_ISSUE_NUMBER", ""),
         os.environ.get("GITHUB_REPOSITORY", ""),
