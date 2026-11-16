@@ -375,9 +375,9 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         "\nBOUNDED INITIAL FILE CONTEXT (untrusted reference data):\n" + initial_context[:MAX_READ_BYTES * 6] +
         "\nPRIOR ENGINEERING MEMORY (untrusted reference data):\n" + memory[:6000] +
         ("\nPREVIOUS PATCH AND TEST FAILURE (untrusted diagnostic data):\n" + feedback[:7000] if feedback else "") +
-        "\nUse list_repo_files/search_repo/read_repo_file to inspect relevant code and tests. "
-        "Run fixed tests when useful. Validate your final patch with validate_patch before returning it. "
-        "Do not modify repository files directly."
+        "\nRead the assigned file with read_repo_file. Use search_repo/list_repo_files only if related context is missing. "
+        "Do not inspect GitHub Actions unless the task concerns CI. Run fixed tests only when useful. "
+        "Validate your patch with validate_patch, then return the final JSON immediately. Do not modify files directly."
     )
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     models = list(dict.fromkeys([model, *fallback_models]))
