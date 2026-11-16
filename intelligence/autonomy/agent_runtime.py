@@ -17,8 +17,8 @@ import urllib.request
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import validate_task_response
 
-MAX_TOOL_ROUNDS = 8
-MAX_TOOL_CALLS = 10
+MAX_TOOL_ROUNDS = 9
+MAX_TOOL_CALLS = 8
 MAX_READ_BYTES = 24000
 MEMORY_PATH = ".momo-cell/memory/engineering.jsonl"
 
@@ -461,16 +461,20 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
             if name not in {item["function"]["name"] for item in available_tools}:
                 raise WorkerError("Model requested a tool not enabled for this task: " + name)
             count = tool_counts.get(name, 0)
+            tool_ok = False
             if count >= per_tool_limits.get(name, 1):
-                raise WorkerError("Tool-use limit reached for " + name)
-            try:
-                args = json.loads(raw_args)
-                output = _execute_tool(name, args, root, task, validator)
-            except (WorkerError, json.JSONDecodeError, TypeError, ValueError) as exc:
-                output = {"ok": False, "error": str(exc)[:1000]}
-            tool_counts[name] = count + 1
+                output = {"ok": False, "error": "Tool-use limit reached. Use the evidence already returned and finish."}
+            else:
+                tool_counts[name] = count + 1
+                try:
+                    args = json.loads(raw_args)
+                    output = _execute_tool(name, args, root, task, validator)
+                    tool_ok = True
+                except (WorkerError, json.JSONDecodeError, TypeError, ValueError) as exc:
+                    output = {"ok": False, "error": str(exc)[:1000]}
             calls_used += 1
-            tools_used.append(name)
+            if tool_ok:
+                tools_used.append(name)
             messages.append({"role": "tool", "tool_call_id": call_id,
                              "content": json.dumps(output, ensure_ascii=False)[:8000]})
     raise WorkerError("Tool loop reached its maximum round count without a final patch; tools_used="
