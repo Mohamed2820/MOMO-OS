@@ -17,6 +17,23 @@ def text_patch(path="intelligence/runtime/example.py"):
 
 
 class AutonomyPolicyTests(unittest.TestCase):
+    def test_model_document_parser_accepts_plain_json_fenced_json_and_content_parts(self):
+        from intelligence.autonomy.runner import _parse_model_document
+
+        expected = {"task_id": 63, "status": "blocked", "task": "x", "summary": "y"}
+        encoded = '{"task_id":63,"status":"blocked","task":"x","summary":"y"}'
+        self.assertEqual(_parse_model_document(encoded), expected)
+        self.assertEqual(_parse_model_document("Result:\n```json\n" + encoded + "\n```"), expected)
+        self.assertEqual(_parse_model_document([{"type": "text", "text": encoded}]), expected)
+
+    def test_model_document_parser_rejects_non_object_content(self):
+        from intelligence.autonomy.runner import _parse_model_document
+
+        for content in ("", "not json", "[]", None):
+            with self.subTest(content=content):
+                with self.assertRaises(WorkerError):
+                    _parse_model_document(content)
+
     def test_project_brief_is_bounded_for_small_context_models(self):
         from intelligence.autonomy.runner import MAX_PROJECT_BRIEF_CHARS, _project_brief
 
