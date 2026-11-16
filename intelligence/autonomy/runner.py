@@ -205,7 +205,7 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
         "models": list(dict.fromkeys([MODEL, *FALLBACK_MODELS])),
         "provider": {"allow_fallbacks": True},
         "temperature": 0.1,
-        "max_tokens": 3000,
+        "max_tokens": 8000,
         "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
