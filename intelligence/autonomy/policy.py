@@ -32,13 +32,6 @@ class WorkerError(RuntimeError):
     """Raised when the worker cannot safely produce or apply a patch."""
 
 
-def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args], check=check, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, timeout=30,
-    )
-
-
 def _allowed(path: str) -> bool:
     if not isinstance(path, str) or not path or path != path.strip():
         return False
@@ -59,6 +52,3 @@ def _allowed(path: str) -> bool:
     if pure.name in BLOCKED_NAMES or pure.suffix.lower() in {".pem", ".key", ".p12", ".pfx"}:
         return False
     return path.startswith(ALLOWED_PREFIXES)
-
-
-from intelligence.autonomy.task_assignment import parse_task_issue, validate_task_response
