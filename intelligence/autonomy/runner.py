@@ -126,6 +126,27 @@ def _request_patch(context: str, brief: str, task: dict, api_key: str) -> dict:
     try:
         with urllib.request.urlopen(request, timeout=90) as response:
             result = json.loads(response.read(2_000_000).decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        # HTTPError carries the provider response body; expose only its bounded,
+        # credential-scrubbed error payload so CI logs identify the real cause.
+        try:
+            raw_error = exc.read(4096).decode("utf-8", errors="replace")
+        except Exception:
+            raw_error = ""
+        raw_error = raw_error.replace(api_key, "[REDACTED]") if api_key else raw_error
+        try:
+            parsed_error = json.loads(raw_error) if raw_error else {}
+            error_value = parsed_error.get("error", parsed_error)
+            if isinstance(error_value, dict):
+                detail = error_value.get("message") or error_value.get("code") or error_value.get("type") or str(error_value)
+            else:
+                detail = str(error_value)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            detail = raw_error
+        detail = re.sub(r"(?i)(bearer\\s+)[^\\s,;]+", r"\\1[REDACTED]", str(detail))
+        detail = re.sub(r"(?i)(sk-or-v1-|sk-[A-Za-z0-9_-]{8,})[A-Za-z0-9_-]*", "[REDACTED]", detail)
+        detail = " ".join(detail.split())[:1200] or "No provider error body returned"
+        raise WorkerError(f"Model provider returned HTTP {exc.code}: {detail}") from None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise WorkerError(f"Model provider request failed: {type(exc).__name__}") from exc
     try:
