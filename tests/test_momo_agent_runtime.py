@@ -189,6 +189,14 @@ class AgentToolRuntimeTests(unittest.TestCase):
             make_repo(root)
             task = sample_task()
             bad_patch = "not a unified diff"
+            second_bad_patch = (
+                "diff --git a/intelligence/runtime/demo.py b/intelligence/runtime/demo.py\n"
+                "--- a/intelligence/runtime/demo.py\n"
+                "+++ b/intelligence/runtime/demo.py\n"
+                "@@ -1 +1 @@\n"
+                "-VALUE = 'also-stale'\n"
+                "+VALUE = 'new'\n"
+            )
 
             def tool_call(call_id, name, arguments):
                 return {"id": call_id, "type": "function", "function": {
@@ -203,7 +211,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
             responses = [
                 response(tool_call("read-1", "read_repo_file", {"path": "intelligence/runtime/demo.py"})),
                 response(tool_call("validate-1", "validate_patch", {"patch": bad_patch})),
-                response(tool_call("validate-2", "validate_patch", {"patch": bad_patch})),
+                response(tool_call("validate-2", "validate_patch", {"patch": second_bad_patch})),
             ]
             with patch("intelligence.autonomy.agent_runtime._request_json", side_effect=responses) as request:
                 with self.assertRaisesRegex(WorkerError, "after the two permitted submissions"):
