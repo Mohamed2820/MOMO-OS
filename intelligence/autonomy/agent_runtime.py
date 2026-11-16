@@ -57,10 +57,11 @@ def _tracked(root: Path) -> list[str]:
     return [item for item in result.stdout.split("\x00") if item]
 
 
-def _safe_file(root: Path, relative: str) -> Path:
+def _safe_file(root: Path, relative: str, tracked: list[str] | None = None) -> Path:
     if not _allowed(relative):
         raise WorkerError("Path is outside the repository read policy")
-    if relative not in set(_tracked(root)):
+    known = tracked if tracked is not None else _tracked(root)
+    if relative not in known:
         raise WorkerError("Only tracked repository files may be read")
     target = root
     for part in PurePosixPath(relative).parts:
@@ -83,14 +84,15 @@ def _search_repo(root: Path, query: str) -> dict:
     if not isinstance(query, str) or not 2 <= len(query.strip()) <= 120:
         raise WorkerError("Search query must contain 2 to 120 characters")
     needle, matches, scanned = query.casefold(), [], 0
-    for relative in _tracked(root):
+    tracked = _tracked(root)
+    for relative in tracked:
         if not _allowed(relative):
             continue
         scanned += 1
         if scanned > 300:
             break
         try:
-            data = _safe_file(root, relative).read_bytes()
+            data = _safe_file(root, relative, tracked).read_bytes()
             if len(data) > 100000:
                 continue
             lines = data.decode("utf-8").splitlines()
