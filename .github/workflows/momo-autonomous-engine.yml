@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile intelligence/autonomy/runner.py intelligence/autonomy/task_assignment.py
-          python3 -m unittest -v tests.test_momo_autonomy tests.test_momo_task_assignment
+          python3 -m unittest discover -s tests -p 'test_momo_*.py' -v
           git diff --check
 
       - name: Commit and publish the candidate branch
