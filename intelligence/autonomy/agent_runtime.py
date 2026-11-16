@@ -119,7 +119,7 @@ def run_fixed_tests(root: Path) -> dict:
     commands = [
         ["python3", "-m", "unittest", "discover", "-s", "tests", "-p", "test_momo_*.py", "-v"],
         ["python3", "-m", "py_compile", "intelligence/autonomy/runner.py",
-         "intelligence/autonomy/task_assignment.py", "intelligence/autonomy/agent_runtime.py"],
+         "intelligence/autonomy/task_assignment.py", "intelligence/autonomy/agent_runtime.py", "intelligence/autonomy/evaluation.py"],
         ["git", "diff", "--check"],
     ]
     results, passed = [], True
@@ -187,7 +187,7 @@ def append_memory(root: Path, record: dict) -> None:
         old = path.read_text(encoding="utf-8").splitlines()[-100:]
         path.write_text("\n".join(old) + "\n", encoding="utf-8")
     fields = ("task_id", "title", "served_model", "reviewer_model", "summary", "tests_passed",
-              "changed_files", "tool_calls", "tools_used", "patch_sha256", "lessons")
+              "changed_files", "tool_calls", "tools_used", "patch_sha256", "evaluation_score", "lessons")
     safe = {key: record.get(key) for key in fields}
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(safe, ensure_ascii=False, sort_keys=True) + "\n")
