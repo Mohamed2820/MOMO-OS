@@ -220,7 +220,7 @@ No fixed delivery date is promised until build capacity, device access, maintain
 
 ### Explicitly not complete
 
-The journal is integrated into TaskCoordinator: accepted plan steps are registered in the same SQLite transaction as the parent task, immutable plan and task events. The journal and coordinator are mirrored into the Buildroot rootfs overlay, with source/overlay parity tests. The target image has not yet been rebuilt with the coordinator integration and startup recovery hook or validated in QEMU. No tool execution adapter, authenticated IPC, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered.
+The journal is integrated into TaskCoordinator: accepted plan steps are registered in the same SQLite transaction as the parent task, immutable plan and task events. The journal and coordinator are mirrored into the Buildroot rootfs overlay, with source/overlay parity tests. The target image has not yet been rebuilt with the coordinator integration and startup recovery hook or validated in QEMU. No tool execution adapter, authenticated user/session identity, native OS sandbox, deadline scheduler, backoff service, concurrency/resource budget manager or outcome reconciler has been delivered.
 
 ### Next execution sequence
 
@@ -297,46 +297,116 @@ PR #42 has been merged into the bootable development branch. It integrates the s
 
 Integrated commit: `a7a4caf381553d9a697b68a093eff9520d8b0bda`.
 
-Verified acceptance runs:
-- x86_64 image: [run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) — build, output verification, QEMU boot, `MOMO OS READY`, IPC status response and artifact upload all succeeded. Artifact ID 14057431431.
-- AArch64 image: [run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951) — build, output verification, QEMU boot, `MOMO OS READY`, IPC status response and artifact upload all succeeded. Artifact ID 14055169054.
+Current acceptance runs:
+- x86_64 image: [run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817) — build in progress at last inspection.
+- AArch64 image: [run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951) — build in progress at last inspection.
 
-These results apply to integrated commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`, not automatically to later commits. The execution-gate revision requires its own fresh x86_64 and AArch64 image runs. Repository-validation is not a substitute for either image test.
+Do not merge further changes to the bootable branch while these image workflows are running. Once complete, inspect kernel/rootfs outputs, QEMU serial logs, IPC status response and uploaded artifacts independently for each architecture. Green repository-validation is not a substitute for either image test.
 
 Remaining gates: resolve image/boot failures; adversarial IPC/seccomp tests; explicit operation/capability authorization; namespace and cgroup isolation plus LSM policy; durable side-effect idempotency and recovery; only then a non-privileged executor adapter. Android remains a separate AOSP/Binder-AIDL/SELinux/AppOps track, followed by per-device bootloader/kernel/DTB/firmware/driver validation.
 
 
-## Execution Authorization Gate — 2026-11-14
+## Execution Progress Record — 2026-11-14: plan-bound execution and Linux IPC
 
-### Implemented on the active feature branch
-- Added `ApprovalStore` with cryptographically random, single-use, expiring tokens. The database stores token hashes only.
-- Bound approvals to task, step, action/domain, resource, risk, canonical plan digest and a supplied arguments digest.
-- Added the central `ExecutionGate` for plan-bound task and step start.
-- Blocked direct TaskStore and step-journal start paths for plan-bound work.
-- Kept high-risk approval consumption and step-start persistence in one SQLite write transaction; rollback restores the token if the start fails.
-- Added negative and concurrency tests for bypasses, mismatched plans/arguments, expiry, replay, races and injected transaction failures.
-- Repository validation passed 167 unit tests on code commit `47170e0132ae2142d0aa24eea10f26dc35590bc2` in PR #45.
+### Delivered in the integration candidate
+- Integrated the durable per-step journal with TaskCoordinator and the Buildroot rootfs overlay.
+- Added plan-bound task/step start enforcement, single-use expiring approval tokens, argument/plan binding, replay and concurrency regression tests.
+- Added Linux AF_UNIX framing, kernel-derived peer credentials and a read-only IPC status daemon under a dedicated unprivileged service account.
+- Added process limits, `no_new_privs` and a required libseccomp denylist for the status daemon.
+- Added x86_64 and AArch64 Buildroot/QEMU workflow definitions and refreshed the SRS, roadmap, support matrix and engineering specifications.
+- Added execution runtime, service API, Linux sandbox and Android integration design documents.
 
-### Explicit limitations
-The gate is an in-process authorization layer, not an OS boundary or executor. Approver labels are not yet authenticated identities; step-argument digests are caller-supplied; R0–R2 grant consumption occurs in a separate database and can be spent before a failed step start. No external tool dispatch is enabled. See [Execution Authorization Gate](EXECUTION_AUTHORIZATION_GATE.md).
+### Canonical validation
+Integration PR #48 passed repository validation on its current initial head: 167 unit tests, documentation/JSON validation, device-profile schema validation and shell utility checks (run [#43597582878](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597582878)). The PR remains an integration candidate until its latest head is revalidated after documentation/workflow additions.
 
-### Updated next execution sequence
-1. Rebuild the execution-gate revision for x86_64 and AArch64, boot both under QEMU, and inspect logs/artifacts.
-2. Add authenticated approver identity and broker-only approval issuance.
-3. Make low-risk grant reservation and step-start persistence atomic or provide a tested reservation protocol.
-4. Implement a separate Linux executor identity with per-task namespaces, cgroups, LSM and strict operation-specific seccomp.
-5. Define typed executor operations, trusted argument canonicalization, idempotency propagation, deadlines, cancellation and independent result verification.
-6. Keep tool execution disabled until adversarial tests and native OS enforcement pass.
-7. Continue core services, Android platform integration, device feasibility, user experience, AI runtime and release engineering in the master phase order.
+### Evidence not yet achieved
+- Fresh x86_64 QEMU build and boot for the execution gate + IPC daemon revision.
+- Fresh AArch64 QEMU build and boot for the same revision.
+- Production Linux namespaces/cgroups/LSM policy and strict per-service seccomp allowlists.
+- Authenticated human/session identity; the approval issuer still accepts a caller-asserted approver label.
+- Operation-specific argument schemas, a typed executor, and outcome reconciliation; canonical argument digests are now derived internally from strict JSON, but no tools are dispatched.
+- Production Linux namespaces/cgroups/LSM enforcement and strict per-service sandbox policies.
+- Android AOSP baseline, Binder/AIDL services, SELinux/AppOps integration and physical device port.
+
+### Next critical path
+1. Re-run repository validation on the latest PR #48 head.
+2. Build and boot the x86_64 and AArch64 QEMU images; inspect serial logs and artifacts.
+3. Fix all build/boot failures before promoting the integration.
+4. Close the remaining execution trust gaps: authenticated human/session identity, operation-specific schema validation, typed executor boundary, native OS isolation, and independent outcome reconciliation. Canonical argument digest computation is now performed by the public gate from exact JSON input, but remains source-level until CI/QEMU evidence is recorded.
+5. Add native Linux service isolation and split authority-bearing databases behind service APIs.
+6. Implement one non-destructive typed reference adapter, then test timeout, cancellation, idempotency and ambiguous outcomes.
+7. Only then progress to Android platform selection and device feasibility.
 
 
-## Fresh Execution-Gate Image Acceptance — 2026-11-14
+## Section 1 continuation — canonical argument authorization
 
-The Buildroot image cache recovery was merged in PR #49. The integrated execution-gate revision now has fresh x86_64 and AArch64 QEMU evidence on commit `b762dd742e8b3b3ede0e5f98578960446c9b5e25`:
+The public step-approval API now requires the raw bounded JSON argument payload and computes the canonical digest internally. The public gate step-start API also requires raw JSON, independently computes the digest, and exposes a deeply immutable parsed argument structure for a future executor. Caller-supplied digests are rejected at the public approval/start APIs. Source modules are mirrored byte-for-byte into the Buildroot rootfs. Focused parser, gate, approval and immutability tests are present, but a fresh CI run on the latest PR #48 head is still required.
 
-- x86_64: [run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201), artifact 14115143750. Build, output verification, QEMU readiness, read-only IPC response and artifact upload passed.
-- AArch64: [run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262), artifact 14114803046. Build, output verification, QEMU readiness, read-only IPC response and artifact upload passed.
+The earlier AArch64 QEMU run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) completed build, image verification, QEMU readiness, provenance and artifact upload on older commit `eac08aedb9a5e5fc0c4a87eaf1a973bf525242ab`. The AArch64 run [#43598435820](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435820) completed image verification, QEMU readiness, provenance and artifact upload on that older commit. The x86_64 run [#43598435846](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43598435846) remains in kernel/rootfs compilation on the same older commit. Neither is acceptance evidence for the latest PR head.
 
-Both guests reported `MOMO OS READY`, the correct architecture and `tool_execution: disabled`. The execution-gate code commit passed repository validation with 167 unit tests. This closes the current virtual image integration gate for the gate revision; it does not close physical device, Android, executor or release gates.
 
-The next critical path is authenticated approval identity → trusted argument canonicalization → atomic grant reservation/dispatch intent → per-task OS sandbox → typed executor protocol → independent outcome reconciliation. No side-effecting tool execution is permitted before these gates pass.
+## Typed read-only execution increment — 2026-11-14
+
+A narrow typed executor is now implemented in `intelligence/runtime/typed_executor.py` and mirrored byte-for-byte into the Buildroot rootfs. The registry only accepts R0/R1 operation specs. Its first operation, `system.status.read`, has an exact empty-object argument schema, requires the matching planned domain/capability/risk, enters through the argument-bound ExecutionGate, executes a fixed in-process read-only handler, hashes the returned JSON object and records the result in the durable step journal. No request can supply a shell command or handler.
+
+Focused tests now cover success, unknown-operation denial, schema mismatch, plan mismatch, high-risk registration rejection, immutable result data and adapter failure recording. The CI workflow now includes the typed executor in source/rootfs compile checks and parity tests, and integration branches are included in the repository-validation push filter. This source increment still needs a fresh successful CI run. It is not a side-effecting executor and does not solve authenticated human identity, deadlines/cancellation, durable side-effect idempotency, OS sandboxing or outcome reconciliation.
+
+
+## Kernel isolation prerequisites — 2026-11-14
+
+Added `board/momo/kernel-security.fragment` to request namespaces, cgroups and resource controllers, seccomp filtering and Landlock. Both x86_64 and AArch64 Buildroot workflows now apply this fragment and verify the generated kernel configuration with `tools/validate_kernel_security_config.py`. Unit tests cover the validator. This is a prerequisite, not a completed sandbox: per-service namespace entry, cgroup assignment, Landlock rules, network/filesystem policy and adversarial tests remain open until the images pass.
+
+
+## Landlock filesystem boundary for IPC status service — 2026-11-14
+
+The unprivileged read-only IPC daemon now applies Landlock after binding its socket and loading seccomp. It can read/execute from `/usr`, read from `/etc`, and inspect/remove its own socket under `/run/momo`; other handled filesystem access is denied. The setup is fail-closed. A subprocess test checks allowed reads, denied reads outside the allowlist and denied writes.
+
+This is a real filesystem restriction for the status daemon, not a complete MOMO sandbox. Per-service namespaces, cgroups, network isolation, a strict syscall allowlist, authenticated principal mapping and security enforcement for future task/executor services remain open. The Landlock code and test require fresh CI and QEMU boot evidence before promotion.
+
+
+## IPC status-service namespace and cgroup profile — 2026-11-14
+
+Added `momo-ipc-sandbox`, a root-started launcher that moves the daemon into a dedicated cgroup before dropping privileges, creates private mount/IPC/UTS/network namespaces, makes mount propagation private, clears supplementary groups, drops to the dedicated `momo-ipc` UID/GID and sets `no_new_privs`. Init script `S98momo-ipc` now requires cgroup v2 CPU/memory/PID controllers and sets a 50% CPU quota, 128 MiB memory limit and 16-process limit. The daemon then applies its existing seccomp denylist and Landlock filesystem boundary.
+
+This is a per-service sandbox profile for the read-only status daemon only. PID/user namespaces, task/executor service isolation, authenticated human/session identity, a strict syscall allowlist, network firewall policy, and adversarial QEMU tests remain open. The wrapper/init changes have not yet passed a fresh CI/QEMU run; do not mark the sandbox gate complete until they do.
+
+
+## Section 1 of the four remaining implementation sections — execution authorization foundation
+
+### Scope and implementation result
+- [x] D1: block the CLI transition command from entering `EXECUTING`; execution must use the gate.
+- [x] D2: block direct low-level step starts for plan-bound tasks and reject step records not present in the accepted plan.
+- [x] D3: replace caller-constructed approval objects with server-issued, random, expiring, single-use tokens stored by hash.
+- [x] D4: bind approvals to task/step, operation/domain, risk, immutable plan digest and exact canonical argument digest; reject mismatch, expiry, replay and concurrent double-consumption.
+- [x] Derive argument digests from bounded strict JSON inside the public approval/start APIs; return deeply immutable authorized arguments.
+- [x] Add focused negative, replay, expiry, concurrency, rollback, tamper and rootfs-parity tests.
+- [x] Add a typed R0/R1 read-only reference executor limited to the fixed `system.status.read` operation; keep IPC tool dispatch disabled.
+- [x] Add Linux status-daemon namespace/cgroup/seccomp/Landlock setup and QEMU assertions.
+- [x] Latest repository validation passed 204 tests on PR #48 code commit `39499f7e0d16d8c2dd6f2f3d2060a9d8fdc7048d` (run [#43605424201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43605424201)); the latest documentation-updated head also passed 204 tests (run [#43605522144](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43605522144)).
+
+### Remaining exit evidence
+- [ ] Fresh x86_64 QEMU image passes namespace inode, cgroup, Landlock, seccomp, network restriction and MOMO readiness assertions.
+- [ ] Fresh AArch64 QEMU image passes the same assertions.
+- [ ] Inspect and retain both successful image artifacts, boot logs, build metadata and hashes.
+- [ ] Review the complete PR diff and merge PR #48 only after both image acceptance runs pass.
+
+Previous image attempts built and reached `MOMO OS READY` but failed final acceptance because namespace reporting compared against `/proc/1` and returned false. The daemon now verifies its live namespace inode identities against values captured by the root launcher immediately after `unshare()`. Corrected image workflows are running; the section remains open until both architectures pass.
+
+**Boundary:** this section does not enable arbitrary or side-effecting tools. The IPC service remains read-only. Authenticated human/session identity, side-effecting operation adapters, full task/executor sandboxing, deadline/cancellation orchestration, outcome reconciliation, Android platform enforcement and physical-device qualification remain later sections.
+
+
+## MOMO CELL integration before Section 2 — 2026-11-14
+
+- [x] Add MOMO CELL as a first-class architecture subsystem, independent from boot-critical services.
+- [x] Implement an allowlisted specialist-cell registry (Guardian, Builder, Contract) with bounded repository traversal and file-size limits.
+- [x] Implement read-only Python AST and JSON contract checks plus required-document checks.
+- [x] Emit structured findings and approval-required repair proposals without mutating source files.
+- [x] Add unit tests proving detection, bounded scope, duplicate-cell rejection, and no file mutation.
+- [x] Run the health scan in repository validation and add a scheduled/manual GitHub Actions health cycle with retained JSON report.
+- [x] Merge MOMO CELL PR #57 into the execution-runtime integration branch (merge commit `a09f17d375cd046c507b88ce661a745cfb84b5b2`).
+- [ ] Extend the typed executor with a dedicated, authenticated, sandboxed repair-proposal adapter before enabling any source writes.
+
+**Operational boundary:** MOMO CELL v1 is active as a deterministic self-monitoring and repair-planning subsystem. It is not yet an autonomous code-writing or self-merging system. Model-driven repair, isolated patch application, authenticated GitHub write identity, rollback verification, and adversarial testing remain explicit later gates. Section 2 must not treat those capabilities as already delivered.
+
+
+**Integration status:** MOMO CELL PR #57 is merged. Repository validation and the scheduled health cycle passed on the integrated branch. The x86_64 and AArch64 QEMU acceptance workflows are being checked against the final integrated revision before PR #48 can be merged to `main`.

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Run a bounded, read-only MOMO CELL system scan during startup.
+case "$1" in
+  start)
+    mkdir -p /var/log
+    if [ -x /usr/bin/momo-cell ]; then
+      /usr/bin/momo-cell --output /var/log/momo-cell-health.json \
+        >> /var/log/momo-cell.log 2>&1 || \
+        echo "[MOMO CELL] Health scan failed; continuing boot in degraded monitoring state."
+    fi
+    ;;
+  stop) ;;
+  restart) "$0" stop; "$0" start ;;
+  *) echo "Usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac
+exit 0

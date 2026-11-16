@@ -29,6 +29,8 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
             "orchestrator.py",
             "approval_store.py",
             "execution_gate.py",
+            "argument_binding.py",
+            "typed_executor.py",
         ):
             with self.subTest(module=name):
                 self.assertEqual(
@@ -133,6 +135,36 @@ class RuntimeOverlayIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(audit.returncode, 0, audit.stderr)
             self.assertEqual(json.loads(audit.stdout), [])
+
+    def test_momo_cell_overlay_matches_source(self):
+        source = ROOT / "intelligence/cell"
+        target = OVERLAY / "usr/lib/momo/intelligence/cell"
+        for name in ("__init__.py", "cli.py"):
+            with self.subTest(module=name):
+                self.assertEqual(
+                    (source / name).read_text(encoding="utf-8"),
+                    (target / name).read_text(encoding="utf-8"),
+                )
+
+    def test_momo_cell_boot_service_and_command_have_valid_shell_syntax(self):
+        for path in (
+            OVERLAY / "etc/init.d/S97momo-cell",
+            BIN / "momo-cell",
+        ):
+            with self.subTest(path=path.name):
+                result = subprocess.run(
+                    ["sh", "-n", str(path)], capture_output=True, text=True
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_system_scan_does_not_require_repository_documents(self):
+        from intelligence.cell import MomoCell
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "service.py").write_text("value = 1\n", encoding="utf-8")
+            report = MomoCell(include_repository_contracts=False).scan(root)
+            self.assertEqual(report.findings, ())
+            self.assertEqual(report.proposals, ())
 
 
 if __name__ == "__main__":

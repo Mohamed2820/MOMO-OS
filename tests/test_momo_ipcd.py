@@ -41,6 +41,10 @@ class IPCServiceTests(unittest.TestCase):
         self.assertEqual(response["request_id"], "status-1")
         self.assertEqual(response["result"]["tool_execution"], "disabled")
         self.assertEqual(response["result"]["capabilities"], ["status.read"])
+        self.assertEqual(
+            set(response["result"]["sandbox"]),
+            {"namespaces", "cgroup", "landlock", "seccomp", "network_socket_creation"},
+        )
         client.close()
         server.close()
 
@@ -107,7 +111,13 @@ class IPCServiceTests(unittest.TestCase):
             "assert resource.getrlimit(resource.RLIMIT_NOFILE) == (32, 32); "
             "assert resource.getrlimit(resource.RLIMIT_FSIZE) == (0, 0); "
             "assert ctypes.CDLL(None).prctl(39, 0, 0, 0, 0) == 1; "
-            "apply_seccomp_filter(); os.fork()"
+            "apply_seccomp_filter(); "
+            "import socket; "
+            "socket_denied=False\n"
+            "try: socket.socket()\n"
+            "except PermissionError: socket_denied=True\n"
+            "assert socket_denied, 'socket creation was not denied'\n"
+            "os.fork()"
         )
         env = os.environ.copy()
         env["PYTHONPATH"] = str(service_path)
@@ -117,6 +127,48 @@ class IPCServiceTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("PermissionError", result.stderr)
+
+    def test_landlock_confines_filesystem_to_read_only_allowlist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            allowed = root / "allowed"
+            blocked = root / "blocked"
+            allowed.mkdir()
+            blocked.mkdir()
+            (allowed / "read.txt").write_text("safe", encoding="utf-8")
+            (blocked / "secret.txt").write_text("private", encoding="utf-8")
+
+            service_path = ROOT / "board/momo/rootfs-overlay/usr/lib/momo"
+            code = """from pathlib import Path
+import sys
+from momo_ipcd import apply_landlock_restrictions
+
+allowed = Path(sys.argv[1])
+blocked = Path(sys.argv[2])
+apply_landlock_restrictions(read_paths=(allowed,), removable_paths=())
+assert (allowed / "read.txt").read_text(encoding="utf-8") == "safe"
+try:
+    (blocked / "secret.txt").read_text(encoding="utf-8")
+except PermissionError:
+    pass
+else:
+    raise AssertionError("Landlock allowed a read outside the allowlist")
+try:
+    (allowed / "new.txt").write_text("no", encoding="utf-8")
+except PermissionError:
+    pass
+else:
+    raise AssertionError("Landlock allowed a write in a read-only path")
+print("landlock-ok")
+"""
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(service_path)
+            result = subprocess.run(
+                [sys.executable, "-c", code, str(allowed), str(blocked)],
+                env=env, capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("landlock-ok", result.stdout)
 
     def test_refuses_to_replace_regular_file_or_foreign_path(self):
         with tempfile.TemporaryDirectory() as directory:

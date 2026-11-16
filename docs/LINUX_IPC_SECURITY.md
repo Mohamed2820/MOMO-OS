@@ -1,6 +1,6 @@
 # MOMO OS — Linux IPC Security Foundations
 
-**Status:** Linux AF_UNIX peer identity and bounded versioned framing are integrated into an unprivileged, read-only status daemon. The daemon has process-lifetime replay detection, resource limits, no_new_privs and a libseccomp default-allow denylist. It is not a tool executor or complete sandbox.
+**Status (2026-11-14):** A read-only Linux AF_UNIX status daemon is integrated into the Buildroot rootfs. It uses kernel peer credentials, bounded versioned framing, replay detection, a dedicated UID, private mount/IPC/UTS/network namespaces, cgroup v2 CPU/memory/PID limits, process resource limits, `no_new_privs`, a required libseccomp denylist and Landlock filesystem confinement. Repository CI passes 203 tests, including namespace/cgroup launcher policy checks and Landlock allow/deny tests. Fresh x86_64 and AArch64 QEMU acceptance for the namespace/cgroup/Landlock startup path is still pending. No side-effecting tool executor or privileged operation dispatcher is enabled.
 
 ## Peer identity
 
@@ -15,12 +15,12 @@
 - Transport framing is not authentication; call peer-credential checks before trusting a connected local peer.
 - Peer identity is not authorization; a service must map UID to a fixed service role and check each operation's capability.
 - The protocol parser does not prevent replay by itself, rate-limit clients, impose socket deadlines, or provide process isolation.
-- Neither helper is wired into a privileged service. No external command/tool execution is enabled.
+- The peer-credential and protocol helpers are wired into the read-only status service. No external command/tool execution is enabled.
 - Linux-specific AF_UNIX mechanisms do not apply to Android. Android requires a separate Binder/AIDL, SELinux and AppOps implementation.
 
 ## Next integration gate
 
-Implement a narrowly scoped unprivileged service using a dedicated UID, authenticate the peer before parsing, apply socket deadlines and message quotas, validate operation-specific argument schemas, bind each operation to a capability check, and run it under native Linux sandbox controls (namespaces, seccomp and LSM). Add adversarial tests for path replacement, replay, malformed frames, slow clients, resource exhaustion and unauthorized peer identities. Keep the tool executor disabled until these controls are verified.
+Extend the existing status-service controls to task and executor services; add authenticated human/session principal mapping, per-operation schema/capability enforcement, socket deadlines and quotas, a strict seccomp allowlist, PID/user namespace policy, per-service cgroups and Android Binder/SELinux equivalents. Add adversarial tests for path replacement, replay, malformed frames, slow clients, resource exhaustion and unauthorized identities. Keep side-effecting execution disabled until those controls are independently verified.
 
 
 ## Replay defense increment (PR #39 candidate)
@@ -42,29 +42,22 @@ The daemon now requires libseccomp and installs a syscall denylist after creatin
 This is not a strict syscall allowlist and is not equivalent to a complete sandbox. Filesystem read/write syscalls and many other kernel interfaces remain available. Namespace isolation, cgroup limits and an LSM policy are still required. If libseccomp cannot load or the filter cannot be installed, the daemon refuses to start.
 
 
-## Integrated daemon status — 2026-11-14
+## Integrated read-only daemon — 2026-11-14
 
-The active bootable development branch includes `momo-ipcd`, started as the dedicated `momo-ipc` user. It authenticates the peer with `SO_PEERCRED` before parsing, accepts only the configured root UID, validates bounded versioned frames, rejects duplicate request IDs within the daemon process, applies file-descriptor/address-space/core/file-size limits, sets `PR_SET_NO_NEW_PRIVS`, and installs a required libseccomp default-allow denylist. The only exposed operation is read-only `status.read`; responses explicitly report `tool_execution: disabled`.
+The Linux status service is now implemented in `board/momo/rootfs-overlay/usr/lib/momo/momo_ipcd.py` and mirrored in the Buildroot overlay. Init script `S98momo-ipc` starts it as the dedicated unprivileged `momo-ipc` account. The service accepts root-owned clients only, authenticates the connected process using `SO_PEERCRED`, parses one bounded protocol frame, rejects duplicate request IDs within the daemon lifetime, and serves only `status.read` with an empty argument object.
 
-Both x86_64 and AArch64 QEMU workflows passed on integrated baseline commit `a7a4caf381553d9a697b68a093eff9520d8b0bda`:
-- [x86_64 run #43454224817](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224817), artifact 14057431431.
-- [AArch64 run #43454224951](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43454224951), artifact 14055169054.
+The root-started `momo-ipc-sandbox` wrapper joins a dedicated cgroup (128 MiB memory, 16 processes, 50% CPU quota), enters private mount/IPC/UTS/network namespaces and drops to `momo-ipc`. The daemon applies resource limits and `PR_SET_NO_NEW_PRIVS`, requires libseccomp to install a denylist that also blocks creation/connection/binding/listening of new sockets after the AF_UNIX listener is established, then applies a fail-closed Landlock read-only filesystem policy before accepting requests. The status response reports the observed namespace IDs, cgroup path and active Landlock/seccomp flags; QEMU boot workflows assert these values. It refuses to start if libseccomp is missing or filter installation fails. The current CLI `momo-ipcctl status` is read-only. The response explicitly reports `tool_execution: disabled`.
 
-### Remaining IPC/security gaps
-- The replay cache is in memory and resets on restart; it is not durable mutation idempotency.
-- The syscall filter is a default-allow denylist, not a strict allowlist.
-- No namespace isolation, cgroup v2 resource policy, LSM worker profile or per-task filesystem isolation is integrated.
-- The root-only peer policy is a single-user development policy, not a multi-user authorization model.
-- No operation-specific capability dispatcher or tool executor exists.
-- Android requires an independent Binder/AIDL + SELinux + AppOps implementation.
+### Verified and pending
 
-See [Linux Executor Isolation Specification](LINUX_EXECUTION_SANDBOX.md). Do not enable tool dispatch until its enablement gate is met.
+- Repository CI for integration PR #48 passed 203 unit tests, including Landlock filesystem allow/deny, kernel config validation, namespace/cgroup launcher checks, sandbox status reporting, seccomp socket-denial, typed executor and source/rootfs parity (run #43604027608).
+- The earlier QEMU acceptance applies to an older image revision and does not validate this daemon.
+- Fresh x86_64 and AArch64 Buildroot/QEMU boot checks are required before this increment receives image-integrated/emulator-tested status.
+- The daemon is not a general-purpose executor. Future mutating operations require a separate authorization design, durable idempotency, outcome reconciliation and stronger per-operation principals. Its current socket syscall restrictions apply only after the existing AF_UNIX listener is bound.
 
 
-## Fresh execution-gate image evidence — 2026-11-14
+## Landlock filesystem confinement — 2026-11-14
 
-The current integrated revision `b762dd742e8b3b3ede0e5f98578960446c9b5e25` passed both QEMU workflows:
-- x86_64: [run #43597839201](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839201).
-- AArch64: [run #43597839262](https://github.com/Mohamed2820/MOMO-OS/actions/runs/43597839262).
+The read-only IPC daemon now installs a Landlock ruleset after binding its AF_UNIX socket and loading the seccomp filter. The daemon receives read/execute access to `/usr` and read access to `/etc`; `/run/momo` is limited to directory metadata and removal of its own socket during shutdown. Other filesystem paths receive no handled filesystem rights. Landlock setup is fail-closed: if the kernel syscall or ruleset operation is unavailable, the daemon does not enter its accept loop.
 
-Both guests reached `MOMO OS READY`, returned the read-only IPC status response and reported `tool_execution: disabled`. This verifies the virtual images, not native sandbox isolation or tool execution.
+A subprocess test proves that an explicitly allowed directory remains readable, an unrelated directory is unreadable, and writes in the allowed read-only directory are denied. This confines the status daemon's filesystem view. Separate launcher and init controls now provide namespaces and cgroup limits for this one service. It still lacks a strict seccomp allowlist and a human/session principal boundary; the profile is not yet applied to task or executor services.

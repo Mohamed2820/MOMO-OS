@@ -1,30 +1,76 @@
 #!/bin/sh
 #
-# Start the unprivileged MOMO local IPC status service.
+# Start MOMO IPC status in private namespaces, a bounded cgroup and Landlock.
 #
 PIDFILE=/run/momo-ipcd.pid
 SOCKET=/run/momo/ipc.sock
+CGROUP_ROOT=/sys/fs/cgroup
+CGROUP_DIR=$CGROUP_ROOT/momo-ipc
+
+prepare_cgroup() {
+  mkdir -p "$CGROUP_ROOT"
+  if [ ! -f "$CGROUP_ROOT/cgroup.controllers" ]; then
+    mount -t cgroup2 none "$CGROUP_ROOT" || {
+      echo "[MOMO IPC] Cannot mount cgroup v2."
+      exit 1
+    }
+  fi
+
+  available=" $(cat "$CGROUP_ROOT/cgroup.controllers") "
+  for controller in cpu memory pids; do
+    case "$available" in
+      *" $controller "*) ;;
+      *)
+        echo "[MOMO IPC] Required cgroup controller missing: $controller"
+        exit 1
+        ;;
+    esac
+  done
+
+  printf '+cpu +memory +pids\n' > "$CGROUP_ROOT/cgroup.subtree_control" || {
+    echo "[MOMO IPC] Cannot enable cgroup controllers."
+    exit 1
+  }
+
+  if [ -d "$CGROUP_DIR" ]; then
+    if [ -s "$CGROUP_DIR/cgroup.procs" ]; then
+      echo "[MOMO IPC] A previous service process is still in its cgroup."
+      exit 1
+    fi
+    rmdir "$CGROUP_DIR" || exit 1
+  fi
+
+  mkdir "$CGROUP_DIR"
+  echo 134217728 > "$CGROUP_DIR/memory.max"
+  echo 16 > "$CGROUP_DIR/pids.max"
+  echo '50000 100000' > "$CGROUP_DIR/cpu.max"
+  export MOMO_IPC_CGROUP="$CGROUP_DIR"
+}
 
 case "$1" in
   start)
     mkdir -p /run/momo
     chown momo-ipc:momo-ipc /run/momo
     chmod 0750 /run/momo
+    prepare_cgroup
     start-stop-daemon --start --background --make-pidfile --pidfile "$PIDFILE" \
-      --chuid momo-ipc:momo-ipc --exec /usr/bin/python3 -- \
-      /usr/lib/momo/momo_ipcd.py
+      --exec /usr/bin/momo-ipc-sandbox
     for attempt in 1 2 3 4 5; do
       [ -S "$SOCKET" ] && break
       sleep 1
     done
     if [ ! -S "$SOCKET" ]; then
       echo "[MOMO IPC] Service failed to create its socket."
+      start-stop-daemon --stop --retry TERM/5/KILL/2 --pidfile "$PIDFILE" 2>/dev/null || true
+      rm -f "$PIDFILE"
+      rmdir "$CGROUP_DIR" 2>/dev/null || true
       exit 1
     fi
     ;;
   stop)
     start-stop-daemon --stop --retry TERM/5/KILL/2 --pidfile "$PIDFILE" 2>/dev/null || true
     rm -f "$PIDFILE"
+    rmdir "$CGROUP_DIR" 2>/dev/null || true
     ;;
   restart)
     "$0" stop

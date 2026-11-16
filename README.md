@@ -43,12 +43,22 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 
 ## First bootable target
 
-- [Buildroot/QEMU virtual targets](docs/BOOTABLE_IMAGE.md) — x86_64 and AArch64 experimental Linux images have both passed QEMU boot and MOMO readiness checks. These are virtual bring-up targets, not phone ROMs.
+- [x86_64 QEMU bring-up image](docs/BOOTABLE_IMAGE.md) — Buildroot-based experimental Linux image with MOMO startup and diagnostics. It is not a phone ROM; QEMU boot evidence is required before calling the target bootable.
+
+## Autonomous maintenance
+
+- [MOMO CELL — self-maintenance core](docs/MOMO_CELL.md): bounded specialist cells, repository health scans, repair proposals, and guarded evolution.
 
 ## Technical specifications
 
 - [Vision](docs/VISION.md)
 - [Technical architecture](docs/ARCHITECTURE.md)\n- [Universal platform strategy](docs/UNIVERSAL_PLATFORM_STRATEGY.md)\n- [Device compatibility and porting](docs/DEVICE_COMPATIBILITY.md)\n- [Platform adapter contracts](docs/PLATFORM_ADAPTERS.md)
+- [Versioned core service API contracts](docs/SERVICE_API_CONTRACTS.md)
+- [Execution runtime and executor design](docs/EXECUTION_RUNTIME_DESIGN.md)
+- [Linux service isolation and sandbox design](docs/LINUX_SANDBOX_DESIGN.md)
+- [Linux IPC security](docs/LINUX_IPC_SECURITY.md)
+- [Android platform integration](docs/ANDROID_PLATFORM_INTEGRATION.md)
+- [Platform support matrix](docs/PLATFORM_SUPPORT_MATRIX.md)
 - [AI runtime](docs/AI_RUNTIME.md)
 - [Provider routing](intelligence/providers/README.md)
 - [Orchestrator implementation](intelligence/runtime/ORCHESTRATOR.md)
@@ -61,9 +71,6 @@ MOMO OS aims to become a Linux-like, multi-device mobile platform: one consisten
 - [Complete product description](docs/PROJECT_OVERVIEW.md)
 - [Master execution plan](docs/MASTER_EXECUTION_PLAN.md)
 - [Roadmap](docs/ROADMAP.md)
-- [Current engineering status](docs/ENGINEERING_STATUS.md)
-- [Execution authorization gate](docs/EXECUTION_AUTHORIZATION_GATE.md)
-- [Linux executor isolation specification](docs/LINUX_EXECUTION_SANDBOX.md)
 
 ## Device feasibility gate
 

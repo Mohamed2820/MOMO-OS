@@ -19,6 +19,7 @@ import sqlite3
 from datetime import datetime, timezone
 
 from intelligence.runtime.momo_runtime import Risk
+from intelligence.runtime.argument_binding import parse_and_bind
 
 TASK_ACTION = "task.execute"
 MAX_TTL_SECONDS = 15 * 60
@@ -89,7 +90,7 @@ class ApprovalStore:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.executescript(_SCHEMA)
 
-    def issue(
+    def _issue(
         self,
         task_id: str,
         plan,
@@ -101,8 +102,8 @@ class ApprovalStore:
         """Return a one-time token for exactly one task, step or plan.
 
         Task-level approval (step_id=None) binds the accepted plan digest.
-        Step-level approval binds the step, its action/resource/risk and the
-        caller-declared arguments digest.
+        Step-level approval is issued only through issue_for_arguments(), which
+        derives the digest from the exact bounded JSON payload.
         """
         from intelligence.runtime.task_coordinator import _plan_digest
 
@@ -149,6 +150,38 @@ class ApprovalStore:
             )
             connection.commit()
         return token
+
+    def issue(
+        self,
+        task_id: str,
+        plan,
+        approver: str,
+        ttl_seconds: int,
+        step_id: str | None = None,
+        args_sha256: str | None = None,
+    ) -> str:
+        """Issue a task-level approval; step approvals require raw JSON arguments."""
+        if step_id is not None or args_sha256 is not None:
+            raise ValueError("Use issue_for_arguments() for step-bound approvals")
+        return self._issue(task_id, plan, approver, ttl_seconds)
+
+    def issue_for_arguments(
+        self,
+        task_id: str,
+        plan,
+        approver: str,
+        ttl_seconds: int,
+        step_id: str,
+        args_payload: str | bytes,
+    ) -> str:
+        """Issue a step approval using a digest computed from exact strict-JSON input."""
+        if not isinstance(step_id, str) or not step_id:
+            raise ValueError("A step identifier is required")
+        _arguments, _canonical_json, args_sha256 = parse_and_bind(args_payload)
+        return self._issue(
+            task_id, plan, approver, ttl_seconds,
+            step_id=step_id, args_sha256=args_sha256,
+        )
 
     @staticmethod
     def consume(connection: sqlite3.Connection, token: object, binding: str, now: datetime) -> None:

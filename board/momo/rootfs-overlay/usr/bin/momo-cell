@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed-system entry point for MOMO CELL.
+export PYTHONPATH=/usr/lib/momo${PYTHONPATH:+:$PYTHONPATH}
+exec /usr/bin/python3 -m intelligence.cell.cli --mode system --root /usr/lib/momo "$@"

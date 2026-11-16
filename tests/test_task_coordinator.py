@@ -10,9 +10,7 @@ from intelligence.runtime.task_coordinator import TaskCoordinator
 from intelligence.execution.step_journal import StepExecutionStatus
 from intelligence.runtime.approval_store import ApprovalStore
 from intelligence.runtime.execution_gate import ExecutionGate
-import hashlib
-
-ARGS_DIGEST = hashlib.sha256(b"step arguments v1").hexdigest()
+ARGS_PAYLOAD = b'{"operation":"inspect","version":1}'
 
 
 class TaskCoordinatorTests(unittest.TestCase):
@@ -50,7 +48,7 @@ class TaskCoordinatorTests(unittest.TestCase):
         """Gate-mediated start for R0-R2 work: task execution, then grant-backed step."""
         gate = ExecutionGate(self.coordinator)
         gate.start_task_execution(task.task_id, plan)
-        return gate.start_step(task.task_id, plan, step_id, ARGS_DIGEST)
+        return gate.start_step(task.task_id, plan, step_id, ARGS_PAYLOAD)
 
     def test_create_task_validates_and_persists_lifecycle(self):
         task = self.coordinator.create_task(self.plan.goal, Risk.R1, self.plan)
@@ -199,10 +197,11 @@ class TaskCoordinatorTests(unittest.TestCase):
         gate = ExecutionGate(self.coordinator)
         task_token = approvals.issue(task.task_id, plan, "owner", 300)
         gate.start_task_execution(task.task_id, plan, approval_token=task_token)
-        step_token = approvals.issue(
-            task.task_id, plan, "owner", 300, step_id="device-check", args_sha256=ARGS_DIGEST,
+        step_token = approvals.issue_for_arguments(
+            task.task_id, plan, "owner", 300,
+            step_id="device-check", args_payload=ARGS_PAYLOAD,
         )
-        gate.start_step(task.task_id, plan, "device-check", ARGS_DIGEST, approval_token=step_token)
+        gate.start_step(task.task_id, plan, "device-check", ARGS_PAYLOAD, approval_token=step_token)
         self.coordinator.execution.finish_step(
             task.task_id, "device-check", False, error="device operation outcome unknown"
         )
