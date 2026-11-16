@@ -28,6 +28,7 @@ The worker now uses a bounded OpenRouter tool-calling loop. The model can reques
 - `read_repo_file` — read one tracked, regular text file within a fixed size limit.
 - `run_fixed_tests` — run the repository-owned MOMO test suite and syntax checks; the model cannot supply a command.
 - `validate_patch` — validate a unified diff against the exact Issue file scope and run `git apply --check` without changing files.
+- `get_recent_ci_runs` / `get_ci_run_jobs` — inspect recent GitHub Actions runs and step outcomes through read-only, same-repository API calls.
 
 The model cannot call arbitrary shell, access secrets, browse the network, write files directly, or expand its assigned file scope. The host applies only a validated patch. A separate reviewer model must approve the patch before application; if the reviewer resolves to the same model as the author, the cycle fails closed. Fixed tests run after application, with at most one feedback-based repair attempt.
 
