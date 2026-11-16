@@ -69,7 +69,7 @@ jobs:
       - name: Run one bounded MOMO CELL engineering cycle
         env:
           MOMO_AGENT_API_KEY: ${{ secrets.MOMO_AGENT_API_KEY }}
-          MOMO_AGENT_MODEL: ${{ vars.MOMO_AGENT_MODEL }}
+          MOMO_AGENT_MODEL: particle-ai/particle-1:free
           MOMO_AGENT_API_URL: ${{ vars.MOMO_AGENT_API_URL }}
           MOMO_TASK_ISSUE_NUMBER: ${{ steps.assignment.outputs.task_issue_number }}
           GITHUB_TOKEN: ${{ github.token }}
