@@ -628,7 +628,7 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
         "Reject incomplete, unsafe, out-of-scope, or unverifiable changes. Do not claim tests passed. "
         "Do not use Markdown fences or any text outside the JSON object."
     )
-    user = "Assigned task:\\n" + json.dumps(task, ensure_ascii=False) + "\\nCandidate diff:\\n" + patch[:48000]
+    user = "Assigned task:\n" + json.dumps(task, ensure_ascii=False) + "\nCandidate diff:\n" + patch[:48000]
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     def request_review(model_name: str) -> tuple[dict | None, str, str]:
