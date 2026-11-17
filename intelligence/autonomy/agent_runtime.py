@@ -459,7 +459,7 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
         try:
             result = _request_json(active_api_url, active_api_key, payload)
         except WorkerError as primary_error:
-            gemini_backup_model = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.6-flash").strip()
+            gemini_backup_model = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.8-flash").strip()
             if not gemini_backup_model or active_model == gemini_backup_model:
                 raise
             try:
@@ -613,7 +613,7 @@ def _parse_review_verdict(result: dict) -> tuple[dict | None, str, str, int]:
 
 def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_url: str) -> dict:
     configured_reviewer = os.environ.get("GEMINI_REVIEW_MODEL", "").strip()
-    primary_model = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
+    primary_model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
     fallback_model = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.6-flash").strip()
     reviewer_model = configured_reviewer or (fallback_model if builder_model.casefold() == primary_model.casefold() else primary_model)
     if not reviewer_model or reviewer_model.casefold() == builder_model.casefold():
