@@ -25,7 +25,7 @@ API_URL = os.environ.get(
     "GEMINI_API_URL",
     "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
 )
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash").strip()
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
 FALLBACK_MODELS: tuple[str, ...] = ()
 MAX_CONTEXT_BYTES = 110_000
 MAX_PATCH_BYTES = 48_000
