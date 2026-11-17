@@ -11,6 +11,8 @@ from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import tempfile
+import time
+import random
 import urllib.error
 import urllib.request
 
@@ -297,25 +299,59 @@ def _execute_tool(name: str, args: dict, root: Path, task: dict, validator) -> d
 
 
 def _request_json(api_url: str, api_key: str, payload: dict) -> dict:
-    request = urllib.request.Request(api_url, data=json.dumps(payload).encode("utf-8"),
-        headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=100) as response:
-            result = json.loads(response.read(2000000).decode("utf-8"))
-    except urllib.error.HTTPError as exc:
+    """Request Gemini with bounded retries for transient capacity and transport failures."""
+    retryable_statuses = {408, 425, 429, 500, 502, 503, 504}
+    max_attempts = 4
+    last_error = None
+    for attempt in range(max_attempts):
+        request = urllib.request.Request(
+            api_url, data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+            method="POST",
+        )
+        retry_after = None
         try:
-            raw = exc.read(3000).decode("utf-8", "replace")
-        except Exception:
-            raw = ""
-        raw = raw.replace(api_key, "[REDACTED]")
-        raw = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", raw)
-        raw = re.sub(r"(?i)sk-or-v1-[A-Za-z0-9_-]+", "[REDACTED]", raw)
-        raise WorkerError("Model provider HTTP " + str(exc.code) + ": " + " ".join(raw.split())[:900]) from None
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise WorkerError("Model provider request failed: " + type(exc).__name__) from exc
-    if not isinstance(result, dict):
-        raise WorkerError("Model provider returned a malformed response")
-    return result
+            with urllib.request.urlopen(request, timeout=100) as response:
+                result = json.loads(response.read(2000000).decode("utf-8"))
+            if not isinstance(result, dict):
+                raise WorkerError("Model provider returned a malformed response")
+            return result
+        except urllib.error.HTTPError as exc:
+            try:
+                raw = exc.read(3000).decode("utf-8", "replace")
+            except Exception:
+                raw = ""
+            raw = raw.replace(api_key, "[REDACTED]")
+            raw = re.sub(r"(?i)bearer\\s+\\S+", "Bearer [REDACTED]", raw)
+            raw = re.sub(r"(?i)sk-or-v1-[A-Za-z0-9_-]+", "[REDACTED]", raw)
+            if exc.code not in retryable_statuses:
+                raise WorkerError("Model provider HTTP " + str(exc.code) + ": " + " ".join(raw.split())[:900]) from None
+            retry_after = exc.headers.get("Retry-After") if exc.headers else None
+            last_error = WorkerError("Model provider HTTP " + str(exc.code) + ": " + " ".join(raw.split())[:900])
+        except (urllib.error.URLError, TimeoutError) as exc:
+            last_error = WorkerError("Model provider request failed: " + type(exc).__name__)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise WorkerError("Model provider returned invalid JSON: " + type(exc).__name__) from exc
+        if attempt + 1 >= max_attempts:
+            break
+        try:
+            server_delay = float(retry_after) if retry_after is not None else 0.0
+        except (TypeError, ValueError):
+            server_delay = 0.0
+        exponential_delay = min(12.0, 1.5 * (2 ** attempt))
+        delay = min(20.0, max(server_delay, exponential_delay) + random.uniform(0.0, 0.75))
+        print(json.dumps({
+            "event": "momo_gemini_transient_retry",
+            "attempt": attempt + 1,
+            "max_attempts": max_attempts,
+            "delay_seconds": round(delay, 2),
+            "error": str(last_error)[:240],
+        }), flush=True)
+        time.sleep(delay)
+    raise WorkerError(
+        "Gemini request exhausted " + str(max_attempts) +
+        " bounded attempts; last transient error: " + str(last_error)[:900]
+    ) from last_error
 
 
 def _message_text(message: dict) -> str:
@@ -454,24 +490,26 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
     }
     calls_used, tools_used, repeated, served_model = 0, [], set(), model
     for turn in range(MAX_TOOL_ROUNDS):
-        payload = {"model": active_model, "temperature": 0.1, "max_tokens": 8000,
+        # Re-attempt the configured primary on EVERY turn. A successful fallback
+        # is request-scoped and must never silently become the new primary.
+        primary_model = os.environ.get("GEMINI_MODEL", model).strip() or model
+        payload = {"model": primary_model, "temperature": 0.1, "max_tokens": 8000,
                    "tool_choice": "auto", "tools": available_tools, "messages": messages}
         try:
             result = _request_json(active_api_url, active_api_key, payload)
+            active_model = str(result.get("model", primary_model))[:160]
         except WorkerError as primary_error:
             gemini_backup_model = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.8-flash").strip()
-            if not gemini_backup_model or active_model == gemini_backup_model:
+            if not gemini_backup_model or primary_model == gemini_backup_model:
                 raise
             try:
                 backup_payload = dict(payload, model=gemini_backup_model)
                 result = _request_json(active_api_url, active_api_key, backup_payload)
                 active_model = str(result.get("model", gemini_backup_model))[:160]
-                print(json.dumps({"event": "momo_cell_model_fallback", "from": model, "to": active_model, "provider": "gemini", "reason": str(primary_error)[:400]}, ensure_ascii=False), flush=True)
+                print(json.dumps({"event": "momo_cell_model_fallback", "from": primary_model, "to": active_model, "provider": "gemini", "reason": str(primary_error)[:400]}, ensure_ascii=False), flush=True)
             except WorkerError as backup_error:
                 raise WorkerError("Gemini primary and Gemini fallback both failed; no non-Gemini provider is configured. " + str(backup_error)[:700]) from backup_error
         served_model = str(result.get("model", active_model))[:160]
-        if turn == 0:
-            active_model = served_model
         choices = result.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             raise WorkerError("Model response has no completion choice")
