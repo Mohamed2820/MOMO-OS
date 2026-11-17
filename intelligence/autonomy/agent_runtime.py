@@ -5,6 +5,7 @@ No arbitrary shell, credentials, network access, or unrestricted writes.
 """
 from __future__ import annotations
 
+import email.utils
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -15,6 +16,7 @@ import time
 import random
 import urllib.error
 import urllib.request
+from datetime import timezone
 
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import validate_task_response
@@ -298,10 +300,29 @@ def _execute_tool(name: str, args: dict, root: Path, task: dict, validator) -> d
     raise WorkerError("Unknown tool or invalid tool arguments")
 
 
+def _retry_after_seconds(value: str | None) -> float | None:
+    """Parse Retry-After as either delta-seconds or an HTTP date."""
+    if not value:
+        return None
+    try:
+        seconds = float(value.strip())
+        return max(0.0, seconds)
+    except (TypeError, ValueError):
+        pass
+    try:
+        retry_at = email.utils.parsedate_to_datetime(value)
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        return max(0.0, retry_at.timestamp() - time.time())
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _request_json(api_url: str, api_key: str, payload: dict) -> dict:
     """Request Gemini with bounded retries for transient capacity and transport failures."""
     retryable_statuses = {408, 425, 429, 500, 502, 503, 504}
-    max_attempts = 4
+    # More patience for short Google capacity incidents, without unbounded waiting.
+    max_attempts = 6
     last_error = None
     for attempt in range(max_attempts):
         request = urllib.request.Request(
@@ -334,12 +355,10 @@ def _request_json(api_url: str, api_key: str, payload: dict) -> dict:
             raise WorkerError("Model provider returned invalid JSON: " + type(exc).__name__) from exc
         if attempt + 1 >= max_attempts:
             break
-        try:
-            server_delay = float(retry_after) if retry_after is not None else 0.0
-        except (TypeError, ValueError):
-            server_delay = 0.0
-        exponential_delay = min(12.0, 1.5 * (2 ** attempt))
-        delay = min(20.0, max(server_delay, exponential_delay) + random.uniform(0.0, 0.75))
+        server_delay = _retry_after_seconds(retry_after) or 0.0
+        exponential_delay = min(32.0, 2.0 ** attempt)
+        # Cap a single sleep so the worker remains bounded even with a bad header.
+        delay = min(60.0, max(server_delay, exponential_delay) + random.uniform(0.0, 1.0))
         print(json.dumps({
             "event": "momo_gemini_transient_retry",
             "attempt": attempt + 1,
