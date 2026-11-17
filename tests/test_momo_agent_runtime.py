@@ -280,20 +280,44 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertIn("A safe fix", memory)
             self.assertIn("reviewer", memory)
 
-    def test_independent_reviewer_must_be_a_different_model(self):
+    def test_reviewer_uses_gemini_36_primary_and_gemini_38_only_as_fallback(self):
         task = sample_task()
-        good = {"model": "critic-model", "choices": [{"message": {
-            "content": json.dumps({"verdict": "approve", "findings": [], "summary": "Scope and logic look sound."})
+        primary_good = {"model": "gemini-3.6-flash", "choices": [{"message": {
+            "content": json.dumps({"verdict": "approve", "findings": [],
+                                   "summary": "Primary review passed."})
         }}]}
-        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
-            with patch("intelligence.autonomy.agent_runtime._request_json", return_value=good):
-                result = review_patch(task, sample_patch(), "builder-model", "fake-key", "https://example.invalid")
+        with patch.dict("os.environ", {
+            "GEMINI_MODEL": "gemini-3.6-flash",
+            "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash",
+            "GEMINI_REVIEW_MODEL": "legacy-review-model",
+        }):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       return_value=primary_good) as request:
+                result = review_patch(task, sample_patch(), "gemini-3.6-flash",
+                                      "fake-key", "https://example.invalid")
         self.assertTrue(result["approved"])
-        same = dict(good, model="builder-model")
-        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
-            with patch("intelligence.autonomy.agent_runtime._request_json", return_value=same):
-                with self.assertRaises(WorkerError):
-                    review_patch(task, sample_patch(), "builder-model", "fake-key", "https://example.invalid")
+        self.assertEqual(result["served_model"], "gemini-3.6-flash")
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual(request.call_args.args[2]["model"], "gemini-3.6-flash")
+
+        fallback_good = {"model": "gemini-3.8-flash", "choices": [{"message": {
+            "content": json.dumps({"verdict": "approve", "findings": [],
+                                   "summary": "Fallback review passed."})
+        }}]}
+        with patch.dict("os.environ", {
+            "GEMINI_MODEL": "gemini-3.6-flash",
+            "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash",
+        }):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       side_effect=[WorkerError("Gemini 3.6 temporarily unavailable"),
+                                    fallback_good]) as request:
+                result = review_patch(task, sample_patch(), "gemini-3.6-flash",
+                                      "fake-key", "https://example.invalid")
+        self.assertTrue(result["approved"])
+        self.assertEqual(result["served_model"], "gemini-3.8-flash")
+        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args_list[0].args[2]["model"], "gemini-3.6-flash")
+        self.assertEqual(request.call_args_list[1].args[2]["model"], "gemini-3.8-flash")
 
     def test_github_actions_tools_are_read_only_and_repository_scoped(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -315,43 +339,46 @@ class AgentToolRuntimeTests(unittest.TestCase):
 
     def test_reviewer_retries_once_when_first_response_is_malformed(self):
         task = sample_task()
-        malformed = {"model": "critic-model", "choices": [{"finish_reason": "stop",
+        malformed = {"model": "gemini-3.6-flash", "choices": [{"finish_reason": "stop",
             "message": {"content": "I approve this patch, but here is no JSON."}}]}
-        valid = {"model": "critic-model", "choices": [{"finish_reason": "stop",
+        valid = {"model": "gemini-3.6-flash", "choices": [{"finish_reason": "stop",
             "message": {"content": json.dumps({"verdict": "approve", "findings": [],
                                                 "summary": "Reviewed successfully."})}}]}
-        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_MODEL": "gemini-3.6-flash",
+                                  "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        side_effect=[malformed, valid]) as request:
                 result = review_patch(task, sample_patch(), "builder-model", "fake-key",
                                       "https://example.invalid")
         self.assertTrue(result["approved"])
-        self.assertEqual(result["served_model"], "critic-model")
+        self.assertEqual(result["served_model"], "gemini-3.6-flash")
         self.assertEqual(request.call_count, 2)
         self.assertIn("Return ONLY one valid JSON object",
                       request.call_args.args[2]["messages"][-1]["content"])
 
     def test_reviewer_fails_closed_after_two_malformed_responses(self):
         task = sample_task()
-        malformed = {"model": "critic-model", "choices": [{"finish_reason": "length",
+        malformed = {"model": "gemini-3.6-flash", "choices": [{"finish_reason": "length",
             "message": {"content": "not valid JSON"}}]}
-        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_MODEL": "gemini-3.6-flash",
+                                  "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
-                       side_effect=[malformed, malformed]) as request:
+                       side_effect=[malformed, malformed, malformed, malformed]) as request:
                 with self.assertRaisesRegex(WorkerError, "after one retry"):
                     review_patch(task, sample_patch(), "builder-model", "fake-key",
                                  "https://example.invalid")
-        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_count, 4)
 
     def test_reviewer_rejection_is_not_retried_or_approved(self):
         task = sample_task()
-        rejected = {"model": "critic-model", "choices": [{"message": {
+        rejected = {"model": "gemini-3.6-flash", "choices": [{"message": {
             "content": json.dumps({"verdict": "reject", "findings": ["unsafe change"],
                                    "summary": "Rejected."})}}]}
-        with patch.dict("os.environ", {"GEMINI_REVIEW_MODEL": "critic-model"}):
+        with patch.dict("os.environ", {"GEMINI_MODEL": "gemini-3.6-flash",
+                                  "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        return_value=rejected) as request:
-                with self.assertRaisesRegex(WorkerError, "Independent review rejected"):
+                with self.assertRaisesRegex(WorkerError, "Code review rejected the patch"):
                     review_patch(task, sample_patch(), "builder-model", "fake-key",
                                  "https://example.invalid")
         request.assert_called_once()
