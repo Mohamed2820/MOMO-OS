@@ -1,5 +1,8 @@
 """Deterministic tests for MOMO CELL's typed tool runtime."""
+import io
 import json
+import urllib.error
+from email.message import Message
 from pathlib import Path
 import subprocess
 import tempfile
@@ -8,7 +11,7 @@ from unittest.mock import patch
 
 from intelligence.autonomy.agent_runtime import (
     MEMORY_PATH, TOOLS, _execute_tool, _list_files, _read_file, _search_repo,
-    _serialize_tool_result,
+    _serialize_tool_result, _request_json, _retry_after_seconds,
     append_memory, load_memory, review_patch, run_agent_cycle,
 )
 from intelligence.autonomy.policy import WorkerError
@@ -131,6 +134,58 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertEqual(result["status"], "patch")
             self.assertEqual(result["tool_calls"], 2)
             self.assertEqual(result["tools_used"], ["read_repo_file", "validate_patch"])
+
+    def test_retry_after_accepts_seconds_and_http_date(self):
+        with patch("intelligence.autonomy.agent_runtime.time.time", return_value=0):
+            self.assertEqual(_retry_after_seconds("7"), 7.0)
+            self.assertEqual(
+                _retry_after_seconds("Thu, 01 Jan 1970 00:02:00 GMT"),
+                120.0,
+            )
+            self.assertIsNone(_retry_after_seconds("not-a-date"))
+
+    def test_request_json_retries_transient_capacity_errors_six_times(self):
+        def overloaded():
+            return urllib.error.HTTPError(
+                "https://example.invalid/chat", 503, "Unavailable",
+                Message(), io.BytesIO(b'{"error":"capacity"}'),
+            )
+
+        responses = [overloaded() for _ in range(5)] + [io.BytesIO(b'{"ok":true}')]
+        with patch("urllib.request.urlopen", side_effect=responses) as request, \
+             patch("intelligence.autonomy.agent_runtime.time.sleep") as sleep, \
+             patch("intelligence.autonomy.agent_runtime.random.uniform", return_value=0):
+            result = _request_json("https://example.invalid/chat", "fake-key", {"model": "gemini-3.6-flash"})
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(request.call_count, 6)
+        self.assertEqual(sleep.call_count, 5)
+        self.assertEqual(request.call_args_list[0].args[0].get_header("Authorization"), "Bearer fake-key")
+
+    def test_request_json_respects_retry_after_header_and_does_not_retry_bad_requests(self):
+        headers = Message()
+        headers["Retry-After"] = "7"
+        unavailable = urllib.error.HTTPError(
+            "https://example.invalid/chat", 503, "Unavailable",
+            headers, io.BytesIO(b'{"error":"capacity"}'),
+        )
+        with patch("urllib.request.urlopen", side_effect=[unavailable, io.BytesIO(b'{"ok":true}')]), \
+             patch("intelligence.autonomy.agent_runtime.time.sleep") as sleep, \
+             patch("intelligence.autonomy.agent_runtime.random.uniform", return_value=0):
+            result = _request_json("https://example.invalid/chat", "fake-key", {"model": "gemini-3.6-flash"})
+        self.assertEqual(result, {"ok": True})
+        sleep.assert_called_once_with(7.0)
+
+        bad_request = urllib.error.HTTPError(
+            "https://example.invalid/chat", 400, "Bad Request",
+            Message(), io.BytesIO(b'{"error":"invalid request"}'),
+        )
+        with patch("urllib.request.urlopen", side_effect=bad_request) as request, \
+             patch("intelligence.autonomy.agent_runtime.time.sleep") as sleep:
+            with self.assertRaisesRegex(WorkerError, "HTTP 400"):
+                _request_json("https://example.invalid/chat", "fake-key", {"model": "gemini-3.6-flash"})
+        request.assert_called_once()
+        sleep.assert_not_called()
 
     def test_gemini_primary_falls_back_only_to_gemini(self):
         with tempfile.TemporaryDirectory() as temp:
