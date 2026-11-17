@@ -672,8 +672,8 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
                               "to": served, "provider": "gemini",
                               "reason": str(primary_error)[:400]}, ensure_ascii=False), flush=True)
         except WorkerError as fallback_error:
-            raise WorkerError("Gemini 3.6 reviewer and Gemini 3.8 reviewer fallback both failed: "
-                              + str(fallback_error)[:700]) from fallback_error
+            raise WorkerError("Gemini 3.6 reviewer failed after one retry or request failure; "
+                              "Gemini 3.8 fallback also failed: " + str(fallback_error)[:700]) from fallback_error
 
     if verdict["verdict"] != "approve" or verdict.get("findings", []):
         raise WorkerError("Code review rejected the patch: " + str(summary or verdict.get("findings", []))[:1200])
