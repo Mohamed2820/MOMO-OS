@@ -322,7 +322,7 @@ def _request_json(api_url: str, api_key: str, payload: dict) -> dict:
             except Exception:
                 raw = ""
             raw = raw.replace(api_key, "[REDACTED]")
-            raw = re.sub(r"(?i)bearer\\s+\\S+", "Bearer [REDACTED]", raw)
+            raw = re.sub(r"(?i)bearer\s+\S+", "Bearer [REDACTED]", raw)
             raw = re.sub(r"(?i)sk-or-v1-[A-Za-z0-9_-]+", "[REDACTED]", raw)
             if exc.code not in retryable_statuses:
                 raise WorkerError("Model provider HTTP " + str(exc.code) + ": " + " ".join(raw.split())[:900]) from None
