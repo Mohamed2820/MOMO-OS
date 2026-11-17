@@ -16,6 +16,7 @@ import time
 import random
 import urllib.error
 import urllib.request
+from datetime import timezone
 
 from intelligence.autonomy.policy import WorkerError, _allowed
 from intelligence.autonomy.task_assignment import validate_task_response
@@ -311,7 +312,7 @@ def _retry_after_seconds(value: str | None) -> float | None:
     try:
         retry_at = email.utils.parsedate_to_datetime(value)
         if retry_at.tzinfo is None:
-            retry_at = retry_at.replace(tzinfo=__import__("datetime").timezone.utc)
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
         return max(0.0, retry_at.timestamp() - time.time())
     except (TypeError, ValueError, OverflowError):
         return None
