@@ -70,8 +70,8 @@ jobs:
       - name: Run one bounded MOMO CELL engineering cycle
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.6-flash' }}
-          GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL || 'gemini-3.8-flash' }}
+          GEMINI_MODEL: gemini-3.6-flash
+          GEMINI_FALLBACK_MODEL: gemini-3.8-flash
           GEMINI_API_URL: https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
           MOMO_TASK_ISSUE_NUMBER: ${{ steps.assignment.outputs.task_issue_number }}
           GITHUB_TOKEN: ${{ github.token }}
