@@ -132,7 +132,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertEqual(result["tool_calls"], 2)
             self.assertEqual(result["tools_used"], ["read_repo_file", "validate_patch"])
 
-    def test_gemini_primary_falls_back_only_to_gemini(self):
+    def test_particle_one_remains_primary_with_openrouter_free_fallbacks(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             make_repo(root)
@@ -145,33 +145,39 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 "name": "validate_patch", "arguments": json.dumps({"patch": patch_text}),
             }}
             def tool_response(call):
-                return {"model": "gemini-3.6-flash", "choices": [{"message": {
+                return {"model": "particle-ai/particle-1:free", "choices": [{"message": {
                     "role": "assistant", "content": None, "tool_calls": [call],
                 }}]}
-            final = {"model": "gemini-3.6-flash", "choices": [{"message": {
+            final = {"model": "particle-ai/particle-1:free", "choices": [{"message": {
                 "role": "assistant", "content": json.dumps({
                     "task_id": 901, "status": "patch", "task": "Update demo value",
-                    "summary": "Used the Gemini fallback after primary capacity error.", "patch": patch_text,
+                    "summary": "Particle-1 completed the bounded tool loop.", "patch": patch_text,
                 }),
             }}]}
-            with patch.dict("os.environ", {
-                "GEMINI_FALLBACK_MODEL": "gemini-3.6-flash",
-            }):
+            with patch.dict("os.environ", {"MOMO_AGENT_MODEL": "particle-ai/particle-1:free"}, clear=False):
                 with patch("intelligence.autonomy.agent_runtime._request_json",
-                           side_effect=[WorkerError("Gemini HTTP 503 capacity"),
-                                        tool_response(read_call), tool_response(validate_call), final]) as request:
+                           side_effect=[tool_response(read_call), tool_response(validate_call), final]) as request:
                     result = run_agent_cycle(
-                        root, task, "brief", "no memory", "gemini-test-key",
-                        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-                        "gemini-3.8-flash", (), _validate_patch,
+                        root, task, "brief", "no memory", "openrouter-test-key",
+                        "https://openrouter.example/chat/completions",
+                        "particle-ai/particle-1:free",
+                        ("nvidia/nemotron-3.5-super-vl:free", "dots-studio/dots-3-note-preview:free"),
+                        _validate_patch,
                     )
             self.assertEqual(result["status"], "patch")
-            self.assertEqual(result["served_model"], "gemini-3.6-flash")
-            self.assertEqual(request.call_count, 4)
-            for call in request.call_args_list:
-                self.assertEqual(call.args[0], "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
-                self.assertEqual(call.args[1], "gemini-test-key")
-            self.assertEqual(request.call_args_list[1].args[2]["model"], "gemini-3.6-flash")
+            self.assertEqual(result["served_model"], "particle-ai/particle-1:free")
+            self.assertEqual(request.call_count, 3)
+            first_payload = request.call_args_list[0].args[2]
+            self.assertEqual(first_payload["model"], "particle-ai/particle-1:free")
+            self.assertEqual(first_payload["models"], [
+                "particle-ai/particle-1:free",
+                "nvidia/nemotron-3.5-super-vl:free",
+                "dots-studio/dots-3-note-preview:free",
+            ])
+            self.assertTrue(first_payload["provider"]["allow_fallbacks"])
+            for call in request.call_args_list[1:]:
+                self.assertEqual(call.args[2]["model"], "particle-ai/particle-1:free")
+                self.assertEqual(call.args[2]["models"], ["particle-ai/particle-1:free"])
 
     def test_patch_validation_failure_returns_current_numbered_source_for_one_repair(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -280,44 +286,45 @@ class AgentToolRuntimeTests(unittest.TestCase):
             self.assertIn("A safe fix", memory)
             self.assertIn("reviewer", memory)
 
-    def test_reviewer_uses_gemini_36_primary_and_gemini_38_only_as_fallback(self):
+    def test_reviewer_uses_independent_openrouter_model_for_particle_builder(self):
         task = sample_task()
-        primary_good = {"model": "gemini-3.6-flash", "choices": [{"message": {
+        reviewer = "nvidia/nemotron-3.5-super-vl:free"
+        response = {"model": reviewer, "choices": [{"message": {
             "content": json.dumps({"verdict": "approve", "findings": [],
-                                   "summary": "Primary review passed."})
+                                   "summary": "Independent review passed."})
         }}]}
-        with patch.dict("os.environ", {
-            "GEMINI_MODEL": "gemini-3.6-flash",
-            "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash",
-            "GEMINI_REVIEW_MODEL": "legacy-review-model",
-        }):
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": ""}, clear=False):
             with patch("intelligence.autonomy.agent_runtime._request_json",
-                       return_value=primary_good) as request:
-                result = review_patch(task, sample_patch(), "gemini-3.6-flash",
-                                      "fake-key", "https://example.invalid")
+                       return_value=response) as request:
+                result = review_patch(
+                    task, sample_patch(), "particle-ai/particle-1:free",
+                    "openrouter-test-key", "https://openrouter.example/chat/completions",
+                )
         self.assertTrue(result["approved"])
-        self.assertEqual(result["served_model"], "gemini-3.6-flash")
+        self.assertEqual(result["served_model"], reviewer)
         self.assertEqual(request.call_count, 1)
-        self.assertEqual(request.call_args.args[2]["model"], "gemini-3.6-flash")
+        payload = request.call_args.args[2]
+        self.assertEqual(payload["model"], reviewer)
+        self.assertEqual(payload["models"], [reviewer])
+        self.assertTrue(payload["provider"]["allow_fallbacks"])
 
-        fallback_good = {"model": "gemini-3.8-flash", "choices": [{"message": {
+    def test_reviewer_uses_dots_when_builder_was_nvidia_fallback(self):
+        task = sample_task()
+        reviewer = "dots-studio/dots-3-note-preview:free"
+        response = {"model": reviewer, "choices": [{"message": {
             "content": json.dumps({"verdict": "approve", "findings": [],
-                                   "summary": "Fallback review passed."})
+                                   "summary": "Independent fallback review passed."})
         }}]}
-        with patch.dict("os.environ", {
-            "GEMINI_MODEL": "gemini-3.6-flash",
-            "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash",
-        }):
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": ""}, clear=False):
             with patch("intelligence.autonomy.agent_runtime._request_json",
-                       side_effect=[WorkerError("Gemini 3.6 temporarily unavailable"),
-                                    fallback_good]) as request:
-                result = review_patch(task, sample_patch(), "gemini-3.6-flash",
-                                      "fake-key", "https://example.invalid")
+                       return_value=response) as request:
+                result = review_patch(
+                    task, sample_patch(), "nvidia/nemotron-3.5-super-vl:free",
+                    "openrouter-test-key", "https://openrouter.example/chat/completions",
+                )
         self.assertTrue(result["approved"])
-        self.assertEqual(result["served_model"], "gemini-3.8-flash")
-        self.assertEqual(request.call_count, 2)
-        self.assertEqual(request.call_args_list[0].args[2]["model"], "gemini-3.6-flash")
-        self.assertEqual(request.call_args_list[1].args[2]["model"], "gemini-3.8-flash")
+        self.assertEqual(result["served_model"], reviewer)
+        self.assertEqual(request.call_args.args[2]["model"], reviewer)
 
     def test_github_actions_tools_are_read_only_and_repository_scoped(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -339,29 +346,27 @@ class AgentToolRuntimeTests(unittest.TestCase):
 
     def test_reviewer_retries_once_when_first_response_is_malformed(self):
         task = sample_task()
-        malformed = {"model": "gemini-3.6-flash", "choices": [{"finish_reason": "stop",
+        malformed = {"model": "critic-model", "choices": [{"finish_reason": "stop",
             "message": {"content": "I approve this patch, but here is no JSON."}}]}
-        valid = {"model": "gemini-3.6-flash", "choices": [{"finish_reason": "stop",
+        valid = {"model": "critic-model", "choices": [{"finish_reason": "stop",
             "message": {"content": json.dumps({"verdict": "approve", "findings": [],
                                                 "summary": "Reviewed successfully."})}}]}
-        with patch.dict("os.environ", {"GEMINI_MODEL": "gemini-3.6-flash",
-                                  "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash"}):
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        side_effect=[malformed, valid]) as request:
                 result = review_patch(task, sample_patch(), "builder-model", "fake-key",
                                       "https://example.invalid")
         self.assertTrue(result["approved"])
-        self.assertEqual(result["served_model"], "gemini-3.6-flash")
+        self.assertEqual(result["served_model"], "critic-model")
         self.assertEqual(request.call_count, 2)
         self.assertIn("Return ONLY one valid JSON object",
                       request.call_args.args[2]["messages"][-1]["content"])
 
     def test_reviewer_fails_closed_after_two_malformed_responses(self):
         task = sample_task()
-        malformed = {"model": "gemini-3.6-flash", "choices": [{"finish_reason": "length",
+        malformed = {"model": "critic-model", "choices": [{"finish_reason": "length",
             "message": {"content": "not valid JSON"}}]}
-        with patch.dict("os.environ", {"GEMINI_MODEL": "gemini-3.6-flash",
-                                  "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash"}):
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        side_effect=[malformed, malformed, malformed, malformed]) as request:
                 with self.assertRaisesRegex(WorkerError, "after one retry"):
@@ -371,11 +376,10 @@ class AgentToolRuntimeTests(unittest.TestCase):
 
     def test_reviewer_rejection_is_not_retried_or_approved(self):
         task = sample_task()
-        rejected = {"model": "gemini-3.6-flash", "choices": [{"message": {
+        rejected = {"model": "critic-model", "choices": [{"message": {
             "content": json.dumps({"verdict": "reject", "findings": ["unsafe change"],
                                    "summary": "Rejected."})}}]}
-        with patch.dict("os.environ", {"GEMINI_MODEL": "gemini-3.6-flash",
-                                  "GEMINI_FALLBACK_MODEL": "gemini-3.8-flash"}):
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        return_value=rejected) as request:
                 with self.assertRaisesRegex(WorkerError, "Code review rejected the patch"):
