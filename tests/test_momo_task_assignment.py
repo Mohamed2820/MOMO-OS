@@ -116,10 +116,22 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
         with self.assertRaises(WorkerError):
             validate_task_response(response, task)
 
+    def test_particle_one_is_the_default_primary_model(self):
+        self.assertEqual(runner.MODEL, "particle-ai/particle-1:free")
+        self.assertEqual(runner.API_URL, "https://openrouter.ai/api/v1/chat/completions")
+        self.assertEqual(
+            runner.FALLBACK_MODELS,
+            ("nvidia/nemotron-3.5-super-vl:free", "dots-studio/dots-3-note-preview:free"),
+        )
+        workflow_path = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "momo-autonomous-engine.yml"
+        workflow = workflow_path.read_text(encoding="utf-8")
+        self.assertIn("MOMO_AGENT_MODEL: particle-ai/particle-1:free", workflow)
+        self.assertNotIn("GEMINI_MODEL:", workflow)
+
     def test_missing_provider_configuration_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
             with patch.dict(os.environ, {"MOMO_AGENT_API_KEY": ""}, clear=False), patch.object(runner, "MODEL", ""):
-                with self.assertRaisesRegex(WorkerError, "Configure GEMINI_API_KEY"):
+                with self.assertRaisesRegex(WorkerError, "Configure MOMO_AGENT_API_KEY"):
                     runner.run(Path(temporary))
 
     def test_rejects_invalid_issue_number_and_missing_github_token(self):

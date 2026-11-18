@@ -22,11 +22,18 @@ def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]
 
 
 API_URL = os.environ.get(
-    "GEMINI_API_URL",
-    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    "MOMO_AGENT_API_URL",
+    "https://openrouter.ai/api/v1/chat/completions",
 )
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash").strip()
-FALLBACK_MODELS: tuple[str, ...] = ()
+MODEL = os.environ.get("MOMO_AGENT_MODEL", "particle-ai/particle-1:free").strip()
+FALLBACK_MODELS: tuple[str, ...] = tuple(dict.fromkeys(
+    model.strip()
+    for model in os.environ.get(
+        "MOMO_AGENT_FALLBACK_MODELS",
+        "nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free",
+    ).split(",")
+    if model.strip()
+))
 MAX_CONTEXT_BYTES = 110_000
 MAX_PATCH_BYTES = 48_000
 MAX_FILES = 24
@@ -286,9 +293,9 @@ def _fetch_assigned_issue(number: str, repository: str, token: str) -> dict:
 
 
 def run(root: Path) -> int:
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    api_key = os.environ.get("MOMO_AGENT_API_KEY", "")
     if not api_key or not MODEL:
-        raise WorkerError("Configure GEMINI_API_KEY secret and GEMINI_MODEL variable.")
+        raise WorkerError("Configure MOMO_AGENT_API_KEY secret and MOMO_AGENT_MODEL variable.")
     task = parse_task_issue(_fetch_assigned_issue(
         os.environ.get("MOMO_TASK_ISSUE_NUMBER", ""),
         os.environ.get("GITHUB_REPOSITORY", ""),

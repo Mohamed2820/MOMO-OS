@@ -69,10 +69,11 @@ jobs:
 
       - name: Run one bounded MOMO CELL engineering cycle
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: gemini-3.6-flash
-          GEMINI_FALLBACK_MODEL: gemini-3.8-flash
-          GEMINI_API_URL: https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+          MOMO_AGENT_API_KEY: ${{ secrets.MOMO_AGENT_API_KEY }}
+          MOMO_AGENT_MODEL: particle-ai/particle-1:free
+          MOMO_AGENT_FALLBACK_MODELS: ${{ vars.MOMO_AGENT_FALLBACK_MODELS || 'nvidia/nemotron-3.5-super-vl:free,dots-studio/dots-3-note-preview:free' }}
+          MOMO_AGENT_REVIEW_MODEL: ${{ vars.MOMO_AGENT_REVIEW_MODEL || '' }}
+          MOMO_AGENT_API_URL: ${{ vars.MOMO_AGENT_API_URL || 'https://openrouter.ai/api/v1/chat/completions' }}
           MOMO_TASK_ISSUE_NUMBER: ${{ steps.assignment.outputs.task_issue_number }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
