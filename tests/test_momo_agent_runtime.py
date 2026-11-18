@@ -368,11 +368,11 @@ class AgentToolRuntimeTests(unittest.TestCase):
             "message": {"content": "not valid JSON"}}]}
         with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
-                       side_effect=[malformed, malformed, malformed, malformed]) as request:
+                       side_effect=[malformed, malformed]) as request:
                 with self.assertRaisesRegex(WorkerError, "after one retry"):
                     review_patch(task, sample_patch(), "builder-model", "fake-key",
                                  "https://example.invalid")
-        self.assertEqual(request.call_count, 4)
+        self.assertEqual(request.call_count, 2)
 
     def test_reviewer_rejection_is_not_retried_or_approved(self):
         task = sample_task()
@@ -382,7 +382,7 @@ class AgentToolRuntimeTests(unittest.TestCase):
         with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
             with patch("intelligence.autonomy.agent_runtime._request_json",
                        return_value=rejected) as request:
-                with self.assertRaisesRegex(WorkerError, "Code review rejected the patch"):
+                with self.assertRaisesRegex(WorkerError, "Independent review rejected the patch"):
                     review_patch(task, sample_patch(), "builder-model", "fake-key",
                                  "https://example.invalid")
         request.assert_called_once()
