@@ -123,6 +123,10 @@ class ExplicitTaskAssignmentTests(unittest.TestCase):
             runner.FALLBACK_MODELS,
             ("nvidia/nemotron-3.5-super-vl:free", "dots-studio/dots-3-note-preview:free"),
         )
+        workflow_path = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "momo-autonomous-engine.yml"
+        workflow = workflow_path.read_text(encoding="utf-8")
+        self.assertIn("MOMO_AGENT_MODEL: particle-ai/particle-1:free", workflow)
+        self.assertNotIn("GEMINI_MODEL:", workflow)
 
     def test_missing_provider_configuration_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
