@@ -509,7 +509,10 @@ def run_agent_cycle(root: Path, task: dict, brief: str, memory: str, api_key: st
             "messages": messages,
         }
         result = _request_json(api_url, api_key, payload)
-        served_model = str(result.get("model", active_model))[:160]
+        reported_model = result.get("model")
+        if not isinstance(reported_model, str) or not reported_model.strip():
+            raise WorkerError("Model provider response omitted served model identity")
+        served_model = reported_model.strip()[:160]
         if turn == 0:
             active_model = served_model
         choices = result.get("choices")
@@ -666,7 +669,7 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
         "Reject incomplete, unsafe, out-of-scope, or unverifiable changes. Do not claim tests passed. "
         "Do not use Markdown fences or any text outside the JSON object."
     )
-    user = "Assigned task:\\n" + json.dumps(task, ensure_ascii=False) + "\\nCandidate diff:\\n" + patch[:48000]
+    user = "Assigned task:\n" + json.dumps(task, ensure_ascii=False) + "\nCandidate diff:\n" + patch[:48000]
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     payload = {
         "model": reviewer_model,
@@ -678,7 +681,9 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
     }
     result = _request_json(api_url, api_key, payload)
     verdict, served, finish, content_length = _parse_review_verdict(result)
-    if served.casefold() == builder_model.casefold():
+    if verdict is not None and not served.strip():
+        raise WorkerError("Independent reviewer response omitted served model identity")
+    if served and served.casefold() == builder_model.casefold():
         raise WorkerError("Independent reviewer resolved to the same model as the patch author")
     if verdict is None:
         choices = result.get("choices")
@@ -697,7 +702,9 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
         retry_payload = dict(payload, messages=retry_messages, max_tokens=1200)
         retry_result = _request_json(api_url, api_key, retry_payload)
         retry_verdict, retry_served, retry_finish, retry_length = _parse_review_verdict(retry_result)
-        if retry_served.casefold() == builder_model.casefold():
+        if retry_verdict is not None and not retry_served.strip():
+            raise WorkerError("Independent reviewer response omitted served model identity")
+        if retry_served and retry_served.casefold() == builder_model.casefold():
             raise WorkerError("Independent reviewer resolved to the same model as the patch author")
         if retry_verdict is None:
             raise WorkerError(
@@ -709,5 +716,7 @@ def review_patch(task: dict, patch: str, builder_model: str, api_key: str, api_u
         verdict, served = retry_verdict, retry_served or served
     if verdict["verdict"] != "approve" or verdict.get("findings", []):
         raise WorkerError("Independent review rejected the patch: " + str(verdict.get("summary", verdict.get("findings", [])))[:1200])
-    return {"approved": True, "served_model": served or reviewer_model,
+    if not served.strip():
+        raise WorkerError("Independent reviewer response omitted served model identity")
+    return {"approved": True, "served_model": served,
             "summary": str(verdict.get("summary", ""))[:1000], "findings": []}

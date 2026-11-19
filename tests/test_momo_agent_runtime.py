@@ -179,6 +179,21 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 self.assertEqual(call.args[2]["model"], "particle-ai/particle-1:free")
                 self.assertEqual(call.args[2]["models"], ["particle-ai/particle-1:free"])
 
+    def test_builder_requires_explicit_served_model_identity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            make_repo(root)
+            response = {"choices": [{"message": {
+                "role": "assistant", "content": "{}",
+            }}]}
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       return_value=response):
+                with self.assertRaisesRegex(WorkerError, "omitted served model identity"):
+                    run_agent_cycle(
+                        root, sample_task(), "brief", "no memory", "fake-key",
+                        "https://example.invalid/chat", "builder-model", (), _validate_patch,
+                    )
+
     def test_patch_validation_failure_returns_current_numbered_source_for_one_repair(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -307,6 +322,25 @@ class AgentToolRuntimeTests(unittest.TestCase):
         self.assertEqual(payload["model"], reviewer)
         self.assertEqual(payload["models"], [reviewer])
         self.assertTrue(payload["provider"]["allow_fallbacks"])
+        review_prompt = payload["messages"][1]["content"]
+        self.assertIn("Assigned task:\n", review_prompt)
+        self.assertIn("\nCandidate diff:\n", review_prompt)
+        self.assertNotIn("Assigned task:\\n", review_prompt)
+
+    def test_reviewer_requires_explicit_served_model_identity(self):
+        task = sample_task()
+        response = {"choices": [{"message": {
+            "content": json.dumps({"verdict": "approve", "findings": [],
+                                   "summary": "No served-model evidence."})
+        }}]}
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": "critic-model"}):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       return_value=response):
+                with self.assertRaisesRegex(WorkerError, "omitted served model identity"):
+                    review_patch(
+                        task, sample_patch(), "particle-ai/particle-1:free",
+                        "openrouter-test-key", "https://openrouter.example/chat/completions",
+                    )
 
     def test_reviewer_uses_dots_when_builder_was_nvidia_fallback(self):
         task = sample_task()
