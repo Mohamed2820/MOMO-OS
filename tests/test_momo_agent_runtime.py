@@ -416,6 +416,21 @@ class AgentToolRuntimeTests(unittest.TestCase):
         self.assertIn("\nCandidate diff:\n", review_prompt)
         self.assertNotIn("Assigned task:\\n", review_prompt)
 
+    def test_reviewer_rejects_configured_model_matching_builder(self):
+        task = sample_task()
+        builder = "particle-ai/particle-1:free"
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": builder}):
+            with patch("intelligence.autonomy.agent_runtime._request_json") as request:
+                with self.assertRaisesRegex(
+                    WorkerError,
+                    "Configured independent reviewer matches the patch author model",
+                ):
+                    review_patch(
+                        task, sample_patch(), builder, "openrouter-test-key",
+                        "https://openrouter.example/chat/completions",
+                    )
+                request.assert_not_called()
+
     def test_reviewer_rejects_served_model_outside_configured_allowlist(self):
         task = sample_task()
         response = {"model": "unconfigured-reviewer", "choices": [{"message": {
