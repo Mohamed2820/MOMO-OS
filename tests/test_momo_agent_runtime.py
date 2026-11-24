@@ -179,6 +179,95 @@ class AgentToolRuntimeTests(unittest.TestCase):
                 self.assertEqual(call.args[2]["model"], "particle-ai/particle-1:free")
                 self.assertEqual(call.args[2]["models"], ["particle-ai/particle-1:free"])
 
+    def test_builder_rejects_served_model_outside_request_allowlist(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            make_repo(root)
+            response = {"model": "unconfigured-model", "choices": [{"message": {
+                "role": "assistant", "content": "{}",
+            }}]}
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       return_value=response):
+                with self.assertRaisesRegex(WorkerError, "outside the current request allowlist"):
+                    run_agent_cycle(
+                        root, sample_task(), "brief", "no memory", "openrouter-test-key",
+                        "https://openrouter.example/chat/completions",
+                        "particle-ai/particle-1:free",
+                        ("nvidia/nemotron-3.5-super-vl:free", "dots-studio/dots-3-note-preview:free"),
+                        _validate_patch,
+                    )
+
+    def test_builder_rejects_model_change_after_tool_loop_is_pinned(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            make_repo(root)
+            read_call = {"id": "read-1", "type": "function", "function": {
+                "name": "read_repo_file",
+                "arguments": json.dumps({"path": "intelligence/runtime/demo.py"}),
+            }}
+            responses = [
+                {"model": "particle-ai/particle-1:free", "choices": [{"message": {
+                    "role": "assistant", "content": None, "tool_calls": [read_call],
+                }}]},
+                {"model": "nvidia/nemotron-3.5-super-vl:free", "choices": [{"message": {
+                    "role": "assistant", "content": "{}",
+                }}]},
+            ]
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       side_effect=responses):
+                with self.assertRaisesRegex(WorkerError, "outside the current request allowlist"):
+                    run_agent_cycle(
+                        root, sample_task(), "brief", "no memory", "openrouter-test-key",
+                        "https://openrouter.example/chat/completions",
+                        "particle-ai/particle-1:free",
+                        ("nvidia/nemotron-3.5-super-vl:free", "dots-studio/dots-3-note-preview:free"),
+                        _validate_patch,
+                    )
+
+    def test_configured_fallback_model_is_accepted_and_pinned(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            make_repo(root)
+            task = sample_task()
+            patch_text = sample_patch()
+            fallback = "nvidia/nemotron-3.5-super-vl:free"
+            read_call = {"id": "read-1", "type": "function", "function": {
+                "name": "read_repo_file", "arguments": json.dumps({"path": "intelligence/runtime/demo.py"}),
+            }}
+            validate_call = {"id": "validate-1", "type": "function", "function": {
+                "name": "validate_patch", "arguments": json.dumps({"patch": patch_text}),
+            }}
+            def response(call=None, content=None):
+                message = {"role": "assistant", "content": content}
+                if call is not None:
+                    message["tool_calls"] = [call]
+                return {"model": fallback, "choices": [{"message": message}]}
+            responses = [
+                response(call=read_call),
+                response(call=validate_call),
+                response(content=json.dumps({
+                    "task_id": 901, "status": "patch", "task": "Update demo value",
+                    "summary": "Configured fallback completed the bounded tool loop.",
+                    "patch": patch_text,
+                })),
+            ]
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       side_effect=responses) as request:
+                result = run_agent_cycle(
+                    root, task, "brief", "no memory", "openrouter-test-key",
+                    "https://openrouter.example/chat/completions",
+                    "particle-ai/particle-1:free",
+                    (fallback, "dots-studio/dots-3-note-preview:free"),
+                    _validate_patch,
+                )
+            self.assertEqual(result["served_model"], fallback)
+            self.assertEqual(request.call_args_list[0].args[2]["models"], [
+                "particle-ai/particle-1:free", fallback, "dots-studio/dots-3-note-preview:free",
+            ])
+            for call in request.call_args_list[1:]:
+                self.assertEqual(call.args[2]["model"], fallback)
+                self.assertEqual(call.args[2]["models"], [fallback])
+
     def test_builder_requires_explicit_served_model_identity(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -326,6 +415,53 @@ class AgentToolRuntimeTests(unittest.TestCase):
         self.assertIn("Assigned task:\n", review_prompt)
         self.assertIn("\nCandidate diff:\n", review_prompt)
         self.assertNotIn("Assigned task:\\n", review_prompt)
+
+    def test_reviewer_rejects_configured_model_matching_builder(self):
+        task = sample_task()
+        builder = "particle-ai/particle-1:free"
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": builder}):
+            with patch("intelligence.autonomy.agent_runtime._request_json") as request:
+                with self.assertRaisesRegex(
+                    WorkerError,
+                    "Configured independent reviewer matches the patch author model",
+                ):
+                    review_patch(
+                        task, sample_patch(), builder, "openrouter-test-key",
+                        "https://openrouter.example/chat/completions",
+                    )
+                request.assert_not_called()
+
+    def test_reviewer_rejects_served_model_outside_configured_allowlist(self):
+        task = sample_task()
+        response = {"model": "unconfigured-reviewer", "choices": [{"message": {
+            "content": json.dumps({"verdict": "approve", "findings": [],
+                                   "summary": "Unexpected reviewer model."})
+        }}]}
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": ""}, clear=False):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       return_value=response):
+                with self.assertRaisesRegex(WorkerError, "outside the configured reviewer allowlist"):
+                    review_patch(
+                        task, sample_patch(), "particle-ai/particle-1:free",
+                        "openrouter-test-key", "https://openrouter.example/chat/completions",
+                    )
+
+    def test_reviewer_retry_rejects_model_outside_configured_allowlist(self):
+        task = sample_task()
+        reviewer = "nvidia/nemotron-3.5-super-vl:free"
+        malformed = {"model": reviewer, "choices": [{"message": {"content": "not JSON"}}]}
+        unexpected = {"model": "unconfigured-reviewer", "choices": [{"message": {
+            "content": json.dumps({"verdict": "approve", "findings": [],
+                                   "summary": "Unexpected retry model."})
+        }}]}
+        with patch.dict("os.environ", {"MOMO_AGENT_REVIEW_MODEL": ""}, clear=False):
+            with patch("intelligence.autonomy.agent_runtime._request_json",
+                       side_effect=[malformed, unexpected]):
+                with self.assertRaisesRegex(WorkerError, "outside the configured reviewer allowlist"):
+                    review_patch(
+                        task, sample_patch(), "particle-ai/particle-1:free",
+                        "openrouter-test-key", "https://openrouter.example/chat/completions",
+                    )
 
     def test_reviewer_requires_explicit_served_model_identity(self):
         task = sample_task()
